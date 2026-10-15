@@ -3,7 +3,7 @@ extends Block
 
 ## Belt that slowly drags you along. A shockwave flips its direction.
 
-const PUSH := 190.0
+const PUSH := 150.0
 
 var direction := 1.0
 

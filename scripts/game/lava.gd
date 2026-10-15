@@ -5,8 +5,8 @@ extends Node2D
 ## caught and speeds up when everyone is far ahead.
 
 const SHADER := preload("res://shaders/lava.gdshader")
-const BASE_SPEED := 42.0
-const MAX_SPEED := 170.0
+const BASE_SPEED := 36.0
+const MAX_SPEED := 140.0
 const RAMP := 0.9              ## base speed gained per 10 s of match time
 const GLOW := 60.0
 

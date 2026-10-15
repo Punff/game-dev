@@ -37,7 +37,8 @@ left/right to change colour.
 blocks/            Block base class + one script per block type (self-drawn)
 scripts/core/      Autoloads: Settings (persisted options + bindings), PlayerManager
                    (joined players, per-player InputMap actions), MatchManager (scene
-                   flow), Sfx (procedural sound + music), SignalBus, Palette
+                   flow), Sfx (silent hook: drop audio files named after events into
+                   assets/sfx/), Grit (film-grain overlay), SignalBus, Palette
 scripts/game/      Game loop, MapPlanner (pure level generator), MapGeneration
                    (streams blocks), camera, lava, background, HUD
 scripts/player/    Player controller

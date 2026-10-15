@@ -3,7 +3,7 @@ extends Block
 
 ## Treadmill that boosts you along its arrows.
 
-const BOOST := 520.0
+const BOOST := 380.0
 
 var direction := 1.0
 

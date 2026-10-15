@@ -16,6 +16,7 @@ var animated := false
 
 var _shape := RectangleShape2D.new()
 var _seed := 0
+var _outline := PackedVector2Array()
 
 
 func _init() -> void:
@@ -30,6 +31,7 @@ func _init() -> void:
 func _ready() -> void:
 	add_to_group("blocks")
 	_seed = hash(Vector2i(int(global_position.x), int(global_position.y)))
+	_outline = PackedVector2Array()
 	set_process(animated)
 
 
@@ -40,6 +42,7 @@ func _process(_delta: float) -> void:
 func set_block_size(new_size: Vector2) -> void:
 	size = new_size
 	_shape.size = new_size
+	_outline = PackedVector2Array()
 	queue_redraw()
 
 
@@ -73,15 +76,55 @@ func _draw() -> void:
 func _draw_body() -> void:
 	var c: Array = colors()
 	var r := Rect2(-size * 0.5, size)
-	# Hard ink shadow, ink outline, flat face.
-	draw_rect(Rect2(r.position + SHADOW, r.size), Color(Palette.INK, 0.55))
-	draw_rect(r, Palette.INK)
-	var face := r.grow(-OUTLINE)
-	draw_rect(face, c[0])
-	# Light catching the top edge, darker underside.
-	draw_rect(Rect2(face.position, Vector2(face.size.x, 4)), c[0].lightened(0.22))
-	draw_rect(Rect2(face.position + Vector2(0, face.size.y - 6), Vector2(face.size.x, 6)), c[0].darkened(0.3))
-	_draw_grit(face, c[0])
+	if _outline.is_empty():
+		_outline = rough_rect(r, _seed, 2.2)
+	# Smudged shadow, fill knocked slightly out of register, wobbly ink line.
+	draw_colored_polygon(_shifted(_outline, SHADOW), Color(Palette.INK, 0.45))
+	draw_colored_polygon(_shifted(_outline, MISREG), c[0])
+	draw_colored_polygon(_shifted(rough_rect(Rect2(r.position + Vector2(6, r.size.y - 12), Vector2(r.size.x - 12, 8)), _seed + 3, 1.5), MISREG), c[0].darkened(0.28))
+	draw_polyline(rough_line(r.position + Vector2(8, 7), Vector2(r.end.x - 8, r.position.y + 7), _seed + 5, 1.5), c[0].lightened(0.25), 2.5)
+	draw_polyline(_outline, Palette.INK, 3.0)
+	_draw_grit(r.grow(-OUTLINE), c[0])
+
+
+const MISREG := Vector2(-2.5, 2.0)
+
+
+static func _shifted(pts: PackedVector2Array, by: Vector2) -> PackedVector2Array:
+	var out := pts.duplicate()
+	for i in out.size():
+		out[i] += by
+	return out
+
+
+## A rectangle traced by an unsteady hand. Closed polyline (first == last).
+static func rough_rect(r: Rect2, seed_value: int, amp := 2.0) -> PackedVector2Array:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	var corners := [r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]
+	var out := PackedVector2Array()
+	for k in 4:
+		var a: Vector2 = corners[k]
+		var b: Vector2 = corners[(k + 1) % 4]
+		var n := maxi(1, int(a.distance_to(b) / 26.0))
+		var normal := (b - a).normalized().orthogonal()
+		for i in n:
+			var t := float(i) / n
+			var j := rng.randf_range(-amp, amp) if i > 0 else rng.randf_range(-amp, amp) * 0.5
+			out.append(a.lerp(b, t) + normal * j)
+	out.append(out[0])
+	return out
+
+
+static func rough_line(a: Vector2, b: Vector2, seed_value: int, amp := 1.5) -> PackedVector2Array:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	var n := maxi(2, int(a.distance_to(b) / 30.0))
+	var normal := (b - a).normalized().orthogonal()
+	var out := PackedVector2Array()
+	for i in n + 1:
+		out.append(a.lerp(b, float(i) / n) + normal * rng.randf_range(-amp, amp))
+	return out
 
 
 ## Cross-hatching and chips so surfaces look used, not plastic.

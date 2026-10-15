@@ -24,6 +24,7 @@ config/icon="res://assets/icon.png"
 SignalBus="*res://scripts/core/signal_bus.gd"
 Settings="*res://scripts/core/settings.gd"
 Sfx="*res://scripts/core/sfx.gd"
+Grit="*res://scripts/core/grit.gd"
 PlayerManager="*res://scripts/core/player_manager.gd"
 MatchManager="*res://scripts/core/match_manager.gd"
 

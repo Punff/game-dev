@@ -3,7 +3,7 @@ extends Block
 
 ## Launches players high into the air and refills their jumps.
 
-const BOUNCE_VELOCITY := 1350.0
+const BOUNCE_VELOCITY := 1000.0
 
 var _squash := 0.0
 

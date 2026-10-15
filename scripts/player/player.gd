@@ -8,45 +8,45 @@ extends CharacterBody2D
 signal died(player_id: int)
 
 # ── Movement ─────────────────────────────────
-const RADIUS := 14.0
-const SPEED := 450.0
-const ACCEL := 4200.0
-const AIR_ACCEL := 3000.0
-const AIR_BRAKE := 0.4          ## fraction of AIR_ACCEL used to slow down with no input
-const FRICTION := 3600.0
-const ICE_ACCEL := 550.0
-const ICE_FRICTION := 170.0
-const GRAVITY := 1150.0
-const JUMP_VELOCITY := 700.0
+# Values follow the original prototype: a small, slippery, floaty ball.
+const RADIUS := 10.0
+const SPEED := 300.0
+const ACCEL := 1080.0
+const AIR_ACCEL := 1080.0
+const AIR_BRAKE := 0.89          ## fraction of AIR_ACCEL used to slow down with no input
+const FRICTION := 960.0
+const ICE_ACCEL := 300.0
+const ICE_FRICTION := 90.0
+const GRAVITY := 1200.0
+const JUMP_VELOCITY := 600.0
 const MAX_JUMPS := 2
-const JUMP_CUT := 0.5            ## velocity multiplier when jump is released early
 const COYOTE_TIME := 0.1
 const JUMP_BUFFER := 0.12
-const MAX_FALL := 1000.0
-const FAST_FALL_ACCEL := 3200.0
-const FAST_FALL_MAX := 1700.0
+const MAX_FALL := 1600.0
+const FAST_FALL_ACCEL := 3500.0
+const FAST_FALL_MAX := 2400.0
 
 # ── Charged jump ─────────────────────────────
 ## Start charging on the ground; keep charging if you run off the edge and
 ## release whenever - even mid-air - for the launch.
-const CHARGE_TIME := 1.0
-const CHARGE_VELOCITY := 1100.0  ## at full charge
+const CHARGE_TIME := 1.2
+const CHARGE_VELOCITY := 820.0   ## at full charge
 
 # ── Abilities ────────────────────────────────
 const GRAVITY_COOLDOWN := 3.5
-const GRAVITY_DURATION := 2.2
-const GRAVITY_RADIUS := 240.0
-const THROW_SPEED := 1150.0
+const GRAVITY_DURATION := 1.6
+const GRAVITY_RADIUS := 170.0
+const THROW_SPEED := 1000.0
 const SHOCK_COOLDOWN := 2.5
-const SHOCK_RANGE := 500.0
+const SHOCK_RANGE := 450.0
 const SHOCK_FORCE := 1800.0
-const SHOCK_RECOIL := 520.0
-const JUMP_PUSH_RADIUS := 170.0
-const JUMP_PUSH_FORCE := 520.0
+const SHOCK_RECOIL := 420.0
+const JUMP_PUSH_RADIUS := 200.0
+const JUMP_PUSH_FORCE := 260.0
 
 ## Half width of the arena; past this (plus a margin) you've been knocked out.
-static var world_half_width := 1100.0
-const OUT_OF_BOUNDS := 700.0
+static var world_half_width := 800.0
+const OUT_OF_BOUNDS := 500.0
 
 var info: PlayerInfo
 var player_id := 1
@@ -183,7 +183,7 @@ func _physics_process(delta: float) -> void:
 		last_impact = fall_speed
 		_on_landed()
 	elif not is_on_floor() and _was_on_floor and velocity.y < 0.0:
-		_squash = Vector2(0.75, 1.3)
+		_squash = Vector2(0.65, 1.4)
 	_update_floor_blocks(delta)
 	_push_players_on_contact()
 	_was_on_floor = is_on_floor()
@@ -221,15 +221,12 @@ func _handle_jump(delta: float) -> void:
 		_coyote = 0.0
 		jumps_left -= 1
 		velocity.y = -JUMP_VELOCITY
-		_squash = Vector2(0.8, 1.2)
+		_squash = Vector2(0.65, 1.4)
 		_on_jumped(1.0, grounded_jump)
 		Sfx.play("jump" if grounded_jump else "double_jump", -3.0)
 		if not grounded_jump:
 			Fx.ring(global_position + Vector2(0, RADIUS), color, 46.0, 4.0, 0.25)
 
-	# Variable jump height.
-	if _just_released("jump") and velocity.y < -JUMP_VELOCITY * 0.4:
-		velocity.y *= JUMP_CUT
 
 
 func _handle_charge(delta: float, on_floor: bool) -> void:
@@ -400,8 +397,7 @@ func _on_jumped(strength: float, from_ground: bool) -> void:
 		var to := other.global_position - global_position
 		var r := JUMP_PUSH_RADIUS * strength
 		if to.length() < r:
-			var f := 1.0 - to.length() / r
-			other.velocity += to.normalized() * JUMP_PUSH_FORCE * strength * f
+			other.velocity += to.normalized() * JUMP_PUSH_FORCE * strength
 	# Debris gets kicked too.
 	for f: Fragment in get_tree().get_nodes_in_group("fragments"):
 		if f.held_by == self:
@@ -414,7 +410,7 @@ func _on_jumped(strength: float, from_ground: bool) -> void:
 
 func _on_landed() -> void:
 	var impact := clampf(last_impact / 1100.0, 0.0, 1.0)
-	_squash = Vector2(1.0 + 0.3 * impact, 1.0 - 0.25 * impact)
+	_squash = Vector2(1.0 + 0.4 * (0.5 + impact), 1.0 - 0.4 * (0.5 + impact) * 0.9)
 	if impact > 0.25:
 		Fx.dust(global_position + Vector2(0, RADIUS), Palette.PAPER_DIM, 8)
 		Sfx.play("land", -8.0 + impact * 6.0)
@@ -452,8 +448,8 @@ func _push_players_on_contact() -> void:
 		if c is Player:
 			var dir: Vector2 = (c.global_position - global_position)
 			dir = Vector2(facing, 0) if dir.length_squared() < 0.01 else dir.normalized()
-			c.velocity += dir * 140.0
-			velocity -= dir * 70.0
+			c.velocity += dir * 200.0
+			velocity -= dir * 200.0
 
 
 # ── Effects from blocks ──────────────────────
@@ -513,7 +509,7 @@ func die() -> void:
 # ── Visuals ──────────────────────────────────
 
 func _update_visuals(delta: float) -> void:
-	_squash = _squash.lerp(Vector2.ONE, minf(14.0 * delta, 1.0))
+	_squash = _squash.lerp(Vector2.ONE, minf(12.0 * delta, 1.0))
 	if not Fx.reduced and velocity.length_squared() > 520.0 * 520.0:
 		_trail.append(global_position)
 	elif not _trail.is_empty():
@@ -554,17 +550,19 @@ func _draw() -> void:
 			if on:
 				draw_arc(Vector2.ZERO, RADIUS + 12, a0 + 0.06, a0 + TAU / segs - 0.06, 6, Palette.PAPER if _charge >= 1.0 else color, 4.5)
 
-	# Body: flat colour, thick ink outline, a visor slash. Squash around the feet.
+	# Body: hand-drawn ball whose ink line "boils" ~10 times a second, colour
+	# fill slightly out of register, a visor slash. Squash around the feet.
 	var base := Vector2(0, RADIUS)
 	draw_set_transform(base - base * _squash, 0.0, _squash)
-	draw_circle(Vector2(6, 6), RADIUS + 3.0, Color(Palette.INK, 0.5))
-	draw_circle(Vector2.ZERO, RADIUS + 3.5, Palette.INK)
-	draw_circle(Vector2.ZERO, RADIUS, Palette.PAPER if _hit_flash > 0.0 else color)
-	# shading crescent
-	draw_arc(Vector2(3, 3), RADIUS - 3.0, 0.2, 1.9, 10, color.darkened(0.35), 4.0)
-	var v := Vector2(facing * 4.0, -3.0)
-	draw_line(v + Vector2(-8, 0), v + Vector2(8, 0), Palette.INK, 7.0)
-	draw_line(v + Vector2(-6, 0), v + Vector2(6, 0), Palette.PAPER, 3.0)
+	var boil := int(Time.get_ticks_msec() / 100) + player_id * 31
+	var ring := _wobbly_circle(RADIUS + 1.5, boil)
+	draw_colored_polygon(Block._shifted(ring, Vector2(4, 5)), Color(Palette.INK, 0.4))
+	draw_colored_polygon(Block._shifted(ring, Vector2(-1.5, 1.5)), Palette.PAPER if _hit_flash > 0.0 else color)
+	draw_arc(Vector2(2, 2), RADIUS - 3.5, 0.3, 1.8, 8, color.darkened(0.3), 3.0)
+	draw_polyline(ring, Palette.INK, 2.5)
+	var v := Vector2(facing * 3.0, -2.5)
+	draw_line(v + Vector2(-6, 0.5), v + Vector2(6, -0.5), Palette.INK, 5.0)
+	draw_line(v + Vector2(-4, 0.5), v + Vector2(4, -0.5), Palette.PAPER, 2.0)
 	draw_set_transform(Vector2.ZERO)
 
 	# Reversed-controls warning: orbiting ink marks.
@@ -580,10 +578,22 @@ func _draw() -> void:
 	# Name tag + ability pips
 	var font := UiTheme.heavy()
 	var tag := "P%d" % player_id
-	draw_string_outline(font, Vector2(-30, -RADIUS - 18), tag, HORIZONTAL_ALIGNMENT_CENTER, 60, 20, 6, Palette.INK)
-	draw_string(font, Vector2(-30, -RADIUS - 18), tag, HORIZONTAL_ALIGNMENT_CENTER, 60, 20, color)
+	draw_string_outline(font, Vector2(-30, -RADIUS - 16), tag, HORIZONTAL_ALIGNMENT_CENTER, 60, 16, 5, Palette.INK)
+	draw_string(font, Vector2(-30, -RADIUS - 16), tag, HORIZONTAL_ALIGNMENT_CENTER, 60, 16, color)
 	_draw_pip(Vector2(-8, -RADIUS - 9), shock_ready())
 	_draw_pip(Vector2(8, -RADIUS - 9), gravity_ready())
+
+
+static func _wobbly_circle(r: float, seed_value: int) -> PackedVector2Array:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	var pts := PackedVector2Array()
+	var n := 14
+	for i in n:
+		var a := TAU * i / n
+		pts.append(Vector2(cos(a), sin(a)) * r * rng.randf_range(0.93, 1.07))
+	pts.append(pts[0])
+	return pts
 
 
 func _draw_pip(p: Vector2, ready: float) -> void:

@@ -40,7 +40,7 @@ cd ../build/web && python3 -m http.server 8060 --bind 127.0.0.1
 - "Quit" is hidden; VSync option hidden (browser controls it).
 - Fullscreen toggle works from the Settings menu (needs a click/keypress).
 - Game auto-pauses when the tab loses focus or a controller disconnects.
-- Audio starts after the first click/keypress (browser autoplay rule).
+- Ships silent; any sounds added to assets/sfx/ start after the first click (browser autoplay rule).
 - Gamepads: browsers only expose a pad after a button is pressed on it.
 
 ## Verified

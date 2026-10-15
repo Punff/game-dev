@@ -75,7 +75,7 @@ func _ready() -> void:
 func _spawn_players() -> void:
 	var infos := PlayerManager.sorted_players()
 	var n := infos.size()
-	var spacing := minf(240.0, 1100.0 / maxf(n, 1))
+	var spacing := minf(200.0, 800.0 / maxf(n, 1))
 	for i in n:
 		var p := Player.new()
 		p.setup(infos[i])

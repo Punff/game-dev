@@ -91,8 +91,8 @@ func _draw() -> void:
 	draw_colored_polygon(shadow, Color(Palette.INK, 0.5))
 	var outline := _poly.duplicate()
 	outline.append(_poly[0])
-	draw_colored_polygon(_poly, _body.lightened(0.12) if fast else _body)
-	draw_polyline(outline, Palette.INK, 4.0)
+	draw_colored_polygon(Block._shifted(_poly, Block.MISREG), _body.lightened(0.12) if fast else _body)
+	draw_polyline(outline, Palette.INK, 2.5)
 	# a crack across the chunk
 	if _poly.size() >= 4:
 		draw_line(_poly[0].lerp(_poly[2], 0.3), _poly[1].lerp(_poly[3], 0.6), Color(Palette.INK, 0.5), 2.0)

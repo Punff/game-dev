@@ -1,7 +1,7 @@
 class_name Hud
 extends CanvasLayer
 
-## In-match overlay drawn in one Control: player cards, altitude track,
+## In-match overlay drawn in one Control: altitude track,
 ## countdown, off-screen arrows and the optional FPS counter.
 
 var game: Node   # game.gd
@@ -34,51 +34,11 @@ func _draw_hud() -> void:
 	if game == null:
 		return
 	var vp := _canvas.size
-	_draw_cards(vp)
 	_draw_track(vp)
 	_draw_offscreen(vp)
 	_draw_countdown(vp)
 	if Settings.get_value("show_fps"):
 		_text(Vector2(vp.x - 110, vp.y - 16), "%d FPS" % Engine.get_frames_per_second(), 16, Palette.TEXT_DIM, HORIZONTAL_ALIGNMENT_RIGHT, 100, false)
-
-
-func _draw_cards(vp: Vector2) -> void:
-	var players: Array = game.players
-	var w := 200.0
-	var h := 66.0
-	var gap := 12.0
-	var total := players.size() * w + (players.size() - 1) * gap
-	var x := (vp.x - total) * 0.5
-	for p: Player in players:
-		var r := Rect2(x, 14, w, h)
-		var dim := 0.4 if p.is_dead else 1.0
-		_canvas.draw_rect(Rect2(r.position + Vector2(6, 6), r.size), Color(Palette.INK, 0.6))
-		_canvas.draw_rect(r, Color(Palette.INK, 0.92))
-		_canvas.draw_rect(r, Color(Palette.PAPER_DIM, dim), false, 2.0)
-		# Colour slab down the left edge
-		_canvas.draw_rect(Rect2(r.position, Vector2(36, r.size.y)), Color(p.color, dim))
-		_canvas.draw_rect(Rect2(r.position + Vector2(36, 0), Vector2(3, r.size.y)), Palette.INK)
-		_text(r.position + Vector2(48, 30), "P%d" % p.player_id, 24, Color(p.color, dim))
-		var hstr := "OUT" if p.is_dead else "%d m" % p.height_meters()
-		if p.is_dead:
-			hstr = "OUT  %d m" % p.info.max_height
-		_text(r.position + Vector2(48, 54), hstr, 18, Color(Palette.TEXT, dim), HORIZONTAL_ALIGNMENT_LEFT, -1, false)
-		if not p.is_dead:
-			_ability_bar(Rect2(r.position + Vector2(132, 22), Vector2(58, 9)), p.shock_ready(), p.color, "SHOCK")
-			_ability_bar(Rect2(r.position + Vector2(132, 48), Vector2(58, 9)), p.gravity_ready(), p.color, "FIELD")
-		x += w + gap
-	# Best height reminder
-	var best: int = Settings.get_value("best_height")
-	if best > 0:
-		_text(Vector2(0, vp.y - 16), "BEST %d m" % best, 16, Color(Palette.TEXT_DIM, 0.8), HORIZONTAL_ALIGNMENT_CENTER, vp.x, false)
-
-
-func _ability_bar(r: Rect2, ready: float, col: Color, label: String) -> void:
-	_canvas.draw_string(_font, r.position + Vector2(0, -3), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(Palette.TEXT_DIM, 0.9 if ready >= 1.0 else 0.55))
-	_canvas.draw_rect(r.grow(2), Palette.INK)
-	_canvas.draw_rect(r, Palette.SMOKE)
-	var fill := Rect2(r.position, Vector2(r.size.x * ready, r.size.y))
-	_canvas.draw_rect(fill, Palette.PAPER if ready >= 1.0 else Color(col, 0.75))
 
 
 ## Vertical track on the right: lava + every player's altitude.

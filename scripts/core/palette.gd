@@ -29,14 +29,14 @@ const GOOD := Color("8fb04a")
 const LAVA := RUST
 
 const PLAYER_COLORS: Array[Color] = [
-	Color("e8452c"), # red
-	Color("3a9ad9"), # blue
-	Color("f2c230"), # yellow
-	Color("62b46a"), # green
-	Color("b06ad9"), # violet
-	Color("ef8a2e"), # orange
-	Color("3fc6c0"), # cyan
-	Color("ec6fa0"), # pink
+	Color("c9503a"), # red
+	Color("4f86b0"), # blue
+	Color("d9b043"), # yellow
+	Color("6e9a5c"), # green
+	Color("8f6aa6"), # violet
+	Color("cf7d3c"), # orange
+	Color("5aa3a0"), # cyan
+	Color("c47490"), # pink
 ]
 
 const PLAYER_COLOR_NAMES: Array[String] = ["Red", "Blue", "Yellow", "Green", "Violet", "Orange", "Cyan", "Pink"]
@@ -44,13 +44,13 @@ const PLAYER_COLOR_NAMES: Array[String] = ["Red", "Blue", "Yellow", "Green", "Vi
 ## Block colours: [face, accent] keyed by block id.
 const BLOCKS := {
 	"static_platform": [Color("7a7266"), Color("d8cdb0")],
-	"bounce_pad": [Color("5f8a3c"), Color("b8d46a")],
-	"speed_block": [Color("e3a92c"), Color("0e0c0b")],
+	"bounce_pad": [Color("5d7a45"), Color("b7c98a")],
+	"speed_block": [Color("c99a3e"), Color("0e0c0b")],
 	"breakable_block": [Color("c9b993"), Color("6d6250")],
 	"conveyor_block": [Color("2f7473"), Color("9fd3cc")],
-	"push_zone": [Color("d2532a"), Color("f3c29a")],
+	"push_zone": [Color("b5573a"), Color("ecc6a4")],
 	"vanishing_block": [Color("51657a"), Color("b8c8d8")],
-	"ice_block": [Color("9cc8d8"), Color("ffffff")],
+	"ice_block": [Color("a3bfc8"), Color("f2efe6")],
 	"moving_platform": [Color("4b6a8c"), Color("d8e4f0")],
 	"reverse_block": [Color("7e1f2c"), Color("f08a9a")],
 }

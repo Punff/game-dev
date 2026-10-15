@@ -5,11 +5,11 @@ extends Camera2D
 ## and when they're too far apart it favours the leader (the lava will
 ## sort out stragglers). Also handles screen shake.
 
-const MARGIN_TOP := 380.0
-const MARGIN_BOTTOM := 220.0
-const MARGIN_SIDE := 300.0
-const MIN_ZOOM := 0.42
-const MAX_ZOOM := 0.9
+const MARGIN_TOP := 300.0
+const MARGIN_BOTTOM := 170.0
+const MARGIN_SIDE := 220.0
+const MIN_ZOOM := 0.5
+const MAX_ZOOM := 1.0
 
 var targets: Array = []
 var lava_y := INF
@@ -62,7 +62,7 @@ func _update(delta: float, instant: bool) -> void:
 				lead = t
 		cx = clampf(lead.global_position.x, left + visible.x * 0.5, right - visible.x * 0.5)
 	# Don't show much beyond the arena walls.
-	var wall := MapPlanner.HALF_WIDTH + 500.0
+	var wall := MapPlanner.HALF_WIDTH + 400.0
 	if visible.x < wall * 2.0:
 		cx = clampf(cx, -wall + visible.x * 0.5, wall - visible.x * 0.5)
 	else:

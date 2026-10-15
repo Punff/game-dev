@@ -3,7 +3,7 @@ extends Block
 
 ## Gusty wind platform: periodically flips the direction it shoves you.
 
-const PUSH := 300.0
+const PUSH := 220.0
 const PERIOD := 2.4
 
 var _phase := 0.0

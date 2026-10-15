@@ -10,26 +10,26 @@ extends RefCounted
 ## reachable from an anchor below, using a jump envelope simulated from the
 ## Player's real constants.
 
-const HALF_WIDTH := 1100.0         ## playable column is [-HALF_WIDTH, HALF_WIDTH]
+const HALF_WIDTH := 800.0         ## playable column is [-HALF_WIDTH, HALF_WIDTH]
 const EDGE_MARGIN := 30.0
-const MIN_WIDTH := 170.0
-const MAX_WIDTH := 400.0
-const MAX_SPECIAL_WIDTH := 250.0   ## bouncy / speed / reverse stay small
-const ROW_SPACING_MIN := 170.0     ## min horizontal space between platforms of one row
-const TALL := 124.0                ## height of big concrete slabs
+const MIN_WIDTH := 140.0
+const MAX_WIDTH := 340.0
+const MAX_SPECIAL_WIDTH := 200.0   ## bouncy / speed / reverse stay small
+const ROW_SPACING_MIN := 140.0     ## min horizontal space between platforms of one row
+const TALL := 110.0                ## height of big concrete slabs
 const CLEARANCE := 64.0            ## min vertical gap between stacked platforms
 const V_MARGIN := 16.0             ## px of jump height we never rely on
 
 const BIOMES := [
 	# name, starts at (px above start), row gap range, chance of a charge-jump row, block weights
-	{"name": "Rubble", "from": 0.0, "gap": Vector2(260, 340), "charge_rows": 0.04,
-		"weights": {"static": 26, "breakable": 40, "bouncy": 8, "moving": 8, "conveyor": 8, "vanishing": 10}},
-	{"name": "Inferno", "from": 9000.0, "gap": Vector2(270, 350), "charge_rows": 0.08,
-		"weights": {"static": 20, "breakable": 34, "bouncy": 8, "speed": 14, "reverse": 10, "push": 8, "moving": 6}},
-	{"name": "Void", "from": 21000.0, "gap": Vector2(275, 355), "charge_rows": 0.12,
-		"weights": {"static": 14, "breakable": 30, "ice": 16, "reverse": 10, "conveyor": 10, "vanishing": 12, "moving": 8}},
-	{"name": "Storm", "from": 36000.0, "gap": Vector2(280, 360), "charge_rows": 0.16,
-		"weights": {"static": 10, "breakable": 30, "moving": 14, "reverse": 8, "ice": 10, "speed": 12, "bouncy": 6, "vanishing": 10, "push": 8}},
+	{"name": "Rubble", "from": 0.0, "gap": Vector2(190, 235), "charge_rows": 0.04,
+		"weights": {"static": 26, "breakable": 48, "bouncy": 8, "moving": 8, "conveyor": 8, "vanishing": 10}},
+	{"name": "Inferno", "from": 9000.0, "gap": Vector2(195, 240), "charge_rows": 0.08,
+		"weights": {"static": 20, "breakable": 42, "bouncy": 8, "speed": 14, "reverse": 10, "push": 8, "moving": 6}},
+	{"name": "Void", "from": 21000.0, "gap": Vector2(200, 240), "charge_rows": 0.12,
+		"weights": {"static": 14, "breakable": 38, "ice": 16, "reverse": 10, "conveyor": 10, "vanishing": 12, "moving": 8}},
+	{"name": "Storm", "from": 36000.0, "gap": Vector2(205, 240), "charge_rows": 0.16,
+		"weights": {"static": 10, "breakable": 38, "moving": 14, "reverse": 8, "ice": 10, "speed": 12, "bouncy": 6, "vanishing": 10, "push": 8}},
 ]
 
 enum T { SCATTER, DEMOLITION, WIDE, CHOKE, DOOR, SAFE, CONTEST, PAIR }
@@ -52,10 +52,10 @@ func _init(seed_value: int = 0) -> void:
 
 
 ## Creates the wide starting floor at y (its top surface) and resets state.
-func start(floor_y: float, floor_width := 1400.0) -> Dictionary:
+func start(floor_y: float, floor_width := 1100.0) -> Dictionary:
 	rows.clear()
 	cursor_y = floor_y
-	var floor := _plat(-floor_width * 0.5, floor_width * 0.5, "static", floor_y + Block.HEIGHT * 0.5, Block.HEIGHT)
+	var floor := _plat(-floor_width * 0.5, floor_width * 0.5, "floor", floor_y, Block.HEIGHT)
 	floor.reachable = true
 	var row := {"y": floor_y, "platforms": [floor], "biome": "Rubble", "template": T.SAFE, "charged": false}
 	_prev_anchors = [floor]
@@ -92,7 +92,7 @@ func _next_row() -> Dictionary:
 	var gap := minf(rng.randf_range(biome.gap.x, biome.gap.y), max_rise(false) - V_MARGIN - 40.0)
 	var charged_row: bool = rng.randf() < biome.charge_rows
 	if charged_row:
-		gap = rng.randf_range(420.0, 520.0)
+		gap = rng.randf_range(300.0, 360.0)
 	var y := cursor_y - gap
 	var tmpl := _pick_template(start_y - y)
 	var plats := _build_template(tmpl, y)
@@ -157,24 +157,24 @@ func _build_template(tmpl: int, y: float) -> Array:
 					continue   # leave holes now and then
 				var w := minf(_rand_width(), seg - ROW_SPACING_MIN)
 				var x0 := l + seg * i + rng.randf_range(0.0, seg - w - ROW_SPACING_MIN)
-				out.append(_plat(x0, x0 + w, "flow", y + rng.randf_range(-55, 55), Block.HEIGHT))
+				out.append(_plat(x0, x0 + w, "flow", y + rng.randf_range(-30, 30), Block.HEIGHT))
 		T.DEMOLITION:
 			# A knot of big concrete slabs at staggered heights, plus a way around.
-			var cx := rng.randf_range(l + 500.0, r - 500.0)
+			var cx := rng.randf_range(l + 380.0, r - 380.0)
 			var k := rng.randi_range(2, 3)
 			var x := cx - 260.0 * k * 0.5
 			for i in k:
-				var w := rng.randf_range(200.0, 300.0)
-				out.append(_plat(x, x + w, "demolition", y + rng.randf_range(-60, 40), TALL if rng.randf() < 0.6 else Block.HEIGHT))
+				var w := rng.randf_range(170.0, 240.0)
+				out.append(_plat(x, x + w, "demolition", y + rng.randf_range(-35, 20), TALL if rng.randf() < 0.6 else Block.HEIGHT))
 				x += w + ROW_SPACING_MIN + rng.randf_range(0, 40)
 			var side_w := _rand_width()
 			if cx > 0.0:
-				out.append(_plat(l + rng.randf_range(0, 200), l + rng.randf_range(0, 200) + side_w, "flow", y + rng.randf_range(-40, 40), Block.HEIGHT))
+				out.append(_plat(l + rng.randf_range(0, 200), l + rng.randf_range(0, 200) + side_w, "flow", y + rng.randf_range(-25, 25), Block.HEIGHT))
 			else:
-				out.append(_plat(r - side_w - rng.randf_range(0, 200), r - rng.randf_range(0, 200), "flow", y + rng.randf_range(-40, 40), Block.HEIGHT))
+				out.append(_plat(r - side_w - rng.randf_range(0, 200), r - rng.randf_range(0, 200), "flow", y + rng.randf_range(-25, 25), Block.HEIGHT))
 		T.WIDE:
-			var cx := rng.randf_range(l + 400.0, r - 400.0)
-			var w := rng.randf_range(560.0, 800.0)
+			var cx := rng.randf_range(l + 300.0, r - 300.0)
+			var w := rng.randf_range(420.0, 560.0)
 			out.append(_plat(cx - w * 0.5, cx + w * 0.5, "safe", y, Block.HEIGHT))
 		T.CHOKE:
 			var cx := rng.randf_range(-300.0, 300.0)
@@ -187,25 +187,26 @@ func _build_template(tmpl: int, y: float) -> Array:
 			out.append(_plat(l, l + dw, "wall", y, Block.HEIGHT))
 			out.append(_plat(r - dw, r, "wall", y, Block.HEIGHT))
 		T.SAFE:
-			var cx := rng.randf_range(-400.0, 400.0)
-			out.append(_plat(cx - 350.0, cx + 350.0, "safe", y, Block.HEIGHT))
+			var cx := rng.randf_range(-250.0, 250.0)
+			out.append(_plat(cx - 260.0, cx + 260.0, "safe", y, Block.HEIGHT))
 		T.CONTEST:
 			# One king-of-the-hill platform; it's the only way up.
-			var cx := rng.randf_range(-550.0, 550.0)
-			var w := rng.randf_range(240.0, 330.0)
+			var cx := rng.randf_range(-420.0, 420.0)
+			var w := rng.randf_range(200.0, 280.0)
 			out.append(_plat(cx - w * 0.5, cx + w * 0.5, "contest", y, Block.HEIGHT))
 		T.PAIR:
 			# Two small platforms side by side, barely apart: shove-fest.
-			var cx := rng.randf_range(-500.0, 500.0)
-			var w := rng.randf_range(180.0, 230.0)
+			var cx := rng.randf_range(-380.0, 380.0)
+			var w := rng.randf_range(150.0, 200.0)
 			var g := rng.randf_range(ROW_SPACING_MIN, ROW_SPACING_MIN + 40.0)
-			out.append(_plat(cx - g * 0.5 - w, cx - g * 0.5, "contest", y + rng.randf_range(-30, 30), Block.HEIGHT))
+			out.append(_plat(cx - g * 0.5 - w, cx - g * 0.5, "contest", y + rng.randf_range(-20, 20), Block.HEIGHT))
 			out.append(_plat(cx + g * 0.5, cx + g * 0.5 + w, "contest", y + rng.randf_range(-30, 30), Block.HEIGHT))
 	return out
 
 
-func _plat(x0: float, x1: float, role: String, y: float, h: float) -> Dictionary:
-	return {"x0": x0, "x1": x1, "y": y, "h": h, "role": role, "type": "static", "travel": 0.0, "reachable": false, "anchor_ok": true}
+## `top` is the walkable surface; the dictionary stores the block centre.
+func _plat(x0: float, x1: float, role: String, top: float, h: float) -> Dictionary:
+	return {"x0": x0, "x1": x1, "y": top + h * 0.5, "h": h, "role": role, "type": "static", "travel": 0.0, "reachable": false, "anchor_ok": true}
 
 
 func _resolve_overlaps(plats: Array) -> void:
@@ -291,8 +292,8 @@ func _ensure_reachable(plats: Array, charged: bool, gap: float) -> void:
 	var sources := _prev_anchors.duplicate()
 	sources.shuffle()
 	for src in sources:
-		var rise := minf(gap, 300.0) * rng.randf_range(0.85, 1.0)
-		var y: float = top_of(src) - rise + Block.HEIGHT * 0.5
+		var rise := minf(gap, max_rise(charged) - V_MARGIN - 50.0) * rng.randf_range(0.8, 1.0)
+		var y: float = top_of(src) - rise
 		for k in 14:
 			for side in [1.0, -1.0]:
 				var x0: float = src.x1 + 40.0 + k * 30.0 if side > 0 else src.x0 - 40.0 - k * 30.0 - w
