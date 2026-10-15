@@ -15,13 +15,13 @@ var _timer := 0.0
 func _init() -> void:
 	super._init()
 	block_id = "vanishing_block"
-	animated = true
 
 
 func on_player_land(_player: Player) -> void:
 	if _state == S.SOLID:
 		_state = S.WARNING
 		_timer = WARN_TIME
+		set_process(true)
 
 
 func _process(delta: float) -> void:
@@ -38,6 +38,7 @@ func _process(delta: float) -> void:
 			if _timer <= 0.0:
 				_state = S.SOLID
 				collision_layer = 1
+				set_process(false)
 	modulate.a = 0.45 + 0.55 * (_timer / WARN_TIME) if _state == S.WARNING else 1.0
 	queue_redraw()
 

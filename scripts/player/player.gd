@@ -226,7 +226,8 @@ func _handle_jump(delta: float, _on_floor: bool) -> void:
 
 
 func _handle_charge(delta: float, on_floor: bool) -> void:
-	if not _charging and on_floor and _just_pressed("charge"):
+	# Holding charge while landing starts charging straight away.
+	if not _charging and on_floor and _pressed("charge"):
 		_charging = true
 		_charge = 0.0
 	if not _charging:

@@ -120,6 +120,8 @@ func load_settings() -> void:
 		var v: Variant = cfg.get_value("general", key, DEFAULTS[key])
 		if typeof(v) == typeof(DEFAULTS[key]) or (typeof(DEFAULTS[key]) == TYPE_FLOAT and typeof(v) == TYPE_INT):
 			values[key] = v
+	if is_web():
+		values.fullscreen = false   # browsers always start windowed
 	var defaults := default_bindings()
 	for profile in PROFILES:
 		for action in ACTIONS:
