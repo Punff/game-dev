@@ -1,7 +1,6 @@
 # Ultimate Cakum Pakum
 
-Couch-party vertical brawl for 1–4 players, inspired by Upperz and dressed
-like a '70s jazz title card. Climb a wide, randomly generated wreck of
+Couch-party vertical brawl for 1–4 players, inspired by Upperz. Climb a wide, randomly generated wreck of
 concrete and steel, smash it apart, throw the debris at each other and stay
 ahead of the rising slag. Last one standing wins; solo runs chase a saved
 best height.
@@ -11,6 +10,8 @@ mid-air), ground pound (fast-fall shatters concrete), aimed shockwave
 (knockback, shatters concrete, launches debris, rocket-jump downward) and a
 gravity field (grab debris, stack it under you, hurl it on release). Fast
 debris knocks players around and smashes more concrete — chain reactions.
+There are no side walls: shove someone far enough off the edge and they're out.
+Every few rows the route funnels onto one contested platform (or a tight pair).
 
 Godot **4.7**, GL Compatibility renderer (same look on desktop and web).
 
