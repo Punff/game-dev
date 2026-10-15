@@ -23,14 +23,13 @@ func on_shockwave(_dir: Vector2, _origin: Vector2) -> void:
 
 
 func _draw_icon() -> void:
-	var col := _icon_color(0.7)
-	var off := fmod(Time.get_ticks_msec() * 0.06 * direction, 24.0)
-	var half := size.x * 0.5 - 10.0
-	var x := -half + posmod(int(off), 24)
-	while x < half:
-		draw_line(Vector2(x, -10), Vector2(x + 7, -10), col, 3.0)
-		draw_line(Vector2(x, 4), Vector2(x + 7, 4), col, 3.0)
-		x += 24.0
-	# End rollers
-	draw_circle(Vector2(-half + 2, -3), 5.0, Color(colors()[1], 0.8))
-	draw_circle(Vector2(half - 2, -3), 5.0, Color(colors()[1], 0.8))
+	var col := _icon_color()
+	var off := posmod(int(Time.get_ticks_msec() * 0.08 * direction), 30)
+	var half := size.x * 0.5 - 18.0
+	var x := -half + off
+	while x < half - 10.0:
+		_ink_line(PackedVector2Array([Vector2(x, -10), Vector2(x + 8 * direction, 0), Vector2(x, 10)]), col, 3.5)
+		x += 30.0
+	for side in [-1.0, 1.0]:
+		draw_circle(Vector2(side * (half + 4), 0), 10.0, Palette.INK)
+		draw_circle(Vector2(side * (half + 4), 0), 6.0, col)

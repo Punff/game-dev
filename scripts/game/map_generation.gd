@@ -3,7 +3,7 @@ extends Node2D
 ## Streams the level: asks MapPlanner for rows ahead of the highest player
 ## and frees blocks that have sunk into the lava.
 
-const STREAM_AHEAD := 2200.0
+const STREAM_AHEAD := 2600.0
 const CLEANUP_BELOW_LAVA := 500.0
 
 var BLOCK_TYPES := {
@@ -33,7 +33,7 @@ func generate(start_floor_y: float) -> void:
 	_blocks.clear()
 	planner = MapPlanner.new(map_seed)
 	floor_y = start_floor_y
-	_spawn_row(planner.start(floor_y, 900.0))
+	_spawn_row(planner.start(floor_y))
 	_stream_to(floor_y - STREAM_AHEAD)
 	Player.world_half_width = MapPlanner.HALF_WIDTH + 20.0
 
@@ -74,8 +74,8 @@ func _spawn_row(row: Dictionary) -> void:
 	for p in row.platforms:
 		var block: Block = BLOCK_TYPES.get(p.type, StaticPlatform).new()
 		var w: float = p.x1 - p.x0
-		block.position = Vector2((p.x0 + p.x1) * 0.5, row.y)
-		block.set_block_size(Vector2(w, Block.HEIGHT))
+		block.position = Vector2((p.x0 + p.x1) * 0.5, p.y)
+		block.set_block_size(Vector2(w, p.h))
 		if block is MovingPlatform:
 			block.travel = p.travel
 			block.speed = randf_range(0.7, 1.2)

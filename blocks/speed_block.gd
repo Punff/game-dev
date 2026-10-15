@@ -23,10 +23,8 @@ func on_player_stand(player: Player, _delta: float) -> void:
 
 
 func _draw_icon() -> void:
-	var t := fmod(Time.get_ticks_msec() * 0.003, 1.0)
-	for p in _icon_positions(70.0):
+	var t := fmod(Time.get_ticks_msec() * 0.004, 1.0)
+	for p in _icon_positions(90.0):
 		for k in 2:
-			var x := (k * 12.0 - 6.0 + t * 6.0) * direction
-			var a := 0.5 + 0.4 * float(k)
-			var col := _icon_color(a)
-			draw_polyline(PackedVector2Array([p + Vector2(x - 6 * direction, -9), p + Vector2(x + 5 * direction, 0), p + Vector2(x - 6 * direction, 9)]), col, 4.0, true)
+			var x := (k * 16.0 - 8.0 + t * 8.0) * direction
+			_ink_line(PackedVector2Array([p + Vector2(x - 9 * direction, -13), p + Vector2(x + 7 * direction, 0), p + Vector2(x - 9 * direction, 13)]), Palette.INK if k == 1 else Palette.RUST, 6.0)

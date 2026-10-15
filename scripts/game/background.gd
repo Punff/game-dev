@@ -8,10 +8,10 @@ const SHADER := preload("res://shaders/background.gdshader")
 
 ## [sky_top, sky_bottom, islands, accent] per biome, matching MapPlanner.BIOMES.
 const PALETTES := [
-	[Color("1a1a3a"), Color("3d2b5e"), Color("2b2552"), Color("ffb36b")],
-	[Color("2a0f22"), Color("5e2030"), Color("3f1729"), Color("ff7a3d")],
-	[Color("0e0a22"), Color("2b1754"), Color("1f1344"), Color("b07bff")],
-	[Color("0b1624"), Color("1f3b55"), Color("16293d"), Color("6fd3ff")],
+	[Color("162130"), Color("5a2622"), Color("0b0a0a"), Color("e3a92c")],   # Rubble: dusk over the slums
+	[Color("230c0e"), Color("9a3a1c"), Color("100707"), Color("f0c050")],   # Inferno: burning refinery
+	[Color("0b1517"), Color("1f4a48"), Color("060c0c"), Color("ece2c8")],   # Void: cold orbit
+	[Color("141416"), Color("44444e"), Color("08080a"), Color("d2532a")],   # Storm: static and rain
 ]
 const BLEND_PX := 2500.0
 

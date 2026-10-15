@@ -5,9 +5,11 @@ extends Camera2D
 ## and when they're too far apart it favours the leader (the lava will
 ## sort out stragglers). Also handles screen shake.
 
-const MARGIN_TOP := 280.0
-const MARGIN_BOTTOM := 170.0
-const MIN_ZOOM := 0.5
+const MARGIN_TOP := 380.0
+const MARGIN_BOTTOM := 220.0
+const MARGIN_SIDE := 320.0
+const MIN_ZOOM := 0.42
+const MAX_ZOOM := 0.8
 
 var targets: Array = []
 var lava_y := INF
@@ -35,27 +37,39 @@ func _physics_process(delta: float) -> void:
 
 func _update(delta: float, instant: bool) -> void:
 	var vp := get_viewport_rect().size
-	var width_zoom := vp.x / (MapPlanner.HALF_WIDTH * 2.0 + 160.0)
 	var alive := targets.filter(func(t): return is_instance_valid(t) and not t.is_dead)
 	if alive.is_empty():
 		return
-	var top := INF
-	var bottom := -INF
+	var box := Rect2(alive[0].global_position, Vector2.ZERO)
 	for t in alive:
-		top = minf(top, t.global_position.y)
-		bottom = maxf(bottom, t.global_position.y)
-	top -= MARGIN_TOP
-	bottom = minf(bottom + MARGIN_BOTTOM, lava_y + 140.0)
-	bottom = maxf(bottom, top + 200.0)
-	var need_h := bottom - top
-	var z := clampf(minf(width_zoom, vp.y / need_h), MIN_ZOOM, maxf(width_zoom, MIN_ZOOM))
-	var visible_h := vp.y / z
+		box = box.expand(t.global_position)
+	var top := box.position.y - MARGIN_TOP
+	var bottom := minf(box.end.y + MARGIN_BOTTOM, lava_y + 160.0)
+	bottom = maxf(bottom, top + 300.0)
+	var left := box.position.x - MARGIN_SIDE
+	var right := box.end.x + MARGIN_SIDE
+	var z := clampf(minf(vp.x / (right - left), vp.y / (bottom - top)), MIN_ZOOM, MAX_ZOOM)
+	var visible := vp / z
 	var cy := (top + bottom) * 0.5
-	if need_h > visible_h:
-		cy = top + visible_h * 0.5   # favour the leader
-	var target := Vector2(0.0, cy)
-	var k := 1.0 if instant else minf(4.0 * delta, 1.0)
-	zoom = zoom.lerp(Vector2(z, z), minf(2.5 * delta, 1.0) if not instant else 1.0)
+	if bottom - top > visible.y:
+		cy = top + visible.y * 0.5   # favour the leader
+	var cx := (left + right) * 0.5
+	if right - left > visible.x:
+		# Too spread: follow whoever is highest horizontally too.
+		var lead: Node2D = alive[0]
+		for t in alive:
+			if t.global_position.y < lead.global_position.y:
+				lead = t
+		cx = clampf(lead.global_position.x, left + visible.x * 0.5, right - visible.x * 0.5)
+	# Don't show much beyond the arena walls.
+	var wall := MapPlanner.HALF_WIDTH + 140.0
+	if visible.x < wall * 2.0:
+		cx = clampf(cx, -wall + visible.x * 0.5, wall - visible.x * 0.5)
+	else:
+		cx = 0.0
+	var target := Vector2(cx, cy)
+	var k := 1.0 if instant else minf(3.5 * delta, 1.0)
+	zoom = zoom.lerp(Vector2(z, z), 1.0 if instant else minf(2.0 * delta, 1.0))
 	global_position = global_position.lerp(target, k)
 
 	_shake = move_toward(_shake, 0.0, 40.0 * delta)

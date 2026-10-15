@@ -31,14 +31,12 @@ func on_player_stand(player: Player, _delta: float) -> void:
 
 func _draw_icon() -> void:
 	var d := direction()
-	var t := Time.get_ticks_msec() * 0.004
-	for p in _icon_positions(80.0):
-		for k in 2:
-			var y := -9.0 + k * 11.0
+	var t := Time.get_ticks_msec() * 0.006
+	for p in _icon_positions(110.0):
+		for k in 3:
 			var pts := PackedVector2Array()
-			for i in 7:
-				var x := (i - 3) * 6.0
-				pts.append(p + Vector2(x, y + sin(t * d + i * 0.9 + k) * 2.5))
-			draw_polyline(pts, _icon_color(0.75), 3.0, true)
-		var tip := p + Vector2(22.0 * d, -3)
-		draw_polyline(PackedVector2Array([tip + Vector2(-6 * d, -6), tip, tip + Vector2(-6 * d, 6)]), _icon_color(), 3.0, true)
+			for i in 8:
+				pts.append(p + Vector2((i - 3.5) * 6.0 - d * 6.0, -12.0 + k * 12.0 + sin(t * d + i * 0.8 + k) * 3.0))
+			_ink_line(pts, _icon_color(), 3.0)
+		var tip := p + Vector2(30.0 * d, 0)
+		_ink_line(PackedVector2Array([tip + Vector2(-9 * d, -9), tip, tip + Vector2(-9 * d, 9)]), _icon_color(), 4.0)

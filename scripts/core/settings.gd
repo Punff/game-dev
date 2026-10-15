@@ -69,7 +69,6 @@ static func default_bindings() -> Dictionary:
 const DEFAULTS := {
 	"master_volume": 0.8,
 	"sfx_volume": 0.8,
-	"music_volume": 0.5,
 	"fullscreen": false,
 	"vsync": true,
 	"screen_shake": 0.7,
@@ -155,7 +154,6 @@ static func _sanitize(b: Variant) -> Dictionary:
 func apply_all() -> void:
 	_set_bus_volume("Master", values.master_volume)
 	_set_bus_volume("SFX", values.sfx_volume)
-	_set_bus_volume("Music", values.music_volume)
 	if not is_web():
 		var want_fs: bool = values.fullscreen
 		var is_fs := DisplayServer.window_get_mode() in [DisplayServer.WINDOW_MODE_FULLSCREEN, DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN]

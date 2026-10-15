@@ -1,87 +1,94 @@
 extends MenuBase
 
-## Title screen.
+## Title screen, laid out like a '70s jazz title card: slanted colour bars,
+## big condensed italic type, menu down the left.
 
-var _title_box: Control
 var _t := 0.0
-var _balls: Array = []
 
 
 func _ready() -> void:
 	MatchManager.state = MatchManager.State.MENU
 	var bg := Background.new()
-	bg.auto_scroll = 40.0
+	bg.auto_scroll = 30.0
 	add_child(bg)
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
+	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 90)
+	margin.add_theme_constant_override("margin_top", 60)
+	margin.add_theme_constant_override("margin_bottom", 60)
+	add_child(margin)
 	var col := VBoxContainer.new()
-	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.add_theme_constant_override("separation", 10)
-	add_child(col)
+	margin.add_child(col)
 
-	_title_box = VBoxContainer.new()
-	_title_box.add_theme_constant_override("separation", -26)
-	_title_box.add_child(UiTheme.title("ULTIMATE", 54, Palette.TEXT_DIM))
-	var t := UiTheme.title("CAKUM PAKUM", 110, Palette.ACCENT)
-	t.add_theme_constant_override("outline_size", 18)
-	t.add_theme_color_override("font_outline_color", Palette.BG_DEEP)
-	_title_box.add_child(t)
-	col.add_child(_title_box)
-	var tag := UiTheme.label("Climb. Sabotage. Don't touch the lava.", 22, Palette.TEXT)
-	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var pre := UiTheme.title("ultimate", 40, Palette.PAPER)
+	pre.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	col.add_child(pre)
+	var title := UiTheme.title("cakum pakum", 128, Palette.MUSTARD)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	title.add_theme_constant_override("outline_size", 22)
+	title.add_theme_constant_override("line_spacing", -30)
+	col.add_child(title)
+	var tag := UiTheme.label("CLIMB.  SABOTAGE.  DON'T TOUCH THE SLAG.", 24, Palette.PAPER)
+	tag.add_theme_font_override("font", UiTheme.heavy())
+	tag.add_theme_constant_override("outline_size", 8)
 	col.add_child(tag)
 
 	var spacer := Control.new()
-	spacer.custom_minimum_size.y = 26
+	spacer.custom_minimum_size.y = 30
 	col.add_child(spacer)
 
-	var buttons := VBoxContainer.new()
-	buttons.add_theme_constant_override("separation", 12)
-	buttons.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	col.add_child(buttons)
 	var list: Array = []
 	for entry in [["Play", _on_play], ["How to Play", _on_help], ["Settings", open_settings], ["Quit", func(): get_tree().quit()]]:
-		var b := UiTheme.button(entry[0], 340)
+		var b := UiTheme.button(entry[0], 360)
+		b.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.pressed.connect(entry[1])
-		buttons.add_child(b)
+		col.add_child(b)
 		list.append(b)
 	if Settings.is_web():
 		list[-1].visible = false
 	MenuBase.link_vertical(list)
 
-	var foot := UiTheme.label("v%s  ·  Keyboard or gamepad  ·  Up to 4 players" % ProjectSettings.get_setting("application/config/version"), 16, Color(Palette.TEXT_DIM, 0.7))
-	foot.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	foot.position.y -= 34
-	foot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	foot.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	var foot := UiTheme.label("v%s   //   KEYBOARD OR GAMEPAD   //   1-4 PLAYERS" % ProjectSettings.get_setting("application/config/version"), 16, Palette.PAPER_DIM)
+	foot.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	foot.position = Vector2(90, -40)
+	foot.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	add_child(foot)
-
-	# A few decorative bouncing balls in player colours.
-	for i in 4:
-		_balls.append({"x": randf_range(0.08, 0.92), "phase": randf() * TAU, "c": Palette.PLAYER_COLORS[i]})
 	focus_first()
 
 
 func _process(delta: float) -> void:
 	_t += delta
-	_title_box.pivot_offset = _title_box.size * 0.5
-	_title_box.rotation = sin(_t * 1.3) * 0.015
 	queue_redraw()
 
 
 func _draw() -> void:
+	# Slanted bars sweeping behind the title, drifting slowly.
 	var vp := size
-	for b in _balls:
-		var h := absf(sin(_t * 2.2 + b.phase))
-		var p := Vector2(vp.x * b.x, vp.y - 40 - h * 160)
-		var sq := Vector2(1.0 + (1.0 - h) * 0.25, 1.0 - (1.0 - h) * 0.25) if h < 0.15 else Vector2.ONE
-		draw_set_transform(p, 0, sq)
-		draw_circle(Vector2.ZERO, 16, Palette.BG_DEEP)
-		draw_circle(Vector2.ZERO, 13, b.c)
-		draw_rect(Rect2(-6, -5, 4, 6), Palette.BG_DEEP)
-		draw_rect(Rect2(2, -5, 4, 6), Palette.BG_DEEP)
-	draw_set_transform(Vector2.ZERO)
+	var bars := [[Palette.RUST, 0.20, 70.0], [Palette.MUSTARD, 0.30, 22.0], [Palette.BURGUNDY, 0.335, 110.0], [Palette.TEAL, 0.50, 16.0]]
+	for i in bars.size():
+		var b: Array = bars[i]
+		var y: float = vp.y * b[1]
+		var h: float = b[2]
+		var drift := sin(_t * 0.4 + i) * 30.0
+		var slant := 260.0
+		var x0 := vp.x * 0.42 + drift
+		var pts := PackedVector2Array([Vector2(x0, y), Vector2(vp.x + 50, y), Vector2(vp.x + 50 - h * 0.6, y + h), Vector2(x0 - h * 0.6, y + h)])
+		pts[0].x -= slant * (1.0 - float(i) / bars.size())
+		draw_colored_polygon(pts, b[0])
+		draw_line(pts[0], pts[1], Palette.INK, 3.0)
+	# Big ink ball with a visor, like the player, watching from the right.
+	var c := Vector2(vp.x * 0.78, vp.y * 0.66 + sin(_t * 1.5) * 6.0)
+	draw_circle(c + Vector2(14, 14), 92, Color(Palette.INK, 0.5))
+	draw_circle(c, 96, Palette.INK)
+	draw_circle(c, 86, Palette.PLAYER_COLORS[0])
+	draw_arc(c + Vector2(10, 10), 70, 0.2, 1.9, 20, Palette.PLAYER_COLORS[0].darkened(0.35), 14.0)
+	draw_line(c + Vector2(-36, -18), c + Vector2(40, -18), Palette.INK, 26.0)
+	draw_line(c + Vector2(-28, -18), c + Vector2(32, -18), Palette.PAPER, 10.0)
 
 
 func _on_play() -> void:

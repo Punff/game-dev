@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://046rpxnd5cby"
-path="res://.godot/imported/Nunito-Regular.ttf-921cd080345d5f87dc345f06607f3a25.fontdata"
+uid="uid://gu2emd7dr75v"
+path="res://.godot/imported/OpenSans-CondensedBold.ttf-4148da94557813eded670c77ab6fdee9.fontdata"
 
 [deps]
 
-source_file="res://assets/fonts/Nunito-Regular.ttf"
-dest_files=["res://.godot/imported/Nunito-Regular.ttf-921cd080345d5f87dc345f06607f3a25.fontdata"]
+source_file="res://assets/fonts/OpenSans-CondensedBold.ttf"
+dest_files=["res://.godot/imported/OpenSans-CondensedBold.ttf-4148da94557813eded670c77ab6fdee9.fontdata"]
 
 [params]
 

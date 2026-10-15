@@ -1,43 +1,56 @@
 class_name Palette
 extends RefCounted
 
-## Shared colour language for UI, world and effects.
+## Noir-jazz colour language: inky blacks, nicotine paper, mustard, rust,
+## burgundy and a cold teal, like a '70s jazz record sleeve.
 
-const BG_DEEP := Color("100f1f")
-const BG := Color("1a1830")
-const PANEL := Color("23203d")
-const PANEL_HI := Color("2e2a50")
-const LINE := Color("4a4475")
-const TEXT := Color("f3efff")
-const TEXT_DIM := Color("a39dc7")
-const ACCENT := Color("ffc94a")     # warm gold, focus / highlights
-const ACCENT_2 := Color("ff5e7e")   # hot pink, danger / titles
-const GOOD := Color("4ade80")
-const LAVA := Color("ff6a2b")
+const INK := Color("0e0c0b")
+const INK_SOFT := Color("1d1a18")
+const SMOKE := Color("34302c")
+const PAPER := Color("ece2c8")
+const PAPER_DIM := Color("a89e86")
+const MUSTARD := Color("e3a92c")
+const RUST := Color("d2532a")
+const BURGUNDY := Color("7e1f2c")
+const TEAL := Color("2f7473")
+const NAVY := Color("1a2433")
+
+# UI aliases
+const BG_DEEP := INK
+const BG := INK_SOFT
+const PANEL := INK_SOFT
+const PANEL_HI := SMOKE
+const LINE := PAPER_DIM
+const TEXT := PAPER
+const TEXT_DIM := PAPER_DIM
+const ACCENT := MUSTARD
+const ACCENT_2 := RUST
+const GOOD := Color("8fb04a")
+const LAVA := RUST
 
 const PLAYER_COLORS: Array[Color] = [
-	Color("ff4d6d"), # red
-	Color("3fa7ff"), # blue
-	Color("ffd23f"), # yellow
-	Color("3ee089"), # green
-	Color("c77dff"), # purple
-	Color("ff8c42"), # orange
-	Color("2de2e6"), # cyan
-	Color("ff7eb9"), # pink
+	Color("e8452c"), # red
+	Color("3a9ad9"), # blue
+	Color("f2c230"), # yellow
+	Color("62b46a"), # green
+	Color("b06ad9"), # violet
+	Color("ef8a2e"), # orange
+	Color("3fc6c0"), # cyan
+	Color("ec6fa0"), # pink
 ]
 
-const PLAYER_COLOR_NAMES: Array[String] = ["Red", "Blue", "Yellow", "Green", "Purple", "Orange", "Cyan", "Pink"]
+const PLAYER_COLOR_NAMES: Array[String] = ["Red", "Blue", "Yellow", "Green", "Violet", "Orange", "Cyan", "Pink"]
 
-## Block colours: [body, highlight] keyed by block id.
+## Block colours: [face, accent] keyed by block id.
 const BLOCKS := {
-	"static_platform": [Color("3d4470"), Color("5d6aa8")],
-	"bounce_pad": [Color("1f9e5a"), Color("4be38f")],
-	"speed_block": [Color("d9822b"), Color("ffbe5c")],
-	"breakable_block": [Color("8a5a3c"), Color("b98560")],
-	"conveyor_block": [Color("5b45c4"), Color("8b78ff")],
-	"push_zone": [Color("c2413d"), Color("ff7a70")],
-	"vanishing_block": [Color("2a8fa8"), Color("6fe3ff")],
-	"ice_block": [Color("8fc9ef"), Color("e6f6ff")],
-	"moving_platform": [Color("596282"), Color("8b95bd")],
-	"reverse_block": [Color("b02e7c"), Color("ff6ac1")],
+	"static_platform": [Color("3b3733"), Color("6d665c")],
+	"bounce_pad": [Color("5f8a3c"), Color("b8d46a")],
+	"speed_block": [Color("e3a92c"), Color("0e0c0b")],
+	"breakable_block": [Color("c9b993"), Color("6d6250")],
+	"conveyor_block": [Color("2f7473"), Color("9fd3cc")],
+	"push_zone": [Color("d2532a"), Color("f3c29a")],
+	"vanishing_block": [Color("51657a"), Color("b8c8d8")],
+	"ice_block": [Color("9cc8d8"), Color("ffffff")],
+	"moving_platform": [Color("1a2433"), Color("8a9bb0")],
+	"reverse_block": [Color("7e1f2c"), Color("f08a9a")],
 }

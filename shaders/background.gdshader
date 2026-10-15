@@ -1,16 +1,16 @@
 shader_type canvas_item;
 
-// Single-pass procedural backdrop: sky gradient, twinkling stars, two layers
-// of parallax floating islands and the out-of-bounds side walls.
-// No textures and no screen reads, so it is cheap on WebGL2.
+// Noir-jazz backdrop in one pass: smoky gradient, comic halftone glow,
+// a pale moon, two parallax layers of endless megastructure towers with
+// lit windows, film grain + scratches, and hazard-striped side walls.
 
-uniform vec4 sky_top : source_color = vec4(0.10, 0.09, 0.20, 1.0);
-uniform vec4 sky_bottom : source_color = vec4(0.20, 0.13, 0.30, 1.0);
-uniform vec4 island_color : source_color = vec4(0.14, 0.12, 0.26, 1.0);
-uniform vec4 accent : source_color = vec4(1.0, 0.6, 0.4, 1.0);
+uniform vec4 sky_top : source_color = vec4(0.10, 0.14, 0.20, 1.0);
+uniform vec4 sky_bottom : source_color = vec4(0.35, 0.16, 0.14, 1.0);
+uniform vec4 island_color : source_color = vec4(0.05, 0.05, 0.05, 1.0); // towers
+uniform vec4 accent : source_color = vec4(0.89, 0.66, 0.17, 1.0);
 uniform vec2 cam_pos = vec2(0.0);
 uniform vec2 view_size = vec2(1280.0, 720.0);
-uniform float half_width = 660.0;
+uniform float half_width = 1100.0;
 uniform float detail = 1.0;
 uniform float time_offset = 0.0;
 
@@ -20,76 +20,90 @@ float hash(vec2 p) {
 	return fract(p.x * p.y);
 }
 
-float rbox(vec2 p, vec2 b, float r) {
-	vec2 q = abs(p) - b + r;
-	return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
-}
-
-// Floating island silhouettes in a grid; one island per cell. Each island is
-// a flat top slab with a tapering rocky underside (a pointed ellipse).
-float islands(vec2 p, vec2 cell, float seed) {
-	vec2 id = floor(p / cell);
-	vec2 f = p - id * cell - cell * 0.5;
-	float h = hash(id + seed);
-	if (h < 0.45) return 0.0;
-	vec2 jitter = (vec2(hash(id + seed + 3.1), hash(id + seed + 7.7)) - 0.5) * cell * 0.3;
-	float w = cell.x * (0.14 + 0.14 * hash(id + 1.3));
-	float th = cell.y * (0.035 + 0.02 * hash(id + 2.9));
-	vec2 q = f - jitter;
-	float top = rbox(q, vec2(w, th), th * 0.9);
-	// Underside: width shrinks with depth, slightly wobbly edge.
-	float depth = w * (0.55 + 0.4 * hash(id + 5.3));
-	float y = clamp(q.y / depth, 0.0, 1.0);
-	float wob = sin(q.y * 0.15 + h * 20.0) * 4.0;
-	float half_w = w * 0.92 * (1.0 - y) * (1.0 - y * 0.3) + wob * (1.0 - y);
-	float under = max(abs(q.x) - half_w, max(-q.y, q.y - depth));
-	float d = min(top, under);
-	return 1.0 - smoothstep(-1.0, 1.0, d);
+// Endless vertical towers: returns (coverage, window light).
+vec2 towers(vec2 p, float cell_w, float seed) {
+	float cx = floor(p.x / cell_w);
+	float h = hash(vec2(cx, seed));
+	if (h < 0.35) return vec2(0.0);
+	float w = cell_w * (0.3 + 0.45 * hash(vec2(cx, seed + 1.0)));
+	float off = (hash(vec2(cx, seed + 2.0)) - 0.5) * (cell_w - w);
+	float lx = p.x - cx * cell_w - cell_w * 0.5 - off;
+	if (abs(lx) > w * 0.5) {
+		// girder bands bridging between towers every so often
+		float band = mod(p.y + h * 900.0, 700.0);
+		return vec2(step(band, 26.0) * step(0.6, h) , 0.0);
+	}
+	// windows
+	vec2 wcell = vec2(22.0, 30.0);
+	vec2 wid = floor(vec2(lx + w * 0.5, p.y) / wcell);
+	vec2 wf = fract(vec2(lx + w * 0.5, p.y) / wcell);
+	float lit = step(0.82, hash(wid + vec2(cx * 7.0, seed)));
+	float win = lit * step(0.3, wf.x) * step(wf.x, 0.7) * step(0.3, wf.y) * step(wf.y, 0.75);
+	// dark seams at the tower edge
+	float edge = step(w * 0.5 - 6.0, abs(lx));
+	return vec2(1.0, win * (1.0 - edge));
 }
 
 void fragment() {
 	vec2 uv = UV;
 	vec2 rel = (uv - 0.5) * view_size;
 	float t = TIME + time_offset;
+	vec2 px = FRAGCOORD.xy;
 
-	vec3 col = mix(sky_top.rgb, sky_bottom.rgb, smoothstep(0.0, 1.0, uv.y));
+	// Smoky gradient, warmer toward the bottom of the screen
+	vec3 col = mix(sky_top.rgb, sky_bottom.rgb, smoothstep(0.1, 1.0, uv.y));
 
-	// Stars (very far, barely move)
-	vec2 sp = rel + cam_pos * 0.04;
-	vec2 sid = floor(sp / 42.0);
-	float s = hash(sid);
-	if (s > 0.86) {
-		vec2 so = (vec2(hash(sid + 1.0), hash(sid + 2.0)) - 0.5) * 30.0;
-		float d = length(sp - sid * 42.0 - 21.0 - so);
-		float tw = 0.55 + 0.45 * sin(t * (1.0 + s * 3.0) + s * 40.0);
-		col += vec3(1.0, 0.95, 0.9) * (1.0 - smoothstep(0.6, 1.8, d)) * tw * 0.55 * detail;
+	// Comic halftone glow rising from the bottom
+	float glow = smoothstep(0.35, 1.05, uv.y);
+	vec2 hc = fract(px / 9.0) - 0.5;
+	float dot_r = glow * 0.55;
+	float halftone = 1.0 - smoothstep(dot_r - 0.06, dot_r + 0.06, length(hc));
+	col = mix(col, sky_bottom.rgb * 1.6 + accent.rgb * 0.15, halftone * 0.55);
+
+	// Big pale moon, barely moving, halftone-shaded
+	vec2 mp = rel + cam_pos * 0.02 - vec2(view_size.x * 0.22, -view_size.y * 0.18);
+	float md = length(mp);
+	float mr = min(view_size.x, view_size.y) * 0.22;
+	if (md < mr) {
+		float shade = clamp((mp.x + mp.y) / mr * 0.6 + 0.5, 0.0, 1.0);
+		float hd = 1.0 - smoothstep(shade * 0.5 - 0.05, shade * 0.5 + 0.05, length(hc));
+		vec3 moon = mix(vec3(0.93, 0.89, 0.78), vec3(0.93, 0.89, 0.78) * 0.55, hd);
+		col = mix(col, moon, 0.85 * (1.0 - smoothstep(mr - 2.0, mr, md)));
 	}
 
-	// Far islands
+	// Far towers
 	if (detail > 0.5) {
-		float far = islands(rel + cam_pos * 0.15 + vec2(t * 4.0, 0.0), vec2(420.0, 300.0), 11.0);
-		col = mix(col, mix(island_color.rgb, sky_top.rgb, 0.45), far * 0.8);
+		vec2 fp = rel + cam_pos * vec2(0.2, 0.2);
+		vec2 far = towers(fp, 260.0, 3.0);
+		col = mix(col, mix(island_color.rgb, sky_top.rgb, 0.55), far.x);
+		col = mix(col, accent.rgb * 0.6, far.y * 0.6);
 	}
-	// Near islands with a lit rim
-	vec2 np = rel + cam_pos * 0.35;
-	float near = islands(np, vec2(560.0, 420.0), 37.0);
-	float near_up = islands(np + vec2(0.0, 3.0), vec2(560.0, 420.0), 37.0);
-	col = mix(col, island_color.rgb, near);
-	col += accent.rgb * clamp(near - near_up, 0.0, 1.0) * 0.35;
+	// Near towers
+	vec2 np = rel + cam_pos * vec2(0.45, 0.45);
+	vec2 near = towers(np, 380.0, 11.0);
+	col = mix(col, island_color.rgb, near.x);
+	col = mix(col, accent.rgb, near.y * 0.85);
 
-	// Side walls outside the playable column
+	// Side walls: ink with hazard stripes along the edge
 	float wx = rel.x + cam_pos.x;
 	float out_d = abs(wx) - half_width;
 	if (out_d > 0.0) {
-		float stripes = step(0.5, fract((wx + rel.y + cam_pos.y) / 48.0)) * 0.06;
-		vec3 wall = sky_top.rgb * 0.45 + stripes;
-		col = mix(col, wall, 0.85);
-		col += accent.rgb * (1.0 - smoothstep(0.0, 6.0, out_d)) * 0.5;
+		col = vec3(0.055, 0.047, 0.043);
+		float stripe = step(0.5, fract((wx * sign(wx) + rel.y + cam_pos.y) / 56.0));
+		col = mix(col, accent.rgb, stripe * (1.0 - step(34.0, out_d)));
+		col = mix(col, vec3(0.0), step(34.0, out_d) * step(out_d, 40.0));
 	}
 
-	// Soft vignette
+	// Film grain, scratches, vignette
+	float grain = hash(px + fract(t * 7.13) * 100.0) - 0.5;
+	col += grain * 0.07 * (0.5 + detail * 0.5);
+	if (detail > 0.5) {
+		float sx = floor(px.x / 2.0);
+		float scratch = step(0.9985, hash(vec2(sx, floor(t * 12.0))));
+		col = mix(col, vec3(0.9, 0.85, 0.7), scratch * 0.25);
+	}
 	vec2 v = uv - 0.5;
-	col *= 1.0 - dot(v, v) * 0.55;
+	col *= 1.0 - dot(v, v) * 1.1;
 
 	COLOR = vec4(col, 1.0);
 }

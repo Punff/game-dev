@@ -31,7 +31,7 @@ func _ready() -> void:
 func show_player(info: PlayerInfo) -> void:
 	_info = info
 	if info == null:
-		add_theme_stylebox_override("panel", UiTheme.box(Color(Palette.PANEL, 0.55), Color(Palette.LINE, 0.6), 2, 18, Vector2(16, 16)))
+		add_theme_stylebox_override("panel", UiTheme.box(Color(Palette.INK, 0.6), Color(Palette.PAPER_DIM, 0.5), 2, 0, Vector2(16, 16), 6))
 		_name.text = "OPEN"
 		_name.add_theme_color_override("font_color", Palette.TEXT_DIM)
 		_device.text = ""
@@ -47,7 +47,9 @@ func show_player(info: PlayerInfo) -> void:
 		_controls.text = "\n".join(lines)
 	else:
 		var border := Palette.GOOD if info.is_ready else info.color
-		add_theme_stylebox_override("panel", UiTheme.box(Palette.PANEL, border, 4 if info.is_ready else 3, 18, Vector2(16, 16)))
+		var sb := UiTheme.box(Color(Palette.INK, 0.94), border, 5 if info.is_ready else 3, 0, Vector2(16, 16), 10)
+		sb.border_width_top = 14
+		add_theme_stylebox_override("panel", sb)
 		_name.text = info.display_name
 		_name.add_theme_color_override("font_color", info.color)
 		_device.text = info.device_label()
@@ -75,20 +77,18 @@ func _process(delta: float) -> void:
 
 
 func _draw_preview() -> void:
-	var c := Vector2(_preview.size.x * 0.5, 56)
+	var c := Vector2(_preview.size.x * 0.5, 54)
 	if _info == null:
-		var a := 0.35 + 0.2 * sin(_t * 3.0)
-		_preview.draw_arc(c, 30, 0, TAU, 40, Color(Palette.TEXT_DIM, a), 3.0, true)
-		_preview.draw_line(c + Vector2(-12, 0), c + Vector2(12, 0), Color(Palette.TEXT_DIM, a), 4.0)
-		_preview.draw_line(c + Vector2(0, -12), c + Vector2(0, 12), Color(Palette.TEXT_DIM, a), 4.0)
+		var a := 0.4 + 0.25 * sin(_t * 3.0)
+		_preview.draw_rect(Rect2(c - Vector2(30, 30), Vector2(60, 60)), Color(Palette.PAPER_DIM, a), false, 3.0)
+		_preview.draw_line(c + Vector2(-14, 0), c + Vector2(14, 0), Color(Palette.PAPER_DIM, a), 5.0)
+		_preview.draw_line(c + Vector2(0, -14), c + Vector2(0, 14), Color(Palette.PAPER_DIM, a), 5.0)
 		return
-	var bounce := absf(sin(_t * (5.0 if _info.is_ready else 2.5))) * (22.0 if _info.is_ready else 8.0)
-	var p := c - Vector2(0, bounce)
-	_preview.draw_set_transform(c + Vector2(0, 36), 0, Vector2(1, 0.25))
-	_preview.draw_circle(Vector2.ZERO, 30 - bounce * 0.4, Color(0, 0, 0, 0.3))
-	_preview.draw_set_transform(Vector2.ZERO)
-	_preview.draw_circle(p, 34, Palette.BG_DEEP)
-	_preview.draw_circle(p, 30, _info.color)
-	_preview.draw_circle(p + Vector2(-9, -11), 10, Color(1, 1, 1, 0.25))
-	for ex in [-10.0, 10.0]:
-		_preview.draw_rect(Rect2(p + Vector2(ex - 4, -8), Vector2(8, 12)), Palette.BG_DEEP)
+	var bob := sin(_t * (6.0 if _info.is_ready else 2.0)) * (5.0 if _info.is_ready else 2.0)
+	var p := c + Vector2(0, bob)
+	_preview.draw_circle(p + Vector2(8, 8), 36, Color(Palette.INK, 0.5))
+	_preview.draw_circle(p, 38, Palette.INK)
+	_preview.draw_circle(p, 33, _info.color)
+	_preview.draw_arc(p + Vector2(4, 4), 26, 0.2, 1.9, 12, _info.color.darkened(0.35), 6.0)
+	_preview.draw_line(p + Vector2(-16, -8), p + Vector2(18, -8), Palette.INK, 12.0)
+	_preview.draw_line(p + Vector2(-12, -8), p + Vector2(14, -8), Palette.PAPER, 5.0)

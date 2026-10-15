@@ -41,9 +41,10 @@ func _show(results: Dictionary) -> void:
 		if results.new_record:
 			c.add_child(_centered(UiTheme.label("New height record: %d m!" % results.best_height, 20, Palette.GOOD)))
 
-	var spacer := Control.new()
-	spacer.custom_minimum_size.y = 8
-	c.add_child(spacer)
+	var sign_off := UiTheme.label("SEE YOU SPACE COWBOY...", 26, Palette.PAPER_DIM)
+	sign_off.add_theme_font_override("font", UiTheme.title_font())
+	sign_off.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	c.add_child(sign_off)
 	var buttons := [
 		_menu.add_button("Rematch", func(): MatchManager.start_match()),
 		_menu.add_button("Change Players", func(): MatchManager.to_lobby()),
@@ -66,7 +67,7 @@ func _row(place: int, info: PlayerInfo) -> Control:
 	h.add_child(medal)
 	var dot := ColorRect.new()
 	dot.color = info.color
-	dot.custom_minimum_size = Vector2(22, 22)
+	dot.custom_minimum_size = Vector2(26, 26)
 	dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	h.add_child(dot)
 	var name := UiTheme.label("P%d" % info.player_id, 26, info.color)

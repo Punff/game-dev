@@ -1,31 +1,29 @@
 extends Node
 
-## Tiny procedural sound bank. Every sound is synthesised once at startup
-## into an AudioStreamWAV, so the game ships with zero audio assets.
+## Procedural noir-jazz sound bank: upright-bass plucks (Karplus-Strong),
+## finger snaps, rimshots, brass stabs, a revolver-crack shockwave and
+## cymbals. Everything is synthesised at startup - one sound per frame so
+## there's no hitch - into AudioStreamWAVs. Zero audio assets shipped.
 
 const RATE := 22050
-const VOICES := 14
+const VOICES := 16
 
 var _streams: Dictionary = {}
 var _players: Array[AudioStreamPlayer] = []
 var _next := 0
 var _last_played: Dictionary = {}
 var _rng := RandomNumberGenerator.new()
-var _music_player := AudioStreamPlayer.new()
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_rng.seed = 1977
 	for i in VOICES:
 		var p := AudioStreamPlayer.new()
 		p.bus = &"SFX"
 		add_child(p)
 		_players.append(p)
 	_build_bank()
-	_music_player.bus = &"Music"
-	_music_player.volume_db = -6.0
-	add_child(_music_player)
-	_build_music()
 
 
 ## Plays a sound by name. `pitch_jitter` randomises pitch a little so
@@ -34,7 +32,6 @@ func play(name: String, volume_db := 0.0, pitch := 1.0, pitch_jitter := 0.04) ->
 	var stream: AudioStreamWAV = _streams.get(name)
 	if stream == null:
 		return
-	# Throttle identical sounds fired in the same few milliseconds.
 	var now := Time.get_ticks_msec()
 	if now - int(_last_played.get(name, -1000)) < 35:
 		return
@@ -49,73 +46,249 @@ func play(name: String, volume_db := 0.0, pitch := 1.0, pitch_jitter := 0.04) ->
 	p.play()
 
 
-# ── Synthesis ────────────────────────────────
+func is_ready() -> bool:
+	return _streams.size() >= 23
+
+
+# ── Bank ─────────────────────────────────────
+
+const A2 := 110.0
+const E3 := 164.81
+const G3 := 196.0
+const A3 := 220.0
+const C4 := 261.63
+const D4 := 293.66
+const E4 := 329.63
+const G4 := 392.0
+const B4 := 493.88
 
 func _build_bank() -> void:
-	_streams["jump"] = _to_wav(_tone(0.11, 330.0, 620.0, "square", 0.22))
-	_streams["double_jump"] = _to_wav(_tone(0.10, 520.0, 980.0, "square", 0.18))
-	_streams["charge_jump"] = _to_wav(_tone(0.26, 180.0, 900.0, "saw", 0.22))
-	_streams["land"] = _to_wav(_noise(0.07, 0.35, 900.0))
-	_streams["bounce"] = _to_wav(_tone(0.28, 180.0, 760.0, "sine", 0.45, 18.0))
-	_streams["shockwave"] = _to_wav(_mix([_noise(0.32, 0.4, 2400.0), _tone(0.32, 140.0, 40.0, "sine", 0.6)]))
-	_streams["break"] = _to_wav(_mix([_noise(0.22, 0.5, 3000.0), _tone(0.12, 220.0, 90.0, "square", 0.15)]))
-	_streams["gravity"] = _to_wav(_tone(0.30, 110.0, 160.0, "sine", 0.45, 9.0))
-	_streams["death"] = _to_wav(_tone(0.55, 620.0, 70.0, "square", 0.25))
-	_streams["count"] = _to_wav(_tone(0.14, 660.0, 660.0, "square", 0.2))
-	_streams["go"] = _to_wav(_tone(0.36, 990.0, 990.0, "square", 0.22))
-	_streams["ui_move"] = _to_wav(_tone(0.035, 1300.0, 1300.0, "sine", 0.25))
-	_streams["ui_select"] = _to_wav(_tone(0.09, 880.0, 1320.0, "square", 0.14))
-	_streams["ui_back"] = _to_wav(_tone(0.09, 640.0, 420.0, "square", 0.14))
-	_streams["join"] = _to_wav(_seq([[523.25, 0.07], [783.99, 0.12]], "square", 0.18))
-	_streams["leave"] = _to_wav(_seq([[587.33, 0.07], [392.0, 0.12]], "square", 0.16))
-	_streams["win"] = _to_wav(_seq([[523.25, 0.1], [659.25, 0.1], [783.99, 0.1], [1046.5, 0.32]], "square", 0.2))
-	_streams["chain"] = _to_wav(_seq([[783.99, 0.06], [1046.5, 0.06], [1318.5, 0.14]], "square", 0.18))
-	_streams["speed"] = _to_wav(_tone(0.12, 400.0, 900.0, "saw", 0.12))
-	_streams["vanish"] = _to_wav(_tone(0.18, 900.0, 300.0, "sine", 0.25))
+	var recipes := {
+		# movement: walking-bass plucks
+		"jump": func(): return _mix([_pluck(A2, 0.32, 0.55, 0.993), _click(0.25)]),
+		"double_jump": func(): return _mix([_pluck(E3, 0.28, 0.5, 0.992), _click(0.2)]),
+		"charge_jump": func(): return _brass([A3, C4, E4, G4], 0.38, 0.22),
+		"land": func(): return _mix([_tone(0.1, 95.0, 45.0, 0.5), _noise(0.06, 0.12, 1200.0)]),
+		"bounce": func(): return _mix([_pluck(A2, 0.4, 0.4, 0.995), _tone(0.3, 140.0, 420.0, 0.25, true)]),
+		# abilities
+		"shockwave": func(): return _gunshot(),
+		"break": func(): return _crumble(),
+		"gravity": func(): return _vibes([E4, B4], 0.6, 0.18),
+		"throw": func(): return _whoosh(0.28, 0.3),
+		"hit": func(): return _rimshot(0.45),
+		"speed": func(): return _whoosh(0.16, 0.18),
+		"vanish": func(): return _vibes([B4, G4], 0.3, 0.14),
+		"death": func(): return _wah(),
+		# match flow
+		"count": func(): return _snap(),
+		"go": func(): return _mix([_brass([C4, E4, G4, B4, D4 * 2.0], 0.7, 0.2), _cymbal(1.2, 0.18)]),
+		"chain": func(): return _mix([_brass([D4, G4, B4], 0.3, 0.2), _cymbal(0.8, 0.14)]),
+		"win": func(): return _seq_samples([_brass([C4, E4, G4], 0.18, 0.2), _brass([D4, G4, B4], 0.18, 0.2), _mix([_brass([E4, G4, B4, D4 * 2.0], 0.8, 0.22), _cymbal(1.2, 0.15)])]),
+		# UI
+		"ui_move": func(): return _hat(0.035, 0.18),
+		"ui_select": func(): return _rimshot(0.35),
+		"ui_back": func(): return _pluck(G3 * 0.5, 0.25, 0.45, 0.99),
+		"join": func(): return _seq_samples([_vibes([A3 * 2.0], 0.12, 0.2), _vibes([E4 * 2.0], 0.35, 0.2)]),
+		"leave": func(): return _seq_samples([_vibes([E4 * 2.0], 0.12, 0.2), _vibes([A3 * 2.0], 0.3, 0.2)]),
+	}
+	for key in recipes:
+		_streams[key] = _to_wav(recipes[key].call())
+		await get_tree().process_frame   # spread the work so startup never hitches
 
 
-func _osc(kind: String, phase: float) -> float:
-	match kind:
-		"square": return 1.0 if fmod(phase, 1.0) < 0.5 else -1.0
-		"saw": return fmod(phase, 1.0) * 2.0 - 1.0
-	return sin(phase * TAU)
+# ── Instruments ──────────────────────────────
+
+## Karplus-Strong plucked string - an upright bass at low pitches.
+func _pluck(f: float, dur: float, vol: float, damp := 0.994) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var period := maxi(2, int(RATE / f))
+	var ring := PackedFloat32Array()
+	ring.resize(period)
+	var lp := 0.0
+	for i in period:
+		lp += 0.5 * (_rng.randf_range(-1.0, 1.0) - lp)   # warmer excitation
+		ring[i] = lp
+	var out := PackedFloat32Array()
+	out.resize(n)
+	for i in n:
+		var idx := i % period
+		var nxt := (idx + 1) % period
+		var v := ring[idx]
+		out[i] = v * vol * 1.6
+		ring[idx] = damp * 0.5 * (v + ring[nxt])
+	return out
 
 
-## Pitch sweep with a quick attack and exponential-ish decay.
-func _tone(dur: float, f0: float, f1: float, kind: String, vol: float, vibrato := 0.0) -> PackedFloat32Array:
+## Pitch sweep with a quick attack and decay (sine or triangle).
+func _tone(dur: float, f0: float, f1: float, vol: float, tri := false) -> PackedFloat32Array:
 	var n := int(dur * RATE)
 	var out := PackedFloat32Array()
 	out.resize(n)
 	var phase := 0.0
 	for i in n:
 		var t := float(i) / n
-		var f := lerpf(f0, f1, t)
-		if vibrato > 0.0:
-			f *= 1.0 + 0.06 * sin(t * dur * vibrato * TAU)
-		phase += f / RATE
-		var env := minf(t * 40.0, 1.0) * pow(1.0 - t, 1.6)
-		out[i] = _osc(kind, phase) * env * vol
+		phase += lerpf(f0, f1, t) / RATE
+		var v := sin(phase * TAU) if not tri else 1.0 - 4.0 * absf(fmod(phase, 1.0) - 0.5)
+		out[i] = v * minf(t * 60.0, 1.0) * pow(1.0 - t, 1.5) * vol
 	return out
 
 
-## Low-passed white noise burst.
+## Section of saw-wave horns through a filter that opens and closes: a stab.
+func _brass(freqs: Array, dur: float, vol: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var phases := []
+	for f in freqs:
+		phases.append([0.0, 0.0])
+	var y := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		var env := minf(t / 0.02, 1.0) * exp(-t * 3.0 / dur)
+		var vib := 1.0 + 0.006 * sin(t * TAU * 5.5) * minf(t * 4.0, 1.0)
+		var s := 0.0
+		for k in freqs.size():
+			var ph: Array = phases[k]
+			ph[0] = fmod(ph[0] + freqs[k] * vib / RATE, 1.0)
+			ph[1] = fmod(ph[1] + freqs[k] * 1.007 * vib / RATE, 1.0)
+			s += (ph[0] * 2.0 - 1.0) + (ph[1] * 2.0 - 1.0)
+		s /= freqs.size() * 2.0
+		var cutoff := 300.0 + 3200.0 * env
+		y += (1.0 - exp(-TAU * cutoff / RATE)) * (s - y)
+		out[i] = y * env * vol * 2.2
+	return out
+
+
+## Vibraphone: sine + bright partial with motor tremolo.
+func _vibes(freqs: Array, dur: float, vol: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	for f in freqs:
+		for i in n:
+			var t := float(i) / RATE
+			var env := minf(t / 0.004, 1.0) * exp(-t * 3.5)
+			var trem := 0.8 + 0.2 * sin(t * TAU * 6.0)
+			out[i] += (sin(t * TAU * f) + 0.25 * sin(t * TAU * f * 4.0) * exp(-t * 12.0)) * env * trem * vol
+	return out
+
+
+## Revolver crack: sharp transient, low body, long gritty tail.
+func _gunshot() -> PackedFloat32Array:
+	var n := int(0.7 * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var lp := 0.0
+	var phase := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		var x := _rng.randf_range(-1.0, 1.0)
+		var crack := x * exp(-t * 90.0) * 0.9
+		lp += (1.0 - exp(-TAU * lerpf(4000.0, 500.0, minf(t * 3.0, 1.0)) / RATE)) * (x - lp)
+		var tail := lp * exp(-t * 7.0) * 0.55
+		phase += lerpf(160.0, 40.0, minf(t * 8.0, 1.0)) / RATE
+		var body := sin(phase * TAU) * exp(-t * 18.0) * 0.6
+		out[i] = crack + tail + body
+	return out
+
+
+## Concrete crumbling: a thump and a scatter of low gritty bursts.
+func _crumble() -> PackedFloat32Array:
+	var out := _tone(0.12, 120.0, 50.0, 0.55)
+	out.resize(int(0.45 * RATE))
+	for k in 7:
+		var at := int(_rng.randf_range(0.0, 0.3) * RATE)
+		var burst := _noise(_rng.randf_range(0.03, 0.09), _rng.randf_range(0.15, 0.35), _rng.randf_range(600.0, 2200.0))
+		for i in burst.size():
+			if at + i < out.size():
+				out[at + i] += burst[i]
+	return out
+
+
+## Muted-trumpet "wah" sliding down - the sad horn.
+func _wah() -> PackedFloat32Array:
+	var dur := 0.8
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var phase := 0.0
+	var y := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		var f := lerpf(330.0, 140.0, pow(t / dur, 0.7))
+		phase = fmod(phase + f / RATE, 1.0)
+		var s := phase * 2.0 - 1.0
+		var wah := 0.5 + 0.5 * sin(t * TAU * 4.0)
+		var cutoff := 250.0 + 1800.0 * wah
+		y += (1.0 - exp(-TAU * cutoff / RATE)) * (s - y)
+		out[i] = y * minf(t / 0.03, 1.0) * (1.0 - t / dur) * 0.5
+	return out
+
+
 func _noise(dur: float, vol: float, cutoff: float) -> PackedFloat32Array:
 	var n := int(dur * RATE)
 	var out := PackedFloat32Array()
 	out.resize(n)
-	var a := clampf(cutoff / RATE * TAU, 0.0, 1.0)
+	var a := 1.0 - exp(-TAU * cutoff / RATE)
 	var y := 0.0
 	for i in n:
 		var t := float(i) / n
 		y += a * (_rng.randf_range(-1.0, 1.0) - y)
-		out[i] = y * vol * 2.2 * pow(1.0 - t, 2.0)
+		out[i] = y * vol * 2.0 * pow(1.0 - t, 2.0)
 	return out
 
 
-func _seq(notes: Array, kind: String, vol: float) -> PackedFloat32Array:
+## High-passed noise: hats, snaps, cymbals.
+func _hiss(dur: float, vol: float, decay: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
 	var out := PackedFloat32Array()
-	for note in notes:
-		out.append_array(_tone(note[1], note[0], note[0], kind, vol))
+	out.resize(n)
+	var y := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		var x := _rng.randf_range(-1.0, 1.0)
+		y += 0.25 * (x - y)
+		out[i] = (x - y) * vol * exp(-t * decay)
+	return out
+
+
+func _hat(dur: float, vol: float) -> PackedFloat32Array:
+	return _hiss(dur, vol, 80.0)
+
+
+func _cymbal(dur: float, vol: float) -> PackedFloat32Array:
+	return _hiss(dur, vol, 3.5)
+
+
+func _snap() -> PackedFloat32Array:
+	return _mix([_hiss(0.08, 0.6, 60.0), _tone(0.02, 1800.0, 1200.0, 0.2)])
+
+
+func _click(vol: float) -> PackedFloat32Array:
+	return _hiss(0.015, vol, 300.0)
+
+
+func _rimshot(vol: float) -> PackedFloat32Array:
+	return _mix([_hiss(0.05, vol, 120.0), _tone(0.06, 520.0, 480.0, vol * 0.7)])
+
+
+func _whoosh(dur: float, vol: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var y := 0.0
+	for i in n:
+		var t := float(i) / n
+		var cutoff := lerpf(300.0, 4000.0, t)
+		y += (1.0 - exp(-TAU * cutoff / RATE)) * (_rng.randf_range(-1.0, 1.0) - y)
+		out[i] = y * vol * 2.0 * sin(t * PI)
+	return out
+
+
+func _seq_samples(parts: Array) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	for p in parts:
+		out.append_array(p)
 	return out
 
 
@@ -142,103 +315,3 @@ func _to_wav(samples: PackedFloat32Array) -> AudioStreamWAV:
 	wav.stereo = false
 	wav.data = data
 	return wav
-
-
-
-# ── Music ────────────────────────────────────
-# A 4-bar chiptune loop (Am - F - C - G) synthesised a few steps per frame
-# so startup never hitches, then looped forever on the Music bus.
-
-const BPM := 112.0
-const MUSIC_RATE := 16000
-const CHORDS := [
-	[110.0, [440.0, 523.25, 659.25]],   # Am
-	[87.31, [349.23, 440.0, 523.25]],   # F
-	[130.81, [523.25, 659.25, 783.99]], # C
-	[98.0, [392.0, 493.88, 587.33]],    # G
-]
-const ARP := [0, 1, 2, 1, 0, 1, 2, 2, 0, 1, 2, 1, 2, 1, 0, 1]
-const BASS_STEPS := [0, 3, 6, 8, 11, 14]
-
-
-func _build_music() -> void:
-	var rate := MUSIC_RATE
-	var step_len := int(rate * 60.0 / BPM / 4.0)
-	var total := step_len * 16 * CHORDS.size()
-	var buf := PackedFloat32Array()
-	buf.resize(total)
-	var step := 0
-	for bar in CHORDS.size():
-		var chord: Array = CHORDS[bar]
-		for i in 16:
-			var at := step * step_len
-			# Arp: thin pulse, an octave up at the end of the phrase
-			var f: float = chord[1][ARP[i]] * (2.0 if i >= 12 and bar == 3 else 1.0)
-			_add_note(buf, at, step_len, f / rate, false, 0.07, 0.9993)
-			if i in BASS_STEPS:
-				_add_note(buf, at, step_len * 2, chord[0] / rate, true, 0.32, 0.99975)
-			if i == 0 or i == 8 or (i == 10 and bar % 2 == 1):
-				_add_kick(buf, at, rate)
-			if i == 4 or i == 12:
-				_add_noise(buf, at, int(step_len * 1.2), 0.22, 0.35)
-			if i % 2 == 1:
-				_add_noise(buf, at, step_len / 3, 0.07, 0.9)
-			step += 1
-			await get_tree().process_frame   # one 16th note per frame: no hitches
-	var data := PackedByteArray()
-	data.resize(total * 2)
-	for i in total:
-		data.encode_s16(i * 2, int(clampf(buf[i], -1.0, 1.0) * 30000.0))
-		if i % 20000 == 19999:
-			await get_tree().process_frame
-	var wav := AudioStreamWAV.new()
-	wav.format = AudioStreamWAV.FORMAT_16_BITS
-	wav.mix_rate = rate
-	wav.data = data
-	wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
-	wav.loop_begin = 0
-	wav.loop_end = total
-	_music_player.stream = wav
-	_music_player.play()
-
-
-## Adds a pulse (25% duty) or triangle note. `inc` is frequency / sample rate,
-## `k` the per-sample exponential decay factor.
-func _add_note(buf: PackedFloat32Array, at: int, length: int, inc: float, tri: bool, vol: float, k: float) -> void:
-	var phase := 0.0
-	var env := vol
-	var attack := 40
-	var n := mini(length, buf.size() - at)
-	for i in n:
-		phase += inc
-		if phase >= 1.0:
-			phase -= 1.0
-		var v: float
-		if tri:
-			v = 1.0 - 4.0 * absf(phase - 0.5)
-		else:
-			v = 1.0 if phase < 0.25 else -1.0
-		var a := env if i > attack else env * i / attack
-		buf[at + i] += v * a
-		env *= k
-
-
-func _add_kick(buf: PackedFloat32Array, at: int, rate: int) -> void:
-	var n := mini(int(rate * 0.16), buf.size() - at)
-	var phase := 0.0
-	for i in n:
-		var t := float(i) / n
-		phase += (150.0 - 105.0 * t) / rate
-		buf[at + i] += sin(phase * TAU) * 0.55 * (1.0 - t)
-
-
-func _add_noise(buf: PackedFloat32Array, at: int, length: int, vol: float, bright: float) -> void:
-	var n := mini(length, buf.size() - at)
-	var y := 0.0
-	var env := vol
-	var k := pow(0.01, 1.0 / maxf(n, 1))
-	for i in n:
-		var x := _rng.randf() * 2.0 - 1.0
-		y += bright * (x - y)
-		buf[at + i] += (x - y * (1.0 - bright)) * env
-		env *= k

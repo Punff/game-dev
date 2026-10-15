@@ -26,8 +26,8 @@ func _physics_process(delta: float) -> void:
 
 
 func _draw_icon() -> void:
-	var col := _icon_color(0.8)
-	var hx := minf(size.x * 0.5 - 14.0, 40.0)
-	draw_line(Vector2(-hx, -3), Vector2(hx, -3), Color(col, 0.4), 3.0)
-	draw_polyline(PackedVector2Array([Vector2(-hx + 7, -10), Vector2(-hx, -3), Vector2(-hx + 7, 4)]), col, 3.0, true)
-	draw_polyline(PackedVector2Array([Vector2(hx - 7, -10), Vector2(hx, -3), Vector2(hx - 7, 4)]), col, 3.0, true)
+	var col := _icon_color()
+	var hx := minf(size.x * 0.5 - 20.0, 50.0)
+	_ink_line(PackedVector2Array([Vector2(-hx, 0), Vector2(hx, 0)]), col, 4.0)
+	_ink_line(PackedVector2Array([Vector2(-hx + 10, -10), Vector2(-hx, 0), Vector2(-hx + 10, 10)]), col, 4.0)
+	_ink_line(PackedVector2Array([Vector2(hx - 10, -10), Vector2(hx, 0), Vector2(hx - 10, 10)]), col, 4.0)

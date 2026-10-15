@@ -52,12 +52,13 @@ func _draw_cards(vp: Vector2) -> void:
 	for p: Player in players:
 		var r := Rect2(x, 14, w, h)
 		var dim := 0.4 if p.is_dead else 1.0
-		var bg := UiTheme.box(Color(Palette.PANEL, 0.85 * dim), Color(p.color, 0.9 * dim), 2, 12)
-		_canvas.draw_style_box(bg, r)
-		# Colour chip
-		_canvas.draw_circle(r.position + Vector2(26, 33), 14, Palette.BG_DEEP)
-		_canvas.draw_circle(r.position + Vector2(26, 33), 11, Color(p.color, dim))
-		_text(r.position + Vector2(48, 30), "P%d" % p.player_id, 20, Color(p.color, dim))
+		_canvas.draw_rect(Rect2(r.position + Vector2(6, 6), r.size), Color(Palette.INK, 0.6))
+		_canvas.draw_rect(r, Color(Palette.INK, 0.92))
+		_canvas.draw_rect(r, Color(Palette.PAPER_DIM, dim), false, 2.0)
+		# Colour slab down the left edge
+		_canvas.draw_rect(Rect2(r.position, Vector2(36, r.size.y)), Color(p.color, dim))
+		_canvas.draw_rect(Rect2(r.position + Vector2(36, 0), Vector2(3, r.size.y)), Palette.INK)
+		_text(r.position + Vector2(48, 30), "P%d" % p.player_id, 24, Color(p.color, dim))
 		var hstr := "OUT" if p.is_dead else "%d m" % p.height_meters()
 		if p.is_dead:
 			hstr = "OUT  %d m" % p.info.max_height
@@ -74,11 +75,10 @@ func _draw_cards(vp: Vector2) -> void:
 
 func _ability_bar(r: Rect2, ready: float, col: Color, label: String) -> void:
 	_canvas.draw_string(_font, r.position + Vector2(0, -3), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(Palette.TEXT_DIM, 0.9 if ready >= 1.0 else 0.55))
-	_canvas.draw_rect(r, Color(Palette.BG_DEEP, 0.9))
+	_canvas.draw_rect(r.grow(2), Palette.INK)
+	_canvas.draw_rect(r, Palette.SMOKE)
 	var fill := Rect2(r.position, Vector2(r.size.x * ready, r.size.y))
-	_canvas.draw_rect(fill, col.lightened(0.3) if ready >= 1.0 else Color(col, 0.55))
-	if ready >= 1.0:
-		_canvas.draw_rect(r, Color(1, 1, 1, 0.5), false, 1.0)
+	_canvas.draw_rect(fill, Palette.PAPER if ready >= 1.0 else Color(col, 0.75))
 
 
 ## Vertical track on the right: lava + every player's altitude.
@@ -95,16 +95,18 @@ func _draw_track(vp: Vector2) -> void:
 	var span := maxf(lava_y - hi, 600.0) * 1.15
 	var map_y := func(wy: float) -> float:
 		return bot_y - (lava_y - wy) / span * (bot_y - top_y)
-	_canvas.draw_line(Vector2(x, top_y), Vector2(x, bot_y), Color(Palette.LINE, 0.8), 4.0)
-	# Lava blob at the bottom
-	_canvas.draw_rect(Rect2(x - 8, bot_y - 4, 16, 10), Palette.LAVA)
+	_canvas.draw_line(Vector2(x, top_y), Vector2(x, bot_y), Palette.INK, 8.0)
+	_canvas.draw_line(Vector2(x, top_y), Vector2(x, bot_y), Palette.PAPER_DIM, 3.0)
+	# Lava block at the bottom
+	_canvas.draw_rect(Rect2(x - 10, bot_y - 6, 20, 14), Palette.INK)
+	_canvas.draw_rect(Rect2(x - 7, bot_y - 3, 14, 8), Palette.LAVA)
 	_text(Vector2(x - 40, bot_y + 26), "LAVA", 14, Palette.LAVA, HORIZONTAL_ALIGNMENT_CENTER, 80)
 	for p: Player in players:
 		if p.is_dead:
 			continue
 		var y: float = map_y.call(p.global_position.y)
-		_canvas.draw_circle(Vector2(x, y), 9, Palette.BG_DEEP)
-		_canvas.draw_circle(Vector2(x, y), 7, p.color)
+		_canvas.draw_rect(Rect2(x - 9, y - 9, 18, 18), Palette.INK)
+		_canvas.draw_rect(Rect2(x - 6, y - 6, 12, 12), p.color)
 		_text(Vector2(x - 54, y + 6), "P%d" % p.player_id, 15, p.color, HORIZONTAL_ALIGNMENT_RIGHT, 40)
 
 
@@ -131,7 +133,13 @@ func _draw_offscreen(vp: Vector2) -> void:
 
 func _draw_countdown(vp: Vector2) -> void:
 	var n: int = game.countdown_value()
-	if n > 0:
-		_text(Vector2(0, vp.y * 0.45), str(n), 140, Palette.ACCENT, HORIZONTAL_ALIGNMENT_CENTER, vp.x)
-	elif game.show_go():
-		_text(Vector2(0, vp.y * 0.45), "CLIMB!", 110, Palette.GOOD, HORIZONTAL_ALIGNMENT_CENTER, vp.x)
+	if n <= 0:
+		return
+	var f := UiTheme.title_font()
+	var y := vp.y * 0.42
+	var sess := "SESSION #%d" % maxi(MatchManager.session, 1)
+	_canvas.draw_rect(Rect2(0, y - 70, vp.x, 50), Color(Palette.INK, 0.85))
+	_canvas.draw_string(UiTheme.heavy(), Vector2(0, y - 32), sess, HORIZONTAL_ALIGNMENT_CENTER, vp.x, 34, Palette.MUSTARD)
+	_canvas.draw_string_outline(f, Vector2(8, y + 150), str(n), HORIZONTAL_ALIGNMENT_CENTER, vp.x, 180, 18, Palette.INK)
+	_canvas.draw_string_outline(f, Vector2(0, y + 142), str(n), HORIZONTAL_ALIGNMENT_CENTER, vp.x, 180, 18, Palette.INK)
+	_canvas.draw_string(f, Vector2(0, y + 142), str(n), HORIZONTAL_ALIGNMENT_CENTER, vp.x, 180, Palette.PAPER)

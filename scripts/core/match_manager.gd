@@ -10,6 +10,7 @@ const GAME := "res://scenes/game.tscn"
 
 var state: State = State.MENU
 var last_results: Dictionary = {}
+var session := 0   ## matches started this run, shown as "SESSION #n"
 
 
 func goto(path: String) -> void:
@@ -31,6 +32,7 @@ func to_lobby() -> void:
 
 
 func start_match() -> void:
+	session += 1
 	PlayerManager.reset_match_stats()
 	state = State.COUNTDOWN
 	goto(GAME)

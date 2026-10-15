@@ -94,7 +94,6 @@ func _build_general() -> void:
 	var focusables: Array = []
 	focusables.append(_slider_row("Master Volume", "master_volume", 0.0, 1.0))
 	focusables.append(_slider_row("Sound Effects", "sfx_volume", 0.0, 1.0))
-	focusables.append(_slider_row("Music", "music_volume", 0.0, 1.0))
 	focusables.append(_check_row("Fullscreen", "fullscreen", func(_on): Settings.toggle_fullscreen()))
 	if not Settings.is_web():
 		focusables.append(_check_row("VSync", "vsync"))

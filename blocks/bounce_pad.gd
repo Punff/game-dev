@@ -3,7 +3,7 @@ extends Block
 
 ## Launches players high into the air and refills their jumps.
 
-const BOUNCE_VELOCITY := 960.0
+const BOUNCE_VELOCITY := 1350.0
 
 var _squash := 0.0
 
@@ -27,9 +27,11 @@ func _process(delta: float) -> void:
 
 func _draw_icon() -> void:
 	var col := _icon_color()
-	var lift := -3.0 - (1.0 - _squash) * 2.0 + sin(Time.get_ticks_msec() * 0.006) * 1.5
-	for p in _icon_positions(80.0):
-		# Double chevron pointing up.
-		for k in 2:
-			var y := p.y + lift + 6.0 - k * 9.0
-			draw_polyline(PackedVector2Array([p + Vector2(-11, y - p.y + 5), p + Vector2(0, y - p.y - 4), p + Vector2(11, y - p.y + 5)]), col, 4.0, true)
+	var lift := -(1.0 - _squash) * 3.0 + sin(Time.get_ticks_msec() * 0.008) * 2.0
+	for p in _icon_positions(110.0):
+		# Coiled spring
+		var pts := PackedVector2Array()
+		for i in 7:
+			pts.append(p + Vector2(-16.0 + i * 5.3, (8.0 if i % 2 == 0 else -8.0) * (1.0 - _squash * 0.5) + lift))
+		_ink_line(pts, col, 4.0)
+		_ink_line(PackedVector2Array([p + Vector2(-20, -16 + lift), p + Vector2(20, -16 + lift)]), col, 4.0)

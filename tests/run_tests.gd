@@ -34,7 +34,7 @@ func _test_envelope_sanity() -> void:
 	var dbl := MapPlanner.max_rise(false)
 	var chg := MapPlanner.max_rise(true)
 	print("Envelope: double-jump rise %.0f px, charged rise %.0f px, reach@200 %.0f px" % [dbl, chg, MapPlanner.reach_h(200, false)])
-	check(dbl > 240.0, "double jump should rise more than the largest normal gap")
+	check(dbl > 380.0, "double jump should clear the largest normal row gap")
 	check(chg > dbl, "charged jump must out-reach a double jump")
 	check(MapPlanner.reach_h(dbl + 10.0, false) < 0.0, "nothing is reachable above max rise")
 	check(MapPlanner.can_reach(-100, 100, 150, 300, 150), "simple sideways hop is reachable")
@@ -49,22 +49,27 @@ func _test_planner_invariants() -> void:
 	for s in range(1, seeds + 1):
 		var p := MapPlanner.new(s)
 		p.start(0.0)
-		p.generate_until(-32000.0)   # all four biomes
+		p.generate_until(-45000.0)   # all four biomes
 		var prev_anchors: Array = p.rows[0].platforms
 		for i in range(1, p.rows.size()):
 			var row: Dictionary = p.rows[i]
 			var prev: Dictionary = p.rows[i - 1]
-			var dy: float = prev.y - row.y
+			var gap: float = prev.y - row.y
 			total_rows += 1
 			var plats: Array = row.platforms
 			check(not plats.is_empty(), "seed %d row %d is empty" % [s, i])
-			# Bounds & sizes
 			for pl in plats:
 				type_counts[pl.type] = type_counts.get(pl.type, 0) + 1
 				var lo: float = pl.x0 - pl.travel
 				var hi: float = pl.x1 + pl.travel
 				check(lo >= -MapPlanner.HALF_WIDTH - 0.1 and hi <= MapPlanner.HALF_WIDTH + 0.1, "seed %d row %d platform out of bounds (%.0f..%.0f)" % [s, i, lo, hi])
 				check(pl.x1 - pl.x0 >= MapPlanner.MIN_WIDTH - 0.1, "seed %d row %d platform too narrow" % [s, i])
+				# Never jammed on top of something from the row below.
+				for q in prev.platforms:
+					if pl.x1 + pl.travel < q.x0 - q.travel or pl.x0 - pl.travel > q.x1 + q.travel:
+						continue
+					var clearance: float = MapPlanner.top_of(q) - (pl.y + pl.h * 0.5)
+					check(clearance >= Player.RADIUS * 2.0, "seed %d row %d platform squashed onto the row below (%.0f px)" % [s, i, clearance])
 			# No overlaps inside a row (moving platforms include their travel)
 			for a in plats.size():
 				for b in range(a + 1, plats.size()):
@@ -72,26 +77,21 @@ func _test_planner_invariants() -> void:
 					var pb: Dictionary = plats[b]
 					var sep: float = (pb.x0 - pb.travel) - (pa.x1 + pa.travel) if pa.x0 < pb.x0 else (pa.x0 - pa.travel) - (pb.x1 + pb.travel)
 					check(sep >= MapPlanner.ROW_SPACING_MIN - 0.5, "seed %d row %d platforms overlap (sep %.1f)" % [s, i, sep])
-			# Vertical spacing sane
-			check(dy >= 150.0 and dy <= 310.0, "seed %d row %d gap %.0f out of range" % [s, i, dy])
+			check(gap > 0.0 and gap <= 540.0, "seed %d row %d gap %.0f out of range" % [s, i, gap])
 			# Reachability: an anchor reachable from an anchor below
 			var anchors := plats.filter(func(pl): return pl.anchor_ok)
-			var ok := false
-			for a in anchors:
-				for src in prev_anchors:
-					if MapPlanner.can_reach(src.x0, src.x1, a.x0, a.x1, dy, row.charged):
-						ok = true
-			check(ok, "seed %d row %d has no reachable anchor" % [s, i])
-			var reached := anchors.filter(func(pl): return MapPlanner.can_reach_any(prev_anchors, pl, dy, row.charged))
-			if not ok:
-				print("  row detail: dy=%.0f charged=%s prev=%s now=%s" % [dy, row.charged, _spans(prev_anchors), _spans(plats)])
+			var reached := anchors.filter(func(pl): return MapPlanner.can_reach_any(prev_anchors, pl, row.charged))
+			check(not reached.is_empty(), "seed %d row %d has no reachable anchor" % [s, i])
+			if reached.is_empty():
+				print("  row detail: charged=%s prev=%s now=%s" % [row.charged, _spans(prev_anchors), _spans(plats)])
 			prev_anchors = reached if not reached.is_empty() else anchors
 	print("Planner: %d rows over %d seeds, block mix %s" % [total_rows, seeds, type_counts])
 	check(type_counts.size() >= 9, "every block type should appear at least once")
+	check(type_counts.get("breakable", 0) > type_counts.get("static", 0) * 0.6, "breakable concrete should be a big part of the map")
 
 
 func _spans(plats: Array) -> String:
-	return ", ".join(plats.map(func(p): return "[%.0f..%.0f %s]" % [p.x0, p.x1, p.type]))
+	return ", ".join(plats.map(func(p): return "[%.0f..%.0f top %.0f %s]" % [p.x0, p.x1, MapPlanner.top_of(p), p.type]))
 
 
 func _test_planner_determinism() -> void:
@@ -145,7 +145,7 @@ func _test_bindings_roundtrip() -> void:
 func _test_jump_physics_matches_envelope() -> void:
 	# Cases inside the planner's safety margin must succeed with a simple bot:
 	# run right, jump, double jump at the apex, hold right.
-	var cases := [Vector2(300, 120), Vector2(120, 200), Vector2(220, 180), Vector2(60, 225), Vector2(30, 220), Vector2(160, 228)]
+	var cases := [Vector2(300, 120), Vector2(120, 200), Vector2(220, 300), Vector2(60, 340), Vector2(30, 300), Vector2(400, 250), Vector2(180, 370)]
 	for c in cases:
 		check(MapPlanner.can_reach(-150, 0, c.x, c.x + 150, c.y), "case %s should be planner-reachable" % c)
 		var landed := await _bot_jump(c.x, c.y)
@@ -183,7 +183,7 @@ func _bot_jump(dx: float, dy: float) -> bool:
 			above = true
 		# Same policy MapPlanner.simulate_ledge assumes: approach the ledge,
 		# don't go under it until you're above it, then drift over.
-		var stop := p.velocity.x * p.velocity.x / (2.0 * Player.AIR_ACCEL * 0.6)
+		var stop := p.velocity.x * p.velocity.x / (2.0 * Player.AIR_ACCEL * Player.AIR_BRAKE)
 		var want_right := x + stop < (dx + 75.0 if above else dx - Player.RADIUS - 10.0)
 		if want_right:
 			Input.action_press(right)
