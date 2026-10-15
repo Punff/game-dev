@@ -1,17 +1,17 @@
 # Web Build
 
-## Export (works from Linux/Windows/macOS)
+## Export
 
 ```bash
 godot --headless --path . --export-release "Web" ../build/web/index.html
 ```
 
-Or in the editor: **Project → Export → Web → Export Project**.
-Output: `../build/web/` (9 files, ~48 MB).
+Output in `../build/web/` — `index.pck` is ~0.4 MB, the rest is the stock
+Godot engine (`index.wasm`, ~39 MB uncompressed, ~9 MB gzipped).
 
 ## Test locally
 
-The build must be served over HTTP (WASM + `.pck` are fetched, `file://` will not work):
+Must be served over HTTP (`file://` won't work):
 
 ```bash
 cd ../build/web && python3 -m http.server 8060 --bind 127.0.0.1
@@ -22,33 +22,30 @@ cd ../build/web && python3 -m http.server 8060 --bind 127.0.0.1
 
 | Setting | Value |
 |---|---|
-| Threads | **single-threaded** (no COOP/COEP headers needed → works on itch.io, GitHub Pages, any static host) |
-| GDExtension support | off |
-| Texture compression | S3TC/BPTC (desktop browsers); ETC2/ASTC off — this is a keyboard/gamepad game, desktop only |
-| Renderer | project is Forward+, the web build runs it on **Compatibility / WebGL 2.0** automatically (no action needed) |
+| Threads | single-threaded — no COOP/COEP headers needed, works on itch.io, GitHub Pages, any static host |
+| GDExtension | off (none used) |
+| Renderer | GL Compatibility / WebGL 2 — the project uses it on desktop too, so what you see in the editor is what the browser shows |
+| Loading page | dark themed via `html/head_include` |
 
 ## Hosting
 
-- Upload the whole `build/web/` folder as-is; entry point `index.html`.
-- Serve `.wasm` and `.pck` with `Content-Type: application/octet-stream` and gzip/brotli
-  enabled — `index.wasm` is ~39 MB uncompressed, compression cuts load time a lot.
-- itch.io: enable "This file will be played in the browser" on `index.html`.
+- Upload the whole `build/web/` folder; entry point `index.html`.
+- Enable gzip/brotli for `.wasm` and `.pck` (big load-time win).
+- itch.io: "This file will be played in the browser", viewport 1280×720,
+  tick "Fullscreen button".
+
+## Web specifics handled in-game
+
+- Settings are saved to browser storage (IndexedDB via `user://`).
+- "Quit" is hidden; VSync option hidden (browser controls it).
+- Fullscreen toggle works from the Settings menu (needs a click/keypress).
+- Game auto-pauses when the tab loses focus or a controller disconnects.
+- Audio starts after the first click/keypress (browser autoplay rule).
+- Gamepads: browsers only expose a pad after a button is pressed on it.
 
 ## Verified
 
-Booted in headless Chrome 155: main menu → lobby (join/ready) → gameplay scene with
-map generation, lava, HUD, particles. Console shows only the two known issues below.
-
-## Known console noise
-
-1. **godot-jolt** — `compatibility_maximum = 4.6`, prints 3 errors at startup on Godot
-   4.7.x (kept intentionally; no wasm32 library exists, extension simply doesn't load).
-2. **`foreground_layer.gd:63`** — `draw_colored_polygon` fails triangulation every frame
-   (`ERROR: Invalid polygon data, triangulation failed.`). Pre-existing, reproduces on
-   desktop too: the cliff baseline is `_vp.y + 30` but the parallax offset
-   `by = _vp.y - cam_pos.y * 0.7` pushes the cliff points below it once the camera
-   rises ~130 px, making the polygon self-intersect.
-   Fix: draw the bottom edge below the lowest cliff point instead of a fixed
-   `_vp.y + 30`, e.g.
-   `var base_y: float = _vp.y + 30; for pt in poly: base_y = max(base_y, pt.y + 1)`
-   (and use `base_y` for both bottom vertices).
+Headless Chromium (SwiftShader software GL): menu → lobby → 2 keyboard players
+join/ready → countdown → gameplay, zero console errors. Same machine, same
+software renderer: original build ~5 fps with 24–34 console errors per run,
+this build ~10 fps with none.

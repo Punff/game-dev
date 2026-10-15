@@ -5,6 +5,7 @@ extends CanvasLayer
 
 var _menu := MenuBase.new()
 var _buttons: Array = []
+var _note: Label
 
 
 func _ready() -> void:
@@ -14,6 +15,9 @@ func _ready() -> void:
 	add_child(_menu)
 	_menu.build_overlay(0.65)
 	_menu.content.add_child(UiTheme.title("PAUSED", 56))
+	_note = UiTheme.label("", 18, Palette.ACCENT_2)
+	_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_menu.content.add_child(_note)
 	var spacer := Control.new()
 	spacer.custom_minimum_size.y = 6
 	_menu.content.add_child(spacer)
@@ -27,7 +31,9 @@ func _ready() -> void:
 	MenuBase.link_vertical(_buttons)
 
 
-func open() -> void:
+func open(note := "") -> void:
+	_note.text = note
+	_note.visible = note != ""
 	if visible:
 		return
 	visible = true

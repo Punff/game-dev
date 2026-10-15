@@ -63,6 +63,7 @@ func _ready() -> void:
 	SignalBus.player_died.connect(_on_player_died)
 	SignalBus.chain_reaction_occurred.connect(_on_chain)
 	SignalBus.settings_changed.connect(func(): Fx.reduced = Settings.get_value("reduced_effects"))
+	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 
 	camera.targets = players
 	camera.lava_y = lava.surface_y
@@ -189,6 +190,18 @@ func _on_chain(count: int, _pos: Vector2) -> void:
 	if count == 3:
 		Sfx.play("chain")
 	SignalBus.screen_shake_requested.emit(4.0 + count)
+
+
+## A controller dropping out mid-match pauses the game so nobody dies to it.
+func _on_joy_connection_changed(device: int, connected: bool) -> void:
+	if not connected and PlayerManager.find_by_device(device) and MatchManager.state != MatchManager.State.ENDED:
+		pause_menu.open("Controller %d disconnected" % (device + 1))
+
+
+## Browsers throttle hidden tabs; pause instead of letting the lava run.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and Settings.is_web() and MatchManager.state == MatchManager.State.PLAYING:
+		pause_menu.open()
 
 
 func _unhandled_input(event: InputEvent) -> void:

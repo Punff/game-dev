@@ -60,7 +60,8 @@ func _ready() -> void:
 		block.sync_to_physics = false   # it's a picture, not a physics body
 		block.collision_layer = 0
 		block.process_mode = Node.PROCESS_MODE_ALWAYS
-		block.set_physics_process(false)
+		if block is MovingPlatform:
+			block.travel = 0.0
 		holder.add_child(block)
 		h.add_child(holder)
 		var texts := VBoxContainer.new()

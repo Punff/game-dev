@@ -14,6 +14,7 @@ var _body: VBoxContainer
 var _scroll: ScrollContainer
 var _hint: Label
 var _back: Button
+var _reset: Button
 var _profile_idx := 0
 
 # Rebinding state
@@ -54,7 +55,10 @@ func _ready() -> void:
 	_hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	footer.add_child(_hint)
-	_back = UiTheme.button("Back", 180)
+	_reset = UiTheme.button("Reset Profile", 200)
+	_reset.pressed.connect(func(): Settings.reset_bindings(_profile()))
+	footer.add_child(_reset)
+	_back = UiTheme.button("Back", 160)
 	_back.pressed.connect(_close)
 	footer.add_child(_back)
 	content.add_child(footer)
@@ -71,6 +75,7 @@ func _close() -> void:
 func _set_tab(i: int) -> void:
 	_tab = i
 	_listen = {}
+	_reset.visible = i == 1
 	for k in _tab_buttons.size():
 		_tab_buttons[k].button_pressed = k == i
 	for c in _body.get_children():
@@ -89,6 +94,7 @@ func _build_general() -> void:
 	var focusables: Array = []
 	focusables.append(_slider_row("Master Volume", "master_volume", 0.0, 1.0))
 	focusables.append(_slider_row("Sound Effects", "sfx_volume", 0.0, 1.0))
+	focusables.append(_slider_row("Music", "music_volume", 0.0, 1.0))
 	focusables.append(_check_row("Fullscreen", "fullscreen", func(_on): Settings.toggle_fullscreen()))
 	if not Settings.is_web():
 		focusables.append(_check_row("VSync", "vsync"))
@@ -211,28 +217,27 @@ func _build_controls() -> void:
 			row.append(b)
 		rows.append(row)
 
-	var reset := UiTheme.button("Reset This Profile", 300)
-	reset.pressed.connect(func(): Settings.reset_bindings(_profile()))
-	var rc := CenterContainer.new()
-	rc.add_child(reset)
-	_body.add_child(rc)
-
+	var reset := _reset
 	# Focus graph: profile -> grid (2 columns) -> reset -> back
 	var first_row: Array = rows[0]
 	var last_row: Array = rows[-1]
 	_profile_button.focus_neighbor_bottom = _profile_button.get_path_to(first_row[0])
-	_profile_button.focus_neighbor_top = _profile_button.get_path_to(_back)
 	for r in rows.size():
 		for c in 2:
 			var b: Button = rows[r][c]
 			b.focus_neighbor_top = b.get_path_to(rows[r - 1][c] if r > 0 else _profile_button)
-			b.focus_neighbor_bottom = b.get_path_to(rows[r + 1][c] if r < rows.size() - 1 else reset)
+			b.focus_neighbor_bottom = b.get_path_to(rows[r + 1][c] if r < rows.size() - 1 else (reset if c == 0 else _back))
 			b.focus_neighbor_left = b.get_path_to(rows[r][1 - c])
 			b.focus_neighbor_right = b.get_path_to(rows[r][1 - c])
 	reset.focus_neighbor_top = reset.get_path_to(last_row[0])
-	reset.focus_neighbor_bottom = reset.get_path_to(_back)
-	_back.focus_neighbor_top = _back.get_path_to(reset)
+	reset.focus_neighbor_bottom = reset.get_path_to(_profile_button)
+	reset.focus_neighbor_right = reset.get_path_to(_back)
+	reset.focus_neighbor_left = reset.get_path_to(_back)
+	_back.focus_neighbor_top = _back.get_path_to(last_row[1])
 	_back.focus_neighbor_bottom = _back.get_path_to(_profile_button)
+	_back.focus_neighbor_left = _back.get_path_to(reset)
+	_back.focus_neighbor_right = _back.get_path_to(reset)
+	_profile_button.focus_neighbor_top = _profile_button.get_path_to(reset)
 	_refresh_bindings()
 	_profile_button.grab_focus.call_deferred()
 

@@ -11,6 +11,7 @@ var _players: Array[AudioStreamPlayer] = []
 var _next := 0
 var _last_played: Dictionary = {}
 var _rng := RandomNumberGenerator.new()
+var _music_player := AudioStreamPlayer.new()
 
 
 func _ready() -> void:
@@ -21,6 +22,10 @@ func _ready() -> void:
 		add_child(p)
 		_players.append(p)
 	_build_bank()
+	_music_player.bus = &"Music"
+	_music_player.volume_db = -6.0
+	add_child(_music_player)
+	_build_music()
 
 
 ## Plays a sound by name. `pitch_jitter` randomises pitch a little so
@@ -138,3 +143,102 @@ func _to_wav(samples: PackedFloat32Array) -> AudioStreamWAV:
 	wav.data = data
 	return wav
 
+
+
+# ── Music ────────────────────────────────────
+# A 4-bar chiptune loop (Am - F - C - G) synthesised a few steps per frame
+# so startup never hitches, then looped forever on the Music bus.
+
+const BPM := 112.0
+const MUSIC_RATE := 16000
+const CHORDS := [
+	[110.0, [440.0, 523.25, 659.25]],   # Am
+	[87.31, [349.23, 440.0, 523.25]],   # F
+	[130.81, [523.25, 659.25, 783.99]], # C
+	[98.0, [392.0, 493.88, 587.33]],    # G
+]
+const ARP := [0, 1, 2, 1, 0, 1, 2, 2, 0, 1, 2, 1, 2, 1, 0, 1]
+const BASS_STEPS := [0, 3, 6, 8, 11, 14]
+
+
+func _build_music() -> void:
+	var rate := MUSIC_RATE
+	var step_len := int(rate * 60.0 / BPM / 4.0)
+	var total := step_len * 16 * CHORDS.size()
+	var buf := PackedFloat32Array()
+	buf.resize(total)
+	var step := 0
+	for bar in CHORDS.size():
+		var chord: Array = CHORDS[bar]
+		for i in 16:
+			var at := step * step_len
+			# Arp: thin pulse, an octave up at the end of the phrase
+			var f: float = chord[1][ARP[i]] * (2.0 if i >= 12 and bar == 3 else 1.0)
+			_add_note(buf, at, step_len, f / rate, false, 0.07, 0.9993)
+			if i in BASS_STEPS:
+				_add_note(buf, at, step_len * 2, chord[0] / rate, true, 0.32, 0.99975)
+			if i == 0 or i == 8 or (i == 10 and bar % 2 == 1):
+				_add_kick(buf, at, rate)
+			if i == 4 or i == 12:
+				_add_noise(buf, at, int(step_len * 1.2), 0.22, 0.35)
+			if i % 2 == 1:
+				_add_noise(buf, at, step_len / 3, 0.07, 0.9)
+			step += 1
+			await get_tree().process_frame   # one 16th note per frame: no hitches
+	var data := PackedByteArray()
+	data.resize(total * 2)
+	for i in total:
+		data.encode_s16(i * 2, int(clampf(buf[i], -1.0, 1.0) * 30000.0))
+		if i % 20000 == 19999:
+			await get_tree().process_frame
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = rate
+	wav.data = data
+	wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	wav.loop_begin = 0
+	wav.loop_end = total
+	_music_player.stream = wav
+	_music_player.play()
+
+
+## Adds a pulse (25% duty) or triangle note. `inc` is frequency / sample rate,
+## `k` the per-sample exponential decay factor.
+func _add_note(buf: PackedFloat32Array, at: int, length: int, inc: float, tri: bool, vol: float, k: float) -> void:
+	var phase := 0.0
+	var env := vol
+	var attack := 40
+	var n := mini(length, buf.size() - at)
+	for i in n:
+		phase += inc
+		if phase >= 1.0:
+			phase -= 1.0
+		var v: float
+		if tri:
+			v = 1.0 - 4.0 * absf(phase - 0.5)
+		else:
+			v = 1.0 if phase < 0.25 else -1.0
+		var a := env if i > attack else env * i / attack
+		buf[at + i] += v * a
+		env *= k
+
+
+func _add_kick(buf: PackedFloat32Array, at: int, rate: int) -> void:
+	var n := mini(int(rate * 0.16), buf.size() - at)
+	var phase := 0.0
+	for i in n:
+		var t := float(i) / n
+		phase += (150.0 - 105.0 * t) / rate
+		buf[at + i] += sin(phase * TAU) * 0.55 * (1.0 - t)
+
+
+func _add_noise(buf: PackedFloat32Array, at: int, length: int, vol: float, bright: float) -> void:
+	var n := mini(length, buf.size() - at)
+	var y := 0.0
+	var env := vol
+	var k := pow(0.01, 1.0 / maxf(n, 1))
+	for i in n:
+		var x := _rng.randf() * 2.0 - 1.0
+		y += bright * (x - y)
+		buf[at + i] += (x - y * (1.0 - bright)) * env
+		env *= k

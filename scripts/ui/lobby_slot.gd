@@ -38,8 +38,13 @@ func show_player(info: PlayerInfo) -> void:
 		_colour.text = ""
 		_state.text = "Join with"
 		_state.add_theme_color_override("font_color", Palette.TEXT_DIM)
-		_controls.text = "%s / Space  (WASD side)\n%s  (Arrows side)\n(A) on a gamepad" % [
-			Settings.action_hint("kb_a", "jump"), Settings.action_hint("kb_b", "jump")]
+		var lines: Array[String] = []
+		if PlayerManager.find_by_device(Settings.DEVICE_KB_A) == null:
+			lines.append("%s / Space  (WASD side)" % Settings.action_hint("kb_a", "jump"))
+		if PlayerManager.find_by_device(Settings.DEVICE_KB_B) == null:
+			lines.append("%s  (Arrows side)" % Settings.action_hint("kb_b", "jump"))
+		lines.append("(A) on a gamepad")
+		_controls.text = "\n".join(lines)
 	else:
 		var border := Palette.GOOD if info.is_ready else info.color
 		add_theme_stylebox_override("panel", UiTheme.box(Palette.PANEL, border, 4 if info.is_ready else 3, 18, Vector2(16, 16)))
