@@ -31,7 +31,7 @@ func _ready() -> void:
 func show_player(info: PlayerInfo) -> void:
 	_info = info
 	if info == null:
-		add_theme_stylebox_override("panel", UiTheme.box(Color(Palette.INK, 0.6), Color(Palette.PAPER_DIM, 0.5), 2, 0, Vector2(16, 16), 6))
+		add_theme_stylebox_override("panel", UiTheme.box(Color(Palette.INK, 0.6), Palette.SMOKE, 2, 0, Vector2(16, 16)))
 		_name.text = "OPEN"
 		_name.add_theme_color_override("font_color", Palette.TEXT_DIM)
 		_device.text = ""
@@ -47,9 +47,7 @@ func show_player(info: PlayerInfo) -> void:
 		_controls.text = "\n".join(lines)
 	else:
 		var border := Palette.GOOD if info.is_ready else info.color
-		var sb := UiTheme.box(Color(Palette.INK, 0.94), border, 5 if info.is_ready else 3, 0, Vector2(16, 16), 10)
-		sb.border_width_top = 14
-		add_theme_stylebox_override("panel", sb)
+		add_theme_stylebox_override("panel", UiTheme.box(Color(Palette.INK, 0.94), border, 4 if info.is_ready else 2, 0, Vector2(16, 16)))
 		_name.text = info.display_name
 		_name.add_theme_color_override("font_color", info.color)
 		_device.text = info.device_label()

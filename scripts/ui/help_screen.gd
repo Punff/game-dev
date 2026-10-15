@@ -19,7 +19,7 @@ var BLOCKS := [
 
 func _ready() -> void:
 	build_overlay(0.8, 1000)
-	content.add_child(UiTheme.title("HOW TO PLAY", 46))
+	content.add_child(UiTheme.title("how to play", 40))
 	var goal := UiTheme.label("Climb. Wreck the route behind you. The slag never stops rising - last one standing wins. Flying chunks hit hard and smash more concrete: chain it.", 20, Palette.TEXT)
 	goal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	goal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

@@ -165,7 +165,7 @@ func _draw() -> void:
 				draw_line(s, l, Color(Palette.INK, a), 6.0)
 				draw_line(s, l, Color(color.lightened(0.3), a), 2.5)
 		Kind.TEXT:
-			var font := UiTheme.title_font()
+			var font := UiTheme.heavy()
 			var size := int(radius * (1.0 + 0.3 * (1.0 - e)))
 			var pos := Vector2(-250, -46.0 * e)
 			var col := Color(color, minf(1.0, a * 2.0))

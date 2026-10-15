@@ -23,11 +23,8 @@ void fragment() {
 	float sy = surface + wave;
 	float d = p.y - sy;
 	if (d < 0.0) {
-		// halftone heat haze above the surface
-		vec2 hc = fract(FRAGCOORD.xy / 8.0) - 0.5;
-		float r = clamp(1.0 + d / 70.0, 0.0, 1.0) * 0.5;
-		float dotv = 1.0 - smoothstep(r - 0.05, r + 0.05, length(hc));
-		COLOR = vec4(mid.rgb, dotv * 0.75);
+		// soft heat glow above the surface
+		COLOR = vec4(mid.rgb, exp(d / 22.0) * 0.4);
 	} else if (d < 6.0) {
 		COLOR = vec4(0.05, 0.04, 0.04, 1.0);   // ink outline
 	} else {

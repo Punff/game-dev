@@ -12,33 +12,35 @@ extends RefCounted
 
 const HALF_WIDTH := 1100.0         ## playable column is [-HALF_WIDTH, HALF_WIDTH]
 const EDGE_MARGIN := 30.0
-const MIN_WIDTH := 160.0
-const MAX_WIDTH := 470.0
+const MIN_WIDTH := 170.0
+const MAX_WIDTH := 400.0
 const MAX_SPECIAL_WIDTH := 250.0   ## bouncy / speed / reverse stay small
-const ROW_SPACING_MIN := 60.0      ## min horizontal space between platforms of one row
+const ROW_SPACING_MIN := 170.0     ## min horizontal space between platforms of one row
 const TALL := 124.0                ## height of big concrete slabs
 const CLEARANCE := 64.0            ## min vertical gap between stacked platforms
 const V_MARGIN := 16.0             ## px of jump height we never rely on
 
 const BIOMES := [
 	# name, starts at (px above start), row gap range, chance of a charge-jump row, block weights
-	{"name": "Rubble", "from": 0.0, "gap": Vector2(240, 320), "charge_rows": 0.04,
+	{"name": "Rubble", "from": 0.0, "gap": Vector2(260, 340), "charge_rows": 0.04,
 		"weights": {"static": 26, "breakable": 40, "bouncy": 8, "moving": 8, "conveyor": 8, "vanishing": 10}},
-	{"name": "Inferno", "from": 9000.0, "gap": Vector2(255, 340), "charge_rows": 0.08,
+	{"name": "Inferno", "from": 9000.0, "gap": Vector2(270, 350), "charge_rows": 0.08,
 		"weights": {"static": 20, "breakable": 34, "bouncy": 8, "speed": 14, "reverse": 10, "push": 8, "moving": 6}},
-	{"name": "Void", "from": 21000.0, "gap": Vector2(265, 350), "charge_rows": 0.12,
+	{"name": "Void", "from": 21000.0, "gap": Vector2(275, 355), "charge_rows": 0.12,
 		"weights": {"static": 14, "breakable": 30, "ice": 16, "reverse": 10, "conveyor": 10, "vanishing": 12, "moving": 8}},
-	{"name": "Storm", "from": 36000.0, "gap": Vector2(275, 360), "charge_rows": 0.16,
+	{"name": "Storm", "from": 36000.0, "gap": Vector2(280, 360), "charge_rows": 0.16,
 		"weights": {"static": 10, "breakable": 30, "moving": 14, "reverse": 8, "ice": 10, "speed": 12, "bouncy": 6, "vanishing": 10, "push": 8}},
 ]
 
-enum T { SCATTER, DEMOLITION, WIDE, CHOKE, DOOR, SAFE }
+enum T { SCATTER, DEMOLITION, WIDE, CHOKE, DOOR, SAFE, CONTEST, PAIR }
 
 var rng := RandomNumberGenerator.new()
 var rows: Array = []              ## generated rows, oldest first
 var cursor_y := 0.0               ## y of the last generated row (negative = up)
 var _prev_anchors: Array = []
 var _prev_row: Array = []
+var _since_contest := 0
+var _next_contest := 4
 
 static var _env_double: PackedVector2Array
 static var _env_charged: PackedVector2Array
@@ -118,19 +120,22 @@ func _next_row() -> Dictionary:
 
 
 func _pick_template(height: float) -> int:
+	# Every few rows the whole route funnels through one platform (or a tight
+	# pair) so everyone ends up fighting over the same spot.
+	_since_contest += 1
+	if height > 900.0 and _since_contest >= _next_contest:
+		_since_contest = 0
+		_next_contest = rng.randi_range(3, 6)
+		return T.CONTEST if rng.randf() < 0.65 else T.PAIR
 	var r := rng.randf()
-	if height < 1200.0:
+	if height < 900.0 or r < 0.6:
 		return T.SCATTER
-	if r < 0.55:
-		return T.SCATTER
-	if r < 0.75:
+	if r < 0.8:
 		return T.DEMOLITION
-	if r < 0.83:
+	if r < 0.88:
 		return T.WIDE
-	if r < 0.9:
+	if r < 0.95:
 		return T.CHOKE
-	if r < 0.96:
-		return T.DOOR
 	return T.SAFE
 
 
@@ -145,10 +150,10 @@ func _build_template(tmpl: int, y: float) -> Array:
 	var out: Array = []
 	match tmpl:
 		T.SCATTER:
-			var n := rng.randi_range(3, 6)
+			var n := rng.randi_range(2, 4)
 			var seg := (r - l) / n
 			for i in n:
-				if rng.randf() < 0.15:
+				if rng.randf() < 0.2:
 					continue   # leave holes now and then
 				var w := minf(_rand_width(), seg - ROW_SPACING_MIN)
 				var x0 := l + seg * i + rng.randf_range(0.0, seg - w - ROW_SPACING_MIN)
@@ -183,7 +188,19 @@ func _build_template(tmpl: int, y: float) -> Array:
 			out.append(_plat(r - dw, r, "wall", y, Block.HEIGHT))
 		T.SAFE:
 			var cx := rng.randf_range(-400.0, 400.0)
-			out.append(_plat(cx - 450.0, cx + 450.0, "safe", y, Block.HEIGHT))
+			out.append(_plat(cx - 350.0, cx + 350.0, "safe", y, Block.HEIGHT))
+		T.CONTEST:
+			# One king-of-the-hill platform; it's the only way up.
+			var cx := rng.randf_range(-550.0, 550.0)
+			var w := rng.randf_range(240.0, 330.0)
+			out.append(_plat(cx - w * 0.5, cx + w * 0.5, "contest", y, Block.HEIGHT))
+		T.PAIR:
+			# Two small platforms side by side, barely apart: shove-fest.
+			var cx := rng.randf_range(-500.0, 500.0)
+			var w := rng.randf_range(180.0, 230.0)
+			var g := rng.randf_range(ROW_SPACING_MIN, ROW_SPACING_MIN + 40.0)
+			out.append(_plat(cx - g * 0.5 - w, cx - g * 0.5, "contest", y + rng.randf_range(-30, 30), Block.HEIGHT))
+			out.append(_plat(cx + g * 0.5, cx + g * 0.5 + w, "contest", y + rng.randf_range(-30, 30), Block.HEIGHT))
 	return out
 
 
@@ -213,6 +230,8 @@ func _assign_types(plats: Array, biome: Dictionary, _tmpl: int) -> void:
 			"safe", "choke":
 				if rng.randf() < 0.7:
 					t = "static"
+			"contest":
+				t = "static" if rng.randf() < 0.8 else "ice"
 			"demolition", "wall":
 				t = "breakable" if rng.randf() < 0.85 else "static"
 		if p.h > Block.HEIGHT and t != "breakable":
@@ -313,7 +332,7 @@ func _fit_moving(plats: Array) -> void:
 		var lo: float = -HALF_WIDTH + EDGE_MARGIN if i == 0 else plats[i - 1].x1 + plats[i - 1].travel + ROW_SPACING_MIN
 		var hi: float = HALF_WIDTH - EDGE_MARGIN if i == plats.size() - 1 else plats[i + 1].x0 - ROW_SPACING_MIN
 		var w: float = minf(p.x1 - p.x0, 260.0)
-		var travel := minf((hi - lo - w) * 0.5, 260.0)
+		var travel := minf((hi - lo - w) * 0.5, 240.0)
 		if travel < 70.0:
 			p.type = "static"
 			p.anchor_ok = true

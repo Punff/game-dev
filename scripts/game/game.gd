@@ -17,7 +17,6 @@ var camera := GameCamera.new()
 var hud: Hud
 var pause_menu: PauseMenu
 var end_screen: EndScreen
-var title_card := TitleCard.new()
 
 var players: Array[Player] = []
 var _deaths := 0
@@ -60,7 +59,6 @@ func _ready() -> void:
 	add_child(pause_menu)
 	end_screen = EndScreen.new()
 	add_child(end_screen)
-	add_child(title_card)
 
 	SignalBus.player_died.connect(_on_player_died)
 	SignalBus.chain_reaction_occurred.connect(_on_chain)
@@ -124,7 +122,6 @@ func _start_match() -> void:
 	for p in players:
 		p.controls_enabled = true
 	Sfx.play("go")
-	title_card.show_card("LET'S JAM", "", 6, 1.1)
 	SignalBus.match_started.emit()
 
 
@@ -146,9 +143,6 @@ func leader() -> Player:
 
 func _on_player_died(player_id: int) -> void:
 	_deaths += 1
-	var dead: PlayerInfo = PlayerManager.players.get(player_id)
-	if dead and players.size() > 1:
-		title_card.show_card("P%d IS OUT" % player_id, "", 3, 0.8, dead.color)
 	var info: PlayerInfo = PlayerManager.players.get(player_id)
 	if info:
 		info.death_order = _deaths
@@ -164,7 +158,6 @@ func _finish(winner: Player) -> void:
 	_ending = true
 	if winner:
 		winner.controls_enabled = false
-		Fx.popup(winner.global_position + Vector2(0, -60), "WINNER!", winner.color, 40)
 	var standings := PlayerManager.sorted_players()
 	standings.sort_custom(func(a, b):
 		# Survivors first, then whoever died last.
@@ -194,7 +187,7 @@ func _on_chain(count: int, _pos: Vector2) -> void:
 	if count == 3:
 		Sfx.play("chain")
 		_hit_stop(0.12)
-	title_card.show_card("CHAIN x%d" % count, "", mini(3 + count, 8), 0.75)
+	Fx.popup(camera.get_screen_center_position() + Vector2(0, -120), "x%d" % count, Palette.PAPER, 26 + count * 2)
 	SignalBus.screen_shake_requested.emit(4.0 + count)
 
 

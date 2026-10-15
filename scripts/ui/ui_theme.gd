@@ -48,10 +48,10 @@ static func build() -> Theme:
 	t.set_color("font_outline_color", "Label", Palette.INK)
 
 	# Buttons: ink slabs; focus = mustard slab with black type.
-	var normal := box(Palette.INK_SOFT, Palette.PAPER_DIM, 2, 0, Vector2(18, 10), 4)
-	var hover := box(Palette.SMOKE, Palette.PAPER, 2, 0, Vector2(18, 10), 4)
-	var focus := box(Palette.MUSTARD, Palette.INK, 3, 0, Vector2(18, 10), 6)
-	var pressed := box(Palette.RUST, Palette.INK, 3, 0, Vector2(18, 10), 2)
+	var normal := box(Palette.INK_SOFT, Palette.SMOKE, 2, 0, Vector2(18, 10))
+	var hover := box(Palette.SMOKE, Palette.PAPER_DIM, 2, 0, Vector2(18, 10))
+	var focus := box(Palette.PAPER, Palette.PAPER, 2, 0, Vector2(18, 10))
+	var pressed := box(Palette.MUSTARD, Palette.MUSTARD, 2, 0, Vector2(18, 10))
 	var disabled := box(Palette.INK, Palette.SMOKE, 2)
 	for type in ["Button", "CheckButton", "OptionButton"]:
 		t.set_stylebox("normal", type, normal)
@@ -66,12 +66,12 @@ static func build() -> Theme:
 		t.set_color("font_pressed_color", type, Palette.INK)
 		t.set_color("font_hover_pressed_color", type, Palette.INK)
 		t.set_color("font_disabled_color", type, Palette.SMOKE)
-		t.set_font_size("font_size", type, 24)
+		t.set_font_size("font_size", type, 22)
 		t.set_font("font", type, heavy())
 
 	# Panels
-	t.set_stylebox("panel", "PanelContainer", box(Color(Palette.INK, 0.94), Palette.PAPER, 3, 0, Vector2(30, 24), 10))
-	t.set_stylebox("panel", "Panel", box(Color(Palette.INK, 0.94), Palette.PAPER, 3, 0, Vector2(0, 0), 10))
+	t.set_stylebox("panel", "PanelContainer", box(Color(Palette.INK, 0.94), Palette.SMOKE, 2, 0, Vector2(30, 24)))
+	t.set_stylebox("panel", "Panel", box(Color(Palette.INK, 0.94), Palette.SMOKE, 2, 0, Vector2(0, 0)))
 
 	# Labels
 	t.set_color("font_color", "Label", Palette.TEXT)
@@ -114,8 +114,8 @@ static func _square(size: int, color: Color) -> ImageTexture:
 static func title(text: String, size := 64, color := Palette.TEXT) -> Label:
 	var l := Label.new()
 	l.text = text.to_upper()
-	l.add_theme_font_override("font", title_font())
-	l.add_theme_constant_override("outline_size", maxi(6, size / 8))
+	l.add_theme_font_override("font", heavy())
+	l.add_theme_constant_override("outline_size", maxi(4, size / 12))
 	l.add_theme_color_override("font_outline_color", Palette.INK)
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", color)
@@ -133,8 +133,8 @@ static func label(text: String, size := 20, color := Palette.TEXT_DIM) -> Label:
 
 static func button(text: String, min_width := 320.0) -> Button:
 	var b := Button.new()
-	b.text = text.to_upper()
-	b.custom_minimum_size = Vector2(min_width, 54)
+	b.text = text
+	b.custom_minimum_size = Vector2(min_width, 50)
 	b.focus_mode = Control.FOCUS_ALL
 	b.pressed.connect(func(): Sfx.play("ui_select"))
 	b.focus_entered.connect(func(): Sfx.play("ui_move"))

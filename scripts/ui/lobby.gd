@@ -23,7 +23,7 @@ func _ready() -> void:
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.add_theme_constant_override("separation", 22)
 	add_child(col)
-	col.add_child(UiTheme.title("pick your crew", 72, Palette.MUSTARD))
+	col.add_child(UiTheme.title("players", 56, Palette.PAPER))
 
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER

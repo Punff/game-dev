@@ -41,13 +41,13 @@ func play(name: String, volume_db := 0.0, pitch := 1.0, pitch_jitter := 0.04) ->
 	var p := _players[_next]
 	_next = (_next + 1) % _players.size()
 	p.stream = stream
-	p.volume_db = volume_db
+	p.volume_db = volume_db + BASE_DB
 	p.pitch_scale = pitch * (1.0 + _rng.randf_range(-pitch_jitter, pitch_jitter))
 	p.play()
 
 
-func is_ready() -> bool:
-	return _streams.size() >= 23
+## Everything is mixed a bit under the bus so the sliders have headroom.
+const BASE_DB := -6.0
 
 
 # ── Bank ─────────────────────────────────────
@@ -63,33 +63,30 @@ const G4 := 392.0
 const B4 := 493.88
 
 func _build_bank() -> void:
+	# Kept soft and short on purpose: these fire constantly with 4 players.
 	var recipes := {
-		# movement: walking-bass plucks
-		"jump": func(): return _mix([_pluck(A2, 0.32, 0.55, 0.993), _click(0.25)]),
-		"double_jump": func(): return _mix([_pluck(E3, 0.28, 0.5, 0.992), _click(0.2)]),
-		"charge_jump": func(): return _brass([A3, C4, E4, G4], 0.38, 0.22),
-		"land": func(): return _mix([_tone(0.1, 95.0, 45.0, 0.5), _noise(0.06, 0.12, 1200.0)]),
-		"bounce": func(): return _mix([_pluck(A2, 0.4, 0.4, 0.995), _tone(0.3, 140.0, 420.0, 0.25, true)]),
-		# abilities
-		"shockwave": func(): return _gunshot(),
+		"jump": func(): return _pluck(A2 * 2.0, 0.16, 0.16, 0.985),
+		"double_jump": func(): return _pluck(E3 * 2.0, 0.14, 0.13, 0.985),
+		"charge_jump": func(): return _mix([_pluck(A2, 0.3, 0.2, 0.99), _whoosh(0.22, 0.08)]),
+		"land": func(): return _tone(0.06, 90.0, 50.0, 0.18),
+		"bounce": func(): return _tone(0.22, 160.0, 380.0, 0.12, true),
+		"shockwave": func(): return _mix([_tone(0.25, 110.0, 40.0, 0.35), _noise(0.22, 0.12, 900.0)]),
 		"break": func(): return _crumble(),
-		"gravity": func(): return _vibes([E4, B4], 0.6, 0.18),
-		"throw": func(): return _whoosh(0.28, 0.3),
-		"hit": func(): return _rimshot(0.45),
-		"speed": func(): return _whoosh(0.16, 0.18),
-		"vanish": func(): return _vibes([B4, G4], 0.3, 0.14),
-		"death": func(): return _wah(),
-		# match flow
+		"gravity": func(): return _vibes([E4], 0.35, 0.05),
+		"throw": func(): return _whoosh(0.2, 0.1),
+		"hit": func(): return _mix([_tone(0.08, 160.0, 80.0, 0.25), _noise(0.05, 0.08, 1500.0)]),
+		"speed": func(): return _whoosh(0.12, 0.05),
+		"vanish": func(): return _noise(0.18, 0.06, 800.0),
+		"death": func(): return _mix([_pluck(A2 * 0.5, 0.6, 0.3, 0.995), _noise(0.3, 0.1, 600.0)]),
 		"count": func(): return _snap(),
-		"go": func(): return _mix([_brass([C4, E4, G4, B4, D4 * 2.0], 0.7, 0.2), _cymbal(1.2, 0.18)]),
-		"chain": func(): return _mix([_brass([D4, G4, B4], 0.3, 0.2), _cymbal(0.8, 0.14)]),
-		"win": func(): return _seq_samples([_brass([C4, E4, G4], 0.18, 0.2), _brass([D4, G4, B4], 0.18, 0.2), _mix([_brass([E4, G4, B4, D4 * 2.0], 0.8, 0.22), _cymbal(1.2, 0.15)])]),
-		# UI
-		"ui_move": func(): return _hat(0.035, 0.18),
-		"ui_select": func(): return _rimshot(0.35),
-		"ui_back": func(): return _pluck(G3 * 0.5, 0.25, 0.45, 0.99),
-		"join": func(): return _seq_samples([_vibes([A3 * 2.0], 0.12, 0.2), _vibes([E4 * 2.0], 0.35, 0.2)]),
-		"leave": func(): return _seq_samples([_vibes([E4 * 2.0], 0.12, 0.2), _vibes([A3 * 2.0], 0.3, 0.2)]),
+		"go": func(): return _pluck(A3, 0.3, 0.2, 0.99),
+		"chain": func(): return _tone(0.15, 200.0, 70.0, 0.25),
+		"win": func(): return _seq_samples([_pluck(A3, 0.14, 0.18, 0.99), _pluck(C4, 0.14, 0.18, 0.99), _pluck(E4, 0.5, 0.2, 0.995)]),
+		"ui_move": func(): return _hat(0.02, 0.05),
+		"ui_select": func(): return _pluck(A3, 0.1, 0.12, 0.98),
+		"ui_back": func(): return _pluck(E3, 0.1, 0.12, 0.98),
+		"join": func(): return _pluck(E4, 0.18, 0.14, 0.99),
+		"leave": func(): return _pluck(A3, 0.18, 0.12, 0.99),
 	}
 	for key in recipes:
 		_streams[key] = _to_wav(recipes[key].call())
@@ -194,11 +191,11 @@ func _gunshot() -> PackedFloat32Array:
 
 ## Concrete crumbling: a thump and a scatter of low gritty bursts.
 func _crumble() -> PackedFloat32Array:
-	var out := _tone(0.12, 120.0, 50.0, 0.55)
-	out.resize(int(0.45 * RATE))
-	for k in 7:
-		var at := int(_rng.randf_range(0.0, 0.3) * RATE)
-		var burst := _noise(_rng.randf_range(0.03, 0.09), _rng.randf_range(0.15, 0.35), _rng.randf_range(600.0, 2200.0))
+	var out := _tone(0.1, 110.0, 50.0, 0.25)
+	out.resize(int(0.35 * RATE))
+	for k in 5:
+		var at := int(_rng.randf_range(0.0, 0.22) * RATE)
+		var burst := _noise(_rng.randf_range(0.03, 0.07), _rng.randf_range(0.05, 0.12), _rng.randf_range(500.0, 1400.0))
 		for i in burst.size():
 			if at + i < out.size():
 				out[at + i] += burst[i]
@@ -261,7 +258,7 @@ func _cymbal(dur: float, vol: float) -> PackedFloat32Array:
 
 
 func _snap() -> PackedFloat32Array:
-	return _mix([_hiss(0.08, 0.6, 60.0), _tone(0.02, 1800.0, 1200.0, 0.2)])
+	return _hiss(0.05, 0.18, 70.0)
 
 
 func _click(vol: float) -> PackedFloat32Array:

@@ -17,6 +17,7 @@ func _ready() -> void:
 	await _test_jump_physics_matches_envelope()
 	await _test_game_smoke()
 	await _test_chaos()
+	await _test_knockout()
 	print("\n%d checks, %d failures" % [_checks, _failures])
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -46,12 +47,22 @@ func _test_planner_invariants() -> void:
 	var seeds := 60
 	var total_rows := 0
 	var type_counts := {}
+	var contest_rows := 0
+	var max_stretch := 0
 	for s in range(1, seeds + 1):
 		var p := MapPlanner.new(s)
 		p.start(0.0)
 		p.generate_until(-45000.0)   # all four biomes
 		var prev_anchors: Array = p.rows[0].platforms
+		var stretch := 0
 		for i in range(1, p.rows.size()):
+			# Contest rows funnel everyone onto the same platform(s).
+			if p.rows[i].template in [MapPlanner.T.CONTEST, MapPlanner.T.PAIR]:
+				contest_rows += 1
+				stretch = 0
+			elif p.rows[0].y - p.rows[i].y > 1400.0:
+				stretch += 1
+				max_stretch = maxi(max_stretch, stretch)
 			var row: Dictionary = p.rows[i]
 			var prev: Dictionary = p.rows[i - 1]
 			var gap: float = prev.y - row.y
@@ -87,6 +98,8 @@ func _test_planner_invariants() -> void:
 			prev_anchors = reached if not reached.is_empty() else anchors
 	print("Planner: %d rows over %d seeds, block mix %s" % [total_rows, seeds, type_counts])
 	check(type_counts.size() >= 9, "every block type should appear at least once")
+	print("Contest rows: %d (%.0f%%), longest run without one: %d rows" % [contest_rows, 100.0 * contest_rows / total_rows, max_stretch])
+	check(max_stretch <= 6, "a contest row should come along at least every 6 rows")
 	check(type_counts.get("breakable", 0) > type_counts.get("static", 0) * 0.6, "breakable concrete should be a big part of the map")
 
 
@@ -277,4 +290,18 @@ func _test_chaos() -> void:
 	get_tree().paused = false
 	scene.queue_free()
 	await get_tree().process_frame
+	PlayerManager.clear()
+
+
+func _test_knockout() -> void:
+	PlayerManager.clear()
+	var id := PlayerManager.join(Settings.DEVICE_KB_A)
+	var p := Player.new()
+	p.setup(PlayerManager.players[id])
+	get_tree().root.add_child(p)
+	p.global_position = Vector2(Player.world_half_width + Player.OUT_OF_BOUNDS + 50.0, 0)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	check(p.is_dead, "knocked past the arena edge = out")
+	p.queue_free()
 	PlayerManager.clear()

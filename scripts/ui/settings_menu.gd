@@ -26,7 +26,7 @@ func _ready() -> void:
 	build_overlay(0.7, 820)
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 12)
-	var title := UiTheme.title("SETTINGS", 44)
+	var title := UiTheme.title("settings", 40)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)

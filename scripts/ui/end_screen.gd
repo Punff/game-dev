@@ -22,14 +22,14 @@ func _show(results: Dictionary) -> void:
 
 	if results.solo:
 		var info: PlayerInfo = standings[0]
-		c.add_child(UiTheme.title("%d m" % info.max_height, 84, Palette.ACCENT))
-		var sub := "NEW PERSONAL BEST!" if results.new_record else "Best: %d m" % int(Settings.get_value("best_height"))
+		c.add_child(UiTheme.title("%d m" % info.max_height, 72, Palette.PAPER))
+		var sub := "New best" if results.new_record else "Best: %d m" % int(Settings.get_value("best_height"))
 		c.add_child(_centered(UiTheme.label(sub, 24, Palette.GOOD if results.new_record else Palette.TEXT_DIM)))
 	else:
 		if winner:
-			c.add_child(UiTheme.title("P%d WINS!" % winner.player_id, 72, winner.color))
+			c.add_child(UiTheme.title("P%d wins" % winner.player_id, 60, winner.color))
 		else:
-			c.add_child(UiTheme.title("DRAW!", 72, Palette.ACCENT))
+			c.add_child(UiTheme.title("draw", 60, Palette.PAPER))
 		c.add_child(_centered(UiTheme.label("Survived %s" % _fmt_time(results.time), 20)))
 		var list := VBoxContainer.new()
 		list.add_theme_constant_override("separation", 6)
@@ -41,10 +41,9 @@ func _show(results: Dictionary) -> void:
 		if results.new_record:
 			c.add_child(_centered(UiTheme.label("New height record: %d m!" % results.best_height, 20, Palette.GOOD)))
 
-	var sign_off := UiTheme.label("SEE YOU SPACE COWBOY...", 26, Palette.PAPER_DIM)
-	sign_off.add_theme_font_override("font", UiTheme.title_font())
-	sign_off.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	c.add_child(sign_off)
+	var spacer := Control.new()
+	spacer.custom_minimum_size.y = 6
+	c.add_child(spacer)
 	var buttons := [
 		_menu.add_button("Rematch", func(): MatchManager.start_match()),
 		_menu.add_button("Change Players", func(): MatchManager.to_lobby()),

@@ -62,7 +62,7 @@ func _update(delta: float, instant: bool) -> void:
 				lead = t
 		cx = clampf(lead.global_position.x, left + visible.x * 0.5, right - visible.x * 0.5)
 	# Don't show much beyond the arena walls.
-	var wall := MapPlanner.HALF_WIDTH + 140.0
+	var wall := MapPlanner.HALF_WIDTH + 500.0
 	if visible.x < wall * 2.0:
 		cx = clampf(cx, -wall + visible.x * 0.5, wall - visible.x * 0.5)
 	else:

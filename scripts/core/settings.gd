@@ -68,7 +68,7 @@ static func default_bindings() -> Dictionary:
 
 const DEFAULTS := {
 	"master_volume": 0.8,
-	"sfx_volume": 0.8,
+	"sfx_volume": 0.6,
 	"fullscreen": false,
 	"vsync": true,
 	"screen_shake": 0.7,

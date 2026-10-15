@@ -133,13 +133,5 @@ func _draw_offscreen(vp: Vector2) -> void:
 
 func _draw_countdown(vp: Vector2) -> void:
 	var n: int = game.countdown_value()
-	if n <= 0:
-		return
-	var f := UiTheme.title_font()
-	var y := vp.y * 0.42
-	var sess := "SESSION #%d" % maxi(MatchManager.session, 1)
-	_canvas.draw_rect(Rect2(0, y - 70, vp.x, 50), Color(Palette.INK, 0.85))
-	_canvas.draw_string(UiTheme.heavy(), Vector2(0, y - 32), sess, HORIZONTAL_ALIGNMENT_CENTER, vp.x, 34, Palette.MUSTARD)
-	_canvas.draw_string_outline(f, Vector2(8, y + 150), str(n), HORIZONTAL_ALIGNMENT_CENTER, vp.x, 180, 18, Palette.INK)
-	_canvas.draw_string_outline(f, Vector2(0, y + 142), str(n), HORIZONTAL_ALIGNMENT_CENTER, vp.x, 180, 18, Palette.INK)
-	_canvas.draw_string(f, Vector2(0, y + 142), str(n), HORIZONTAL_ALIGNMENT_CENTER, vp.x, 180, Palette.PAPER)
+	if n > 0:
+		_text(Vector2(0, vp.y * 0.45), str(n), 110, Palette.PAPER, HORIZONTAL_ALIGNMENT_CENTER, vp.x)

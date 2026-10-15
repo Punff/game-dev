@@ -8,29 +8,29 @@ extends CharacterBody2D
 signal died(player_id: int)
 
 # ── Movement ─────────────────────────────────
-const RADIUS := 18.0
-const SPEED := 390.0
-const ACCEL := 2700.0
-const AIR_ACCEL := 1900.0
-const AIR_BRAKE := 0.45          ## fraction of AIR_ACCEL used to slow down with no input
-const FRICTION := 2800.0
+const RADIUS := 14.0
+const SPEED := 450.0
+const ACCEL := 4200.0
+const AIR_ACCEL := 3000.0
+const AIR_BRAKE := 0.4          ## fraction of AIR_ACCEL used to slow down with no input
+const FRICTION := 3600.0
 const ICE_ACCEL := 550.0
 const ICE_FRICTION := 170.0
-const GRAVITY := 1400.0
-const JUMP_VELOCITY := 780.0
+const GRAVITY := 1150.0
+const JUMP_VELOCITY := 700.0
 const MAX_JUMPS := 2
 const JUMP_CUT := 0.5            ## velocity multiplier when jump is released early
 const COYOTE_TIME := 0.1
 const JUMP_BUFFER := 0.12
-const MAX_FALL := 1300.0
-const FAST_FALL_ACCEL := 3800.0
-const FAST_FALL_MAX := 2100.0
+const MAX_FALL := 1000.0
+const FAST_FALL_ACCEL := 3200.0
+const FAST_FALL_MAX := 1700.0
 
 # ── Charged jump ─────────────────────────────
 ## Start charging on the ground; keep charging if you run off the edge and
 ## release whenever - even mid-air - for the launch.
 const CHARGE_TIME := 1.0
-const CHARGE_VELOCITY := 1220.0  ## at full charge
+const CHARGE_VELOCITY := 1100.0  ## at full charge
 
 # ── Abilities ────────────────────────────────
 const GRAVITY_COOLDOWN := 3.5
@@ -40,12 +40,13 @@ const THROW_SPEED := 1150.0
 const SHOCK_COOLDOWN := 2.5
 const SHOCK_RANGE := 500.0
 const SHOCK_FORCE := 1800.0
-const SHOCK_RECOIL := 430.0
+const SHOCK_RECOIL := 520.0
 const JUMP_PUSH_RADIUS := 170.0
 const JUMP_PUSH_FORCE := 520.0
 
-## Half width of the playable column; set by the game from the map generator.
+## Half width of the arena; past this (plus a margin) you've been knocked out.
 static var world_half_width := 1100.0
+const OUT_OF_BOUNDS := 700.0
 
 var info: PlayerInfo
 var player_id := 1
@@ -173,10 +174,10 @@ func _physics_process(delta: float) -> void:
 	var fall_speed := velocity.y
 	move_and_slide()
 
-	var x_limit := world_half_width - RADIUS
-	if absf(global_position.x) > x_limit:
-		global_position.x = clampf(global_position.x, -x_limit, x_limit)
-		velocity.x = 0.0
+	# No walls: get shoved far enough off the side and you're out.
+	if absf(global_position.x) > world_half_width + OUT_OF_BOUNDS:
+		die()
+		return
 
 	if is_on_floor() and not _was_on_floor:
 		last_impact = fall_speed
@@ -220,7 +221,7 @@ func _handle_jump(delta: float) -> void:
 		_coyote = 0.0
 		jumps_left -= 1
 		velocity.y = -JUMP_VELOCITY
-		_squash = Vector2(0.7, 1.35)
+		_squash = Vector2(0.8, 1.2)
 		_on_jumped(1.0, grounded_jump)
 		Sfx.play("jump" if grounded_jump else "double_jump", -3.0)
 		if not grounded_jump:
@@ -413,7 +414,7 @@ func _on_jumped(strength: float, from_ground: bool) -> void:
 
 func _on_landed() -> void:
 	var impact := clampf(last_impact / 1100.0, 0.0, 1.0)
-	_squash = Vector2(1.0 + 0.5 * impact + 0.1, 1.0 - 0.45 * impact - 0.05)
+	_squash = Vector2(1.0 + 0.3 * impact, 1.0 - 0.25 * impact)
 	if impact > 0.25:
 		Fx.dust(global_position + Vector2(0, RADIUS), Palette.PAPER_DIM, 8)
 		Sfx.play("land", -8.0 + impact * 6.0)
