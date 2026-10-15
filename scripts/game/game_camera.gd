@@ -7,9 +7,9 @@ extends Camera2D
 
 const MARGIN_TOP := 380.0
 const MARGIN_BOTTOM := 220.0
-const MARGIN_SIDE := 320.0
+const MARGIN_SIDE := 300.0
 const MIN_ZOOM := 0.42
-const MAX_ZOOM := 0.8
+const MAX_ZOOM := 0.9
 
 var targets: Array = []
 var lava_y := INF

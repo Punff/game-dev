@@ -5,8 +5,8 @@ extends Node2D
 
 const FLOOR_Y := 0.0
 const COUNTDOWN := 3
-const LAVA_START_BELOW := 420.0
-const LAVA_GRACE := 2.0
+const LAVA_START_BELOW := 650.0
+const LAVA_GRACE := 3.5
 const END_DELAY := 1.4
 
 var background := Background.new()

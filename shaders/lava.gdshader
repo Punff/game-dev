@@ -34,20 +34,24 @@ void fragment() {
 		float depth = clamp(d / 300.0, 0.0, 1.0);
 		vec3 col = mix(hot.rgb, mid.rgb, smoothstep(0.0, 40.0, d));
 		col = mix(col, deep.rgb, depth);
-		// drifting crust plates (cell noise)
-		vec2 q = vec2(x + TIME * 14.0, p.y * 1.6) / 70.0;
+		// Cooling crust plates with glowing cracks between them (F2 - F1 cell noise).
+		vec2 q = vec2(x + TIME * 14.0, p.y * 1.4) / 80.0;
 		vec2 id = floor(q);
 		vec2 f = fract(q);
-		float m = 1.0;
+		float f1 = 8.0;
+		float f2 = 8.0;
 		for (int j = -1; j <= 1; j++) {
 			for (int i = -1; i <= 1; i++) {
 				vec2 o = vec2(float(i), float(j));
 				vec2 c = o + vec2(hash(id + o), hash(id + o + 9.1)) - f;
-				m = min(m, dot(c, c));
+				float dd = dot(c, c);
+				if (dd < f1) { f2 = f1; f1 = dd; } else if (dd < f2) { f2 = dd; }
 			}
 		}
-		float crust = smoothstep(0.12, 0.3, m) * (0.35 + 0.65 * depth);
-		col = mix(col, vec3(0.06, 0.04, 0.04), crust * 0.8);
+		float edge = sqrt(f2) - sqrt(f1);
+		float crust = smoothstep(0.05, 0.16, edge) * smoothstep(10.0, 60.0, d);
+		vec3 crust_col = mix(vec3(0.16, 0.07, 0.06), vec3(0.07, 0.04, 0.04), depth);
+		col = mix(col, crust_col, crust * 0.92);
 		COLOR = vec4(col, 1.0);
 	}
 }

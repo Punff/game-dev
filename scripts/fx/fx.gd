@@ -146,11 +146,16 @@ func _draw() -> void:
 				for i in 13:
 					var ang := base - spread + spread * 2.0 * i / 12.0
 					pts.append(Vector2(cos(ang), sin(ang)) * r)
-				draw_colored_polygon(pts, Color(color, 0.35 * (1.0 - _t / 0.35)))
+				draw_colored_polygon(pts, Color(color, 0.55 * (1.0 - _t / 0.35)))
 			for k in 3:
 				var rr := r * (1.0 - k * 0.18)
-				draw_arc(Vector2.ZERO, rr, base - spread, base + spread, 24, Color(Palette.INK, a), 10.0 - k * 2.0)
-				draw_arc(Vector2.ZERO, rr, base - spread, base + spread, 24, Color(Palette.PAPER if k == 0 else color, a), 5.0 - k)
+				draw_arc(Vector2.ZERO, rr, base - spread, base + spread, 24, Color(Palette.INK, a), 18.0 - k * 4.0)
+				draw_arc(Vector2.ZERO, rr, base - spread, base + spread, 24, Color(Palette.PAPER if k == 0 else color, a), 10.0 - k * 2.5)
+			# radial gun-blast streaks
+			for k in 7:
+				var ang := base - spread * 0.8 + spread * 1.6 * k / 6.0
+				var dv := Vector2(cos(ang), sin(ang))
+				draw_line(dv * r * 0.25, dv * r * 0.25 + dv * 60.0 * (1.0 - _t), Color(Palette.PAPER, a), 4.0)
 		Kind.LINES:
 			var d := direction.normalized()
 			var side := d.orthogonal()

@@ -1,8 +1,16 @@
 # Ultimate Cakum Pakum
 
-Couch-party vertical race for 1–4 players. Climb procedurally generated
-platforms, sabotage each other, and stay ahead of the rising lava. Last one
-standing wins; solo runs chase a saved best height.
+Couch-party vertical brawl for 1–4 players, inspired by Upperz and dressed
+like a '70s jazz title card. Climb a wide, randomly generated wreck of
+concrete and steel, smash it apart, throw the debris at each other and stay
+ahead of the rising slag. Last one standing wins; solo runs chase a saved
+best height.
+
+Core toys: double jump, charge jump (keeps charging off ledges, fire it
+mid-air), ground pound (fast-fall shatters concrete), aimed shockwave
+(knockback, shatters concrete, launches debris, rocket-jump downward) and a
+gravity field (grab debris, stack it under you, hurl it on release). Fast
+debris knocks players around and smashes more concrete — chain reactions.
 
 Godot **4.7**, GL Compatibility renderer (same look on desktop and web).
 

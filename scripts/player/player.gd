@@ -8,7 +8,7 @@ extends CharacterBody2D
 signal died(player_id: int)
 
 # ── Movement ─────────────────────────────────
-const RADIUS := 16.0
+const RADIUS := 18.0
 const SPEED := 390.0
 const ACCEL := 2700.0
 const AIR_ACCEL := 1900.0

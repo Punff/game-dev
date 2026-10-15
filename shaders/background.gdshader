@@ -28,11 +28,7 @@ vec2 towers(vec2 p, float cell_w, float seed) {
 	float w = cell_w * (0.3 + 0.45 * hash(vec2(cx, seed + 1.0)));
 	float off = (hash(vec2(cx, seed + 2.0)) - 0.5) * (cell_w - w);
 	float lx = p.x - cx * cell_w - cell_w * 0.5 - off;
-	if (abs(lx) > w * 0.5) {
-		// girder bands bridging between towers every so often
-		float band = mod(p.y + h * 900.0, 700.0);
-		return vec2(step(band, 26.0) * step(0.6, h) , 0.0);
-	}
+	if (abs(lx) > w * 0.5) return vec2(0.0);
 	// windows
 	vec2 wcell = vec2(22.0, 30.0);
 	vec2 wid = floor(vec2(lx + w * 0.5, p.y) / wcell);
@@ -75,14 +71,15 @@ void fragment() {
 	if (detail > 0.5) {
 		vec2 fp = rel + cam_pos * vec2(0.2, 0.2);
 		vec2 far = towers(fp, 260.0, 3.0);
-		col = mix(col, mix(island_color.rgb, sky_top.rgb, 0.55), far.x);
-		col = mix(col, accent.rgb * 0.6, far.y * 0.6);
+		col = mix(col, mix(island_color.rgb, sky_top.rgb, 0.65), far.x);
+		col = mix(col, accent.rgb * 0.6, far.y * 0.35);
 	}
 	// Near towers
 	vec2 np = rel + cam_pos * vec2(0.45, 0.45);
 	vec2 near = towers(np, 380.0, 11.0);
-	col = mix(col, island_color.rgb, near.x);
-	col = mix(col, accent.rgb, near.y * 0.85);
+	// Keep towers a step back from pure ink so gameplay pops in front.
+	col = mix(col, mix(island_color.rgb, sky_top.rgb, 0.3), near.x);
+	col = mix(col, accent.rgb * 0.8, near.y * 0.6);
 
 	// Side walls: ink with hazard stripes along the edge
 	float wx = rel.x + cam_pos.x;

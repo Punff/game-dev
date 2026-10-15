@@ -10,7 +10,7 @@ var BLOCKS := [
 	[ConveyorBlock, "Conveyor", "Drags you. Shockwave flips it."],
 	[PushZone, "Gust", "Wind that changes direction."],
 	[IceBlock, "Ice", "Slippery. Plan your stops."],
-	[BreakableBlock, "Crumbly", "Shatters when you jump off it or blast it. Debris floats!"],
+	[BreakableBlock, "Concrete", "Jump off, ground-pound, blast or chunk it: shatters into floating debris."],
 	[VanishingBlock, "Ghost", "Vanishes after you land. Comes back."],
 	[MovingPlatform, "Mover", "Slides side to side."],
 	[ReverseBlock, "Scrambler", "Flips left and right for a few seconds."],
@@ -20,7 +20,7 @@ var BLOCKS := [
 func _ready() -> void:
 	build_overlay(0.8, 1000)
 	content.add_child(UiTheme.title("HOW TO PLAY", 46))
-	var goal := UiTheme.label("Climb as high as you can. The lava never stops rising. Last one standing wins - or play solo and chase your best height.", 20, Palette.TEXT)
+	var goal := UiTheme.label("Climb. Wreck the route behind you. The slag never stops rising - last one standing wins. Flying chunks hit hard and smash more concrete: chain it.", 20, Palette.TEXT)
 	goal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	goal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(goal)
@@ -30,10 +30,11 @@ func _ready() -> void:
 	abilities.add_theme_constant_override("h_separation", 28)
 	abilities.add_theme_constant_override("v_separation", 4)
 	for pair in [
-		["Double Jump", "Jump again in mid-air. Tap for a short hop."],
-		["Charge Jump", "Hold on the ground, release for a huge leap."],
-		["Shockwave", "Blast players and blocks in the aimed direction. Aim down to rocket-jump."],
-		["Gravity Field", "Hold to hover and pull floating debris under you."],
+		["Double Jump", "Jump again in mid-air. Tap for a short hop. Jumping next to someone shoves them."],
+		["Charge Jump", "Hold to charge - start on the ground, keep it running off ledges - release anywhere to launch."],
+		["Ground Pound", "Fast-fall onto concrete and it shatters under you (and anyone standing on it)."],
+		["Shockwave", "Aimed blast: knocks players, shatters concrete, turns debris into projectiles. Aim down to rocket-jump."],
+		["Gravity Field", "Hold to hover and grab debris - it stacks under you. Release while aiming to hurl it."],
 	]:
 		var l := UiTheme.label(pair[0], 20, Palette.ACCENT)
 		abilities.add_child(l)

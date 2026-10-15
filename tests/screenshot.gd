@@ -48,6 +48,15 @@ func _do_action(scene: Node, action: String) -> void:
 			await get_tree().create_timer(4.5).timeout
 			for p in scene.players.slice(1):
 				p.die()
+		"blast":
+			# Shatter nearby concrete and fire a shockwave to preview debris.
+			await get_tree().create_timer(4.2).timeout
+			var c: Vector2 = scene.camera.get_screen_center_position()
+			for b in get_tree().get_nodes_in_group("destructible") + get_tree().get_nodes_in_group("blocks"):
+				if b is BreakableBlock and b.global_position.distance_to(c) < 700:
+					b.break_apart(c + Vector2(0, 300), 300.0)
+			scene.players[0]._fire_shockwave()
+			scene.players[1]._field_active = true
 		"climb":
 			# Teleport players upward to preview later biomes.
 			await get_tree().create_timer(4.0).timeout

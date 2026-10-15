@@ -43,7 +43,7 @@ const PLAYER_COLOR_NAMES: Array[String] = ["Red", "Blue", "Yellow", "Green", "Vi
 
 ## Block colours: [face, accent] keyed by block id.
 const BLOCKS := {
-	"static_platform": [Color("3b3733"), Color("6d665c")],
+	"static_platform": [Color("7a7266"), Color("d8cdb0")],
 	"bounce_pad": [Color("5f8a3c"), Color("b8d46a")],
 	"speed_block": [Color("e3a92c"), Color("0e0c0b")],
 	"breakable_block": [Color("c9b993"), Color("6d6250")],
@@ -51,6 +51,6 @@ const BLOCKS := {
 	"push_zone": [Color("d2532a"), Color("f3c29a")],
 	"vanishing_block": [Color("51657a"), Color("b8c8d8")],
 	"ice_block": [Color("9cc8d8"), Color("ffffff")],
-	"moving_platform": [Color("1a2433"), Color("8a9bb0")],
+	"moving_platform": [Color("4b6a8c"), Color("d8e4f0")],
 	"reverse_block": [Color("7e1f2c"), Color("f08a9a")],
 }
