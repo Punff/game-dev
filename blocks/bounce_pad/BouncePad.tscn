@@ -1,0 +1,21 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://blocks/bounce_pad/BouncePad.gd" id="1_bounce"]
+[ext_resource type="Texture2D" path="res://assets/white_square.png" id="2_white"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
+size = Vector2(128, 64)
+
+[node name="BouncePad" type="AnimatableBody2D"]
+script = ExtResource("1_bounce")
+texture = ExtResource("2_white")
+tint = Color(0.15, 0.85, 0.3, 1)
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+modulate = Color(0.15, 0.85, 0.3, 1)
+texture = ExtResource("2_white")
+region_enabled = true
+region_rect = Rect2(0, 0, 128, 64)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_1")
