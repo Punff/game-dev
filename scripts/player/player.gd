@@ -81,6 +81,7 @@ var _floor_blocks: Array = []
 var _squash := Vector2.ONE
 var _trail: PackedVector2Array = []
 var _hit_flash := 0.0
+var _stun := 0.0
 var _a: Dictionary = {}          # action name cache
 
 
@@ -113,17 +114,20 @@ func _ready() -> void:
 
 # ── Input helpers ────────────────────────────
 
+func _can_act() -> bool:
+	return controls_enabled and _stun <= 0.0
+
 func _pressed(a: String) -> bool:
-	return controls_enabled and Input.is_action_pressed(_a[a])
+	return _can_act() and Input.is_action_pressed(_a[a])
 
 func _just_pressed(a: String) -> bool:
-	return controls_enabled and Input.is_action_just_pressed(_a[a])
+	return _can_act() and Input.is_action_just_pressed(_a[a])
 
 func _just_released(a: String) -> bool:
-	return controls_enabled and Input.is_action_just_released(_a[a])
+	return _can_act() and Input.is_action_just_released(_a[a])
 
 func _axis(neg: String, pos: String) -> float:
-	if not controls_enabled:
+	if not _can_act():
 		return 0.0
 	return Input.get_axis(_a[neg], _a[pos])
 
@@ -144,6 +148,7 @@ func _physics_process(delta: float) -> void:
 	shock_cd = maxf(shock_cd - delta, 0.0)
 	_reverse_timer = maxf(_reverse_timer - delta, 0.0)
 	_hit_flash = maxf(_hit_flash - delta, 0.0)
+	_stun = maxf(_stun - delta, 0.0)
 
 	# Surface effects collected last frame.
 	_push_applied = surface_push
@@ -375,6 +380,17 @@ func hit_by_chunk(impulse: Vector2, _chunk: Fragment) -> void:
 	Fx.burst(global_position, Palette.PAPER_DIM, 6, 200.0, 0.3)
 
 
+## Red-block zap: briefly lose control and get thrown.
+func stun(duration: float, impulse: Vector2) -> void:
+	if is_dead:
+		return
+	_take_hit(impulse)
+	velocity = impulse
+	_stun = duration
+	Sfx.play("hit", -2.0)
+	Fx.poof(global_position, Palette.BLOCKS["hazard_block"][0], 4)
+
+
 func _take_hit(impulse: Vector2) -> void:
 	if is_dead:
 		return
@@ -393,6 +409,8 @@ func _on_jumped(strength: float, from_ground: bool) -> void:
 		for b in _floor_blocks:
 			if is_instance_valid(b):
 				b.on_player_jump(self, strength)
+			if is_instance_valid(b):
+				b.add_wear(Block.WEAR_JUMP * strength)
 	# Jumping next to someone shoves them away.
 	for other: Player in get_tree().get_nodes_in_group("player"):
 		if other == self or other.is_dead:
@@ -437,9 +455,19 @@ func _update_floor_blocks(delta: float) -> void:
 	for b in now:
 		if not b in _floor_blocks:
 			b.on_player_land(self)
+			if is_instance_valid(b):
+				b.add_wear(Block.WEAR_LAND + Block.WEAR_IMPACT * clampf(last_impact / 1000.0, 0.0, 1.0))
 	for b in now:
 		if is_instance_valid(b):
 			b.on_player_stand(self, delta)
+			if is_instance_valid(b):
+				b.add_wear(Block.WEAR_STAND * delta)
+	# Red blocks bite from any side.
+	for i in get_slide_collision_count():
+		var c := get_slide_collision(i)
+		if c.get_collider() is HazardBlock and _stun <= 0.0:
+			c.get_collider().on_player_touch(self, c.get_normal())
+			break
 	for b in _floor_blocks:
 		if is_instance_valid(b) and not b in now:
 			b.on_player_leave(self)
@@ -499,8 +527,8 @@ func die() -> void:
 	velocity = Vector2.ZERO
 	collision_layer = 0
 	collision_mask = 0
-	Fx.burst(global_position, color, 22, 480.0, 0.8)
-	Fx.ring(global_position, Palette.PAPER, 140.0, 8.0, 0.5)
+	Fx.poof(global_position, Palette.POOF, 9)
+	Fx.burst(global_position, color, 14, 380.0, 0.7)
 	Sfx.play("death")
 	SignalBus.screen_shake_requested.emit(16.0)
 	PlayerManager.rumble(player_id, 1.0, 1.0, 0.45)
@@ -566,6 +594,14 @@ func _draw() -> void:
 	draw_line(v + Vector2(-8, 0), v + Vector2(8, 0), Palette.INK, 7.0)
 	draw_line(v + Vector2(-6, 0), v + Vector2(6, 0), Palette.PAPER, 3.0)
 	draw_set_transform(Vector2.ZERO)
+
+	if _stun > 0.0:
+		var t2 := Time.get_ticks_msec() * 0.012
+		for k in 3:
+			var a2 := t2 + k * TAU / 3.0
+			var p2 := Vector2(cos(a2), sin(a2) * 0.4) * (RADIUS + 8) + Vector2(0, -RADIUS - 4)
+			draw_line(p2 - Vector2(4, 4), p2 + Vector2(4, 4), Palette.INK, 3.0)
+			draw_line(p2 + Vector2(-4, 4), p2 + Vector2(4, -4), Palette.INK, 3.0)
 
 	# Reversed-controls warning: orbiting ink marks.
 	if _reverse_timer > 0.0:

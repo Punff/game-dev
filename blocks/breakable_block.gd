@@ -18,6 +18,7 @@ static var _recent_breaks: Array[int] = []
 func _init() -> void:
 	super._init()
 	block_id = "breakable_block"
+	toughness = 0.6
 
 
 func on_player_jump(player: Player, _strength: float) -> void:
@@ -39,51 +40,12 @@ func break_apart(origin: Vector2, force := 260.0) -> void:
 	if _broken or not is_inside_tree():
 		return
 	_broken = true
-	collision_layer = 0
-	visible = false
 	SignalBus.block_broken.emit(global_position)
 	Sfx.play("break", -1.0, randf_range(0.85, 1.1))
 	Fx.burst(global_position, Palette.PAPER_DIM, 10, 260.0, 0.5)
 	_track_chain(global_position)
 
-	var parent := get_parent()
-	var live := get_tree().get_nodes_in_group("fragments").size()
-	var cols := maxi(2, roundi(size.x / CHUNK_SIZE))
-	var rows := 1 if size.y < 90.0 else 2
-	if live > 110:
-		cols = maxi(2, cols / 2)
-	var rng := RandomNumberGenerator.new()
-	rng.randomize()
-	var cw := size.x / cols
-	var rh := size.y / rows
-	# Jittered grid of cut points shared between neighbouring chunks.
-	var pts := []
-	for j in rows + 1:
-		var row := []
-		for i in cols + 1:
-			var p := Vector2(-size.x * 0.5 + cw * i, -size.y * 0.5 + rh * j)
-			if i > 0 and i < cols:
-				p.x += rng.randf_range(-cw, cw) * 0.3
-			if j > 0 and j < rows:
-				p.y += rng.randf_range(-rh, rh) * 0.25
-			row.append(p)
-		pts.append(row)
-	for j in rows:
-		for i in cols:
-			var a: Vector2 = pts[j][i]
-			var b: Vector2 = pts[j][i + 1]
-			var c: Vector2 = pts[j + 1][i + 1]
-			var d: Vector2 = pts[j + 1][i]
-			var center := (a + b + c + d) * 0.25
-			var poly := PackedVector2Array([a - center, b - center, c - center, d - center])
-			var f := Fragment.new()
-			f.setup(poly, colors()[0], colors()[1])
-			parent.add_child(f)
-			f.global_position = global_position + center
-			var away := (f.global_position - origin).normalized()
-			f.linear_velocity = away * force * rng.randf_range(0.5, 1.0) + Vector2(0, rng.randf_range(-90, -20))
-			f.angular_velocity = rng.randf_range(-4, 4)
-	queue_free()
+	shatter(origin, force, 0.0, CHUNK_SIZE)
 
 
 static func _track_chain(pos: Vector2) -> void:

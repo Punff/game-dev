@@ -23,13 +23,13 @@ const V_MARGIN := 16.0             ## px of jump height we never rely on
 const BIOMES := [
 	# name, starts at (px above start), row gap range, chance of a charge-jump row, block weights
 	{"name": "Rubble", "from": 0.0, "gap": Vector2(260, 340), "charge_rows": 0.04,
-		"weights": {"static": 26, "breakable": 40, "bouncy": 8, "moving": 8, "conveyor": 8, "vanishing": 10}},
+		"weights": {"static": 26, "breakable": 38, "bouncy": 8, "moving": 8, "conveyor": 8, "vanishing": 8, "hazard": 4}},
 	{"name": "Inferno", "from": 9000.0, "gap": Vector2(270, 350), "charge_rows": 0.08,
-		"weights": {"static": 20, "breakable": 34, "bouncy": 8, "speed": 14, "reverse": 10, "push": 8, "moving": 6}},
+		"weights": {"static": 20, "breakable": 32, "bouncy": 8, "speed": 12, "reverse": 8, "push": 8, "moving": 6, "hazard": 8}},
 	{"name": "Void", "from": 21000.0, "gap": Vector2(275, 355), "charge_rows": 0.12,
-		"weights": {"static": 14, "breakable": 30, "ice": 16, "reverse": 10, "conveyor": 10, "vanishing": 12, "moving": 8}},
+		"weights": {"static": 14, "breakable": 28, "ice": 14, "reverse": 8, "conveyor": 10, "vanishing": 10, "moving": 8, "hazard": 10}},
 	{"name": "Storm", "from": 36000.0, "gap": Vector2(280, 360), "charge_rows": 0.16,
-		"weights": {"static": 10, "breakable": 30, "moving": 14, "reverse": 8, "ice": 10, "speed": 12, "bouncy": 6, "vanishing": 10, "push": 8}},
+		"weights": {"static": 10, "breakable": 28, "moving": 12, "reverse": 8, "ice": 10, "speed": 10, "bouncy": 6, "vanishing": 8, "push": 8, "hazard": 12}},
 ]
 
 enum T { SCATTER, DEMOLITION, WIDE, CHOKE, DOOR, SAFE, CONTEST, PAIR }
@@ -55,7 +55,7 @@ func _init(seed_value: int = 0) -> void:
 func start(floor_y: float, floor_width := 1400.0) -> Dictionary:
 	rows.clear()
 	cursor_y = floor_y
-	var floor := _plat(-floor_width * 0.5, floor_width * 0.5, "static", floor_y + Block.HEIGHT * 0.5, Block.HEIGHT)
+	var floor := _plat(-floor_width * 0.5, floor_width * 0.5, "floor", floor_y + Block.HEIGHT * 0.5, Block.HEIGHT)
 	floor.reachable = true
 	var row := {"y": floor_y, "platforms": [floor], "biome": "Rubble", "template": T.SAFE, "charged": false}
 	_prev_anchors = [floor]
@@ -237,16 +237,16 @@ func _assign_types(plats: Array, biome: Dictionary, _tmpl: int) -> void:
 		if p.h > Block.HEIGHT and t != "breakable":
 			t = "breakable" if rng.randf() < 0.7 else "static"
 		p.type = t
-		if t in ["bouncy", "speed", "reverse", "push", "ice", "vanishing", "conveyor"]:
+		if t in ["bouncy", "speed", "reverse", "push", "ice", "vanishing", "conveyor", "hazard"]:
 			p.h = Block.HEIGHT
-		if t in ["bouncy", "speed", "reverse"] and p.x1 - p.x0 > MAX_SPECIAL_WIDTH:
+		if t in ["bouncy", "speed", "reverse", "hazard"] and p.x1 - p.x0 > MAX_SPECIAL_WIDTH:
 			var c: float = (p.x0 + p.x1) * 0.5
 			var hw := rng.randf_range(MIN_WIDTH, MAX_SPECIAL_WIDTH) * 0.5
 			p.x0 = c - hw
 			p.x1 = c + hw
 		if t in ["speed", "conveyor"]:
 			p["dir"] = 1.0 if rng.randf() < 0.5 else -1.0
-		p.anchor_ok = not t in ["moving", "vanishing", "breakable"]
+		p.anchor_ok = not t in ["moving", "vanishing", "breakable", "hazard"]
 
 
 func _weighted(weights: Dictionary) -> String:

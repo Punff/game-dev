@@ -14,13 +14,14 @@ var BLOCKS := [
 	[VanishingBlock, "Ghost", "Vanishes after you land. Comes back."],
 	[MovingPlatform, "Mover", "Slides side to side."],
 	[ReverseBlock, "Scrambler", "Flips left and right for a few seconds."],
+	[HazardBlock, "Red Block", "Touch it from any side: stunned and thrown. Shove people into it."],
 ]
 
 
 func _ready() -> void:
-	build_overlay(0.8, 1000)
+	build_overlay(0.8, 1120)
 	content.add_child(UiTheme.title("how to play", 40))
-	var goal := UiTheme.label("Climb. Wreck the route behind you. The slag never stops rising - last one standing wins. Flying chunks hit hard and smash more concrete: chain it.", 20, Palette.TEXT)
+	var goal := UiTheme.label("Climb. Every block wears down as you land, stand and jump on it, then crumbles - the route falls apart behind you. The slag keeps rising. Last one standing wins.", 20, Palette.TEXT)
 	goal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	goal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(goal)
@@ -33,31 +34,31 @@ func _ready() -> void:
 		["Double Jump", "Jump again in mid-air. Tap for a short hop. Jumping next to someone shoves them."],
 		["Charge Jump", "Hold to charge - start on the ground, keep it running off ledges - release anywhere to launch."],
 		["Ground Pound", "Fast-fall onto concrete and it shatters under you (and anyone standing on it)."],
-		["Shockwave", "Aimed blast: knocks players, shatters concrete, turns debris into projectiles. Aim down to rocket-jump."],
+		["Shockwave", "Aimed blast: knocks players back, shatters concrete, flings debris. Aim down to rocket-jump."],
 		["Gravity Field", "Hold to hover and grab debris - it stacks under you. Release while aiming to hurl it."],
 	]:
 		var l := UiTheme.label(pair[0], 20, Palette.ACCENT)
 		abilities.add_child(l)
 		var d := UiTheme.label(pair[1], 18, Palette.TEXT_DIM)
 		d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		d.custom_minimum_size.x = 640
+		d.custom_minimum_size.x = 820
 		abilities.add_child(d)
 	content.add_child(abilities)
 	content.add_child(HSeparator.new())
 
 	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 24)
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 18)
 	grid.add_theme_constant_override("v_separation", 10)
 	content.add_child(grid)
 	for entry in BLOCKS:
 		var h := HBoxContainer.new()
 		h.add_theme_constant_override("separation", 14)
 		var holder := Control.new()
-		holder.custom_minimum_size = Vector2(130, 44)
+		holder.custom_minimum_size = Vector2(96, 40)
 		var block: Block = entry[0].new()
-		block.set_block_size(Vector2(120, Block.HEIGHT))
-		block.position = Vector2(65, 22)
+		block.set_block_size(Vector2(88, 40))
+		block.position = Vector2(46, 20)
 		block.sync_to_physics = false   # it's a picture, not a physics body
 		block.collision_layer = 0
 		block.process_mode = Node.PROCESS_MODE_ALWAYS
@@ -69,7 +70,7 @@ func _ready() -> void:
 		texts.add_theme_constant_override("separation", -4)
 		texts.add_child(UiTheme.label(entry[1], 19, Palette.TEXT))
 		var d := UiTheme.label(entry[2], 15, Palette.TEXT_DIM)
-		d.custom_minimum_size.x = 300
+		d.custom_minimum_size.x = 200
 		d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		texts.add_child(d)
 		h.add_child(texts)

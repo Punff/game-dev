@@ -54,6 +54,8 @@ func _physics_process(delta: float) -> void:
 	_age += delta
 	stun = maxf(stun - delta, 0.0)
 	_thrown_time = maxf(_thrown_time - delta, 0.0)
+	if gravity_scale > 0.0 and _age > 4.0 and modulate.a == 1.0:
+		_age = LIFETIME   # falling crumbly bits clear out quickly
 	if _age > LIFETIME:
 		modulate.a = 1.0 - (_age - LIFETIME)
 		if _age > LIFETIME + 1.0:

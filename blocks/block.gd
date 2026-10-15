@@ -4,10 +4,25 @@ extends AnimatableBody2D
 ## Base class for every platform. Blocks build their own collision shape and
 ## draw themselves in a flat ink style (no textures, no shaders), so they are
 ## cheap to spawn in bulk and look crisp at any zoom.
+##
+## Every block wears down as players land, stand and jump on it, cracks, and
+## finally crumbles away: the tower falls apart behind whoever climbs first.
 
 const HEIGHT := 60.0
 const OUTLINE := 4.0
 const SHADOW := Vector2(8, 8)
+
+# Wear, in "fractions of a block's life" (scaled by toughness).
+const WEAR_LAND := 0.1
+const WEAR_IMPACT := 0.15     ## extra on a hard landing (scaled by fall speed)
+const WEAR_STAND := 0.08      ## per second, per player standing on it
+const WEAR_JUMP := 0.07
+const CRUMBLE_WARNING := 0.4  ## seconds of shaking before it goes
+
+## 0 = indestructible. Higher lasts longer.
+var toughness := 1.0
+var wear := 0.0
+var _crumbling := false
 
 var block_id := "static_platform"
 var size := Vector2(160.0, HEIGHT)
@@ -35,6 +50,82 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	queue_redraw()
+
+
+func add_wear(amount: float) -> void:
+	if toughness <= 0.0 or _crumbling or not is_inside_tree():
+		return
+	var stage := wear_stage()
+	wear += amount / toughness
+	if wear_stage() != stage:
+		queue_redraw()
+		Fx.burst(global_position + Vector2(randf_range(-size.x, size.x) * 0.4, -size.y * 0.5), colors()[0], 3, 90.0, 0.3)
+	if wear >= 1.0:
+		crumble()
+
+
+func wear_stage() -> int:
+	return clampi(int(wear * 4.0), 0, 3)
+
+
+## Starts the short shake-then-collapse.
+func crumble() -> void:
+	if _crumbling:
+		return
+	_crumbling = true
+	set_process(true)   # redraw every frame while it shakes
+	Sfx.play("crack", -4.0)
+	get_tree().create_timer(CRUMBLE_WARNING, false).timeout.connect(
+		func(): shatter(global_position + Vector2(0, -size.y), 90.0, 0.35))
+
+
+## Breaks into chunks. `gravity` > 0 makes the bits fall away (crumbling);
+## 0 leaves floating debris (blasted concrete).
+func shatter(origin: Vector2, force := 260.0, gravity := 0.0, chunk := 80.0) -> void:
+	if not is_inside_tree() or is_queued_for_deletion():
+		return
+	collision_layer = 0
+	visible = false
+	Fx.poof(global_position, Palette.PAPER_DIM, 4)
+	var parent := get_parent()
+	var live := get_tree().get_nodes_in_group("fragments").size()
+	var cols := maxi(2, roundi(size.x / chunk))
+	var rows := 1 if size.y < 90.0 else 2
+	if live > 110:
+		cols = maxi(2, cols / 2)
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var cw := size.x / cols
+	var rh := size.y / rows
+	# Jittered grid of cut points shared between neighbouring chunks.
+	var pts := []
+	for j in rows + 1:
+		var row := []
+		for i in cols + 1:
+			var p := Vector2(-size.x * 0.5 + cw * i, -size.y * 0.5 + rh * j)
+			if i > 0 and i < cols:
+				p.x += rng.randf_range(-cw, cw) * 0.3
+			if j > 0 and j < rows:
+				p.y += rng.randf_range(-rh, rh) * 0.25
+			row.append(p)
+		pts.append(row)
+	for j in rows:
+		for i in cols:
+			var a: Vector2 = pts[j][i]
+			var b: Vector2 = pts[j][i + 1]
+			var c: Vector2 = pts[j + 1][i + 1]
+			var d: Vector2 = pts[j + 1][i]
+			var center := (a + b + c + d) * 0.25
+			var poly := PackedVector2Array([a - center, b - center, c - center, d - center])
+			var f := Fragment.new()
+			f.setup(poly, colors()[0], colors()[1])
+			f.gravity_scale = gravity
+			parent.add_child(f)
+			f.global_position = global_position + center
+			var away := (f.global_position - origin).normalized()
+			f.linear_velocity = away * force * rng.randf_range(0.5, 1.0) + Vector2(0, rng.randf_range(-90, -20))
+			f.angular_velocity = rng.randf_range(-4, 4)
+	queue_free()
 
 
 func set_block_size(new_size: Vector2) -> void:
@@ -66,8 +157,36 @@ func colors() -> Array:
 
 
 func _draw() -> void:
+	if _crumbling:
+		draw_set_transform(Vector2(randf_range(-3, 3), randf_range(-2, 2)))
 	_draw_body()
 	_draw_icon()
+	_draw_wear()
+	draw_set_transform(Vector2.ZERO)
+
+
+## Cracks spreading across the face as the block wears out.
+func _draw_wear() -> void:
+	var stage := wear_stage()
+	if stage == 0:
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _seed + 101
+	var ink := Color(Palette.INK, 0.8)
+	var hh := size.y * 0.5 - OUTLINE
+	for k in stage * 2:
+		var x := rng.randf_range(-size.x * 0.45, size.x * 0.45)
+		var y := -hh if rng.randf() < 0.5 else hh
+		var pts := PackedVector2Array([Vector2(x, y)])
+		for i in 3 + stage:
+			x += rng.randf_range(-14, 14)
+			y += signf(-y) * rng.randf_range(6, 12) if absf(y) > 2.0 else rng.randf_range(-8, 8)
+			pts.append(Vector2(x, clampf(y, -hh, hh)))
+		draw_polyline(pts, ink, 1.5 + stage * 0.5)
+	if stage >= 3:
+		# missing corner chunk
+		var cx := size.x * 0.5 - OUTLINE
+		draw_colored_polygon(PackedVector2Array([Vector2(cx - 18, -hh), Vector2(cx, -hh), Vector2(cx, -hh + 14)]), Palette.INK)
 
 
 func _draw_body() -> void:

@@ -17,6 +17,7 @@ var BLOCK_TYPES := {
 	"ice": IceBlock,
 	"moving": MovingPlatform,
 	"reverse": ReverseBlock,
+	"hazard": HazardBlock,
 }
 
 @export var map_seed := 0
@@ -76,6 +77,9 @@ func _spawn_row(row: Dictionary) -> void:
 		var w: float = p.x1 - p.x0
 		block.position = Vector2((p.x0 + p.x1) * 0.5, p.y)
 		block.set_block_size(Vector2(w, p.h))
+		match p.role:
+			"contest": block.toughness *= 1.6   # worth fighting over, not instantly gone
+			"floor": block.toughness = 4.0
 		if block is MovingPlatform:
 			block.travel = p.travel
 			block.speed = randf_range(0.7, 1.2)
