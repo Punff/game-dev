@@ -7,15 +7,16 @@ shader_type canvas_item;
 
 uniform float strength = 1.0;
 
+// "Hash without sine" (Dave Hoskins) - no visible patterns on WebGL.
 float hash(vec2 p) {
-	p = fract(p * vec2(123.34, 456.21));
-	p += dot(p, p + 45.32);
-	return fract(p.x * p.y);
+	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
 }
 
 void fragment() {
 	vec2 px = FRAGCOORD.xy;
-	float frame = floor(TIME * 12.0);
+	float frame = mod(floor(TIME * 12.0), 97.0);
 	float n = hash(floor(px / 2.0) + frame * 17.0);
 
 	// Dark grain
