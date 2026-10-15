@@ -1,207 +1,155 @@
 extends Node
 
-const MAX_PLAYERS = 4
+## Tracks joined players and owns the per-player InputMap actions
+## (p1_jump, p2_left, ...), rebuilt from Settings whenever bindings change.
 
-var active_players: Dictionary = {}
+const MAX_PLAYERS := 4
+
+var players: Dictionary = {}   # player_id -> PlayerInfo
+
 
 func _ready() -> void:
-	pass
+	SignalBus.bindings_changed.connect(rebuild_all_actions)
+	SignalBus.settings_changed.connect(_apply_deadzones)
+	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 
-func join_player(device_id: int) -> int:
-	for p_id in active_players:
-		if active_players[p_id].device_id == device_id:
-			return p_id
 
-	if active_players.size() >= MAX_PLAYERS:
+func join(device_id: int) -> int:
+	var existing := find_by_device(device_id)
+	if existing:
+		return existing.player_id
+	if players.size() >= MAX_PLAYERS:
 		return -1
+	var info := PlayerInfo.new()
+	info.player_id = _next_free_id()
+	info.device_id = device_id
+	info.color_index = _first_free_color(info.player_id - 1)
+	players[info.player_id] = info
+	_build_actions(info)
+	SignalBus.player_joined.emit(info.player_id, device_id)
+	return info.player_id
 
-	var new_id = _get_next_available_id()
-	var player_data = PlayerData.new()
-	player_data.player_id = new_id
-	player_data.device_id = device_id
-	player_data.color = _get_default_color(new_id)
-	player_data.name = "Player %d" % new_id
 
-	active_players[new_id] = player_data
+func leave(player_id: int) -> void:
+	if not players.has(player_id):
+		return
+	players.erase(player_id)
+	_clear_actions(player_id)
+	SignalBus.player_left.emit(player_id)
 
-	_map_input_actions(new_id, device_id)
 
-	SignalBus.player_joined.emit(new_id, device_id)
-	return new_id
+func clear() -> void:
+	for id in players.keys():
+		leave(id)
 
-func _map_input_actions(player_id: int, device_id: int) -> void:
-	var prefix = "p%d_" % player_id
-	var actions = ["jump", "left", "right", "up", "down", "charge", "gravity", "shockwave"]
 
-	for action_suffix in actions:
-		var action_name = prefix + action_suffix
+func find_by_device(device_id: int) -> PlayerInfo:
+	for info in players.values():
+		if info.device_id == device_id:
+			return info
+	return null
 
-		if not InputMap.has_action(action_name):
-			InputMap.add_action(action_name)
 
-		var is_first_device = true
-		for p_id in active_players:
-			if p_id == player_id and active_players[p_id].device_id != device_id:
-				is_first_device = false
+func sorted_players() -> Array:
+	var ids := players.keys()
+	ids.sort()
+	return ids.map(func(id): return players[id])
 
-		if is_first_device:
-			InputMap.action_erase_events(action_name)
 
-		if device_id == -1:
-			_add_default_keyboard_events(action_name, player_id)
-		else:
-			_add_gamepad_events(action_name, device_id, action_suffix)
-
-func _add_default_keyboard_events(action_name: String, player_id: int) -> void:
-	var event = InputEventKey.new()
-	match action_name:
-		"p1_jump":   event.physical_keycode = KEY_UP
-		"p1_up":     event.physical_keycode = KEY_W
-		"p1_left":   event.physical_keycode = KEY_LEFT
-		"p1_right":  event.physical_keycode = KEY_RIGHT
-		"p1_down":    event.physical_keycode = KEY_DOWN
-		"p1_charge":  event.physical_keycode = KEY_SHIFT
-		"p1_gravity": event.physical_keycode = KEY_CTRL
-		"p1_shockwave": event.physical_keycode = KEY_Z
-
-		"p2_jump":   event.physical_keycode = KEY_W
-		"p2_up":     event.physical_keycode = KEY_UP
-		"p2_left":   event.physical_keycode = KEY_A
-		"p2_right":  event.physical_keycode = KEY_D
-		"p2_down":    event.physical_keycode = KEY_S
-		"p2_charge":  event.physical_keycode = KEY_Q
-		"p2_gravity": event.physical_keycode = KEY_E
-		"p2_shockwave": event.physical_keycode = KEY_F
-
-		"p3_jump":   event.physical_keycode = KEY_KP_8
-		"p3_up":     event.physical_keycode = KEY_KP_9
-		"p3_left":   event.physical_keycode = KEY_KP_4
-		"p3_right":  event.physical_keycode = KEY_KP_6
-		"p3_down":    event.physical_keycode = KEY_KP_5
-		"p3_charge":  event.physical_keycode = KEY_KP_1
-		"p3_gravity": event.physical_keycode = KEY_KP_3
-		"p3_shockwave": event.physical_keycode = KEY_KP_2
-
-		"p4_jump":   event.physical_keycode = KEY_I
-		"p4_up":     event.physical_keycode = KEY_U
-		"p4_left":   event.physical_keycode = KEY_J
-		"p4_right":  event.physical_keycode = KEY_L
-		"p4_down":    event.physical_keycode = KEY_K
-		"p4_charge":  event.physical_keycode = KEY_H
-		"p4_gravity": event.physical_keycode = KEY_O
-		"p4_shockwave": event.physical_keycode = KEY_Y
-
-		_: return
-
-	InputMap.action_add_event(action_name, event)
-
-func _add_gamepad_events(action_name: String, device_id: int, action_suffix: String) -> void:
-	var events = InputMap.action_get_events(action_name)
-
-	match action_suffix:
-		"jump":
-			_add_joy_button_if_missing(action_name, device_id, JOY_BUTTON_A)
-		"left":
-			_add_joy_axis_if_missing(action_name, device_id, JOY_AXIS_LEFT_X, -1.0)
-		"right":
-			_add_joy_axis_if_missing(action_name, device_id, JOY_AXIS_LEFT_X, 1.0)
-		"down":
-			_add_joy_button_if_missing(action_name, device_id, JOY_BUTTON_X)
-		"up":
-			_add_joy_axis_if_missing(action_name, device_id, JOY_AXIS_LEFT_Y, -1.0)
-		"charge":
-			_add_joy_button_if_missing(action_name, device_id, JOY_BUTTON_RIGHT_SHOULDER)
-			_add_joy_axis_if_missing(action_name, device_id, JOY_AXIS_TRIGGER_RIGHT, 1.0)
-		"gravity":
-			_add_joy_button_if_missing(action_name, device_id, JOY_BUTTON_LEFT_SHOULDER)
-			_add_joy_axis_if_missing(action_name, device_id, JOY_AXIS_TRIGGER_LEFT, 1.0)
-		"shockwave":
-			_add_joy_button_if_missing(action_name, device_id, JOY_BUTTON_B)
-
-func _add_joy_button_if_missing(action: String, device: int, button: int) -> void:
-	for ev in InputMap.action_get_events(action):
-		if ev is InputEventJoypadButton and ev.device == device and ev.button_index == button:
+func cycle_color(player_id: int, step := 1) -> void:
+	var info: PlayerInfo = players.get(player_id)
+	if info == null:
+		return
+	var n := Palette.PLAYER_COLORS.size()
+	var idx := info.color_index
+	for i in n:
+		idx = posmod(idx + step, n)
+		if not _color_taken(idx, player_id):
+			info.color_index = idx
 			return
-	var ev = InputEventJoypadButton.new()
-	ev.device = device
-	ev.button_index = button
-	InputMap.action_add_event(action, ev)
 
-func _add_joy_axis_if_missing(action: String, device: int, axis: int, value: float) -> void:
-	for ev in InputMap.action_get_events(action):
-		if ev is InputEventJoypadMotion and ev.device == device and ev.axis == axis and sign(ev.axis_value) == sign(value):
-			return
-	var ev = InputEventJoypadMotion.new()
-	ev.device = device
-	ev.axis = axis
-	ev.axis_value = value
-	InputMap.action_add_event(action, ev)
 
-func leave_player(player_id: int) -> void:
-	if active_players.has(player_id):
-		active_players.erase(player_id)
-		SignalBus.player_left.emit(player_id)
+func reset_match_stats() -> void:
+	for info in players.values():
+		info.max_height = 0
+		info.death_order = 0
 
-func _get_next_available_id() -> int:
+
+# ── Input actions ────────────────────────────
+
+func action(player_id: int, action_name: String) -> StringName:
+	return StringName("p%d_%s" % [player_id, action_name])
+
+
+func rebuild_all_actions() -> void:
+	for info in players.values():
+		_build_actions(info)
+
+
+func _build_actions(info: PlayerInfo) -> void:
+	var profile := Settings.profile_for_device(info.device_id)
+	for a in Settings.ACTIONS:
+		var name := action(info.player_id, a)
+		if not InputMap.has_action(name):
+			InputMap.add_action(name)
+		InputMap.action_erase_events(name)
+		for ev in Settings.events_for(profile, a, info.device_id):
+			InputMap.action_add_event(name, ev)
+	_apply_deadzones()
+
+
+func _clear_actions(player_id: int) -> void:
+	for a in Settings.ACTIONS:
+		var name := action(player_id, a)
+		if InputMap.has_action(name):
+			InputMap.erase_action(name)
+
+
+func _apply_deadzones() -> void:
+	var dz: float = Settings.get_value("deadzone")
+	for info in players.values():
+		for a in Settings.ACTIONS:
+			var name := action(info.player_id, a)
+			if InputMap.has_action(name):
+				# Triggers want a lower threshold than sticks to feel responsive.
+				InputMap.action_set_deadzone(name, dz if a in ["left", "right", "up", "down"] else 0.25)
+
+
+func _on_joy_connection_changed(device: int, connected: bool) -> void:
+	if not connected:
+		var info := find_by_device(device)
+		if info and get_tree().current_scene and get_tree().current_scene.name == "Lobby":
+			leave(info.player_id)
+
+
+func _next_free_id() -> int:
 	for i in range(1, MAX_PLAYERS + 1):
-		if not active_players.has(i):
+		if not players.has(i):
 			return i
 	return -1
 
-func _get_default_color(id: int) -> Color:
-	return get_available_colors()[id - 1]
 
-func get_available_colors() -> Array[Color]:
-	return [
-		Color(0.9, 0.2, 0.2), # Red
-		Color(0.2, 0.9, 0.2), # Green
-		Color(0.2, 0.2, 0.9), # Blue
-		Color(0.9, 0.9, 0.2), # Yellow
-		Color(0.2, 0.9, 0.9), # Cyan
-		Color(0.9, 0.2, 0.9), # Magenta
-		Color(1.0, 0.5, 0.0), # Orange
-		Color(0.5, 0.0, 0.5)  # Purple
-	]
+func _first_free_color(preferred: int) -> int:
+	var n := Palette.PLAYER_COLORS.size()
+	for i in n:
+		var idx := (preferred + i) % n
+		if not _color_taken(idx, -1):
+			return idx
+	return preferred
 
-func cycle_player_color(player_id: int) -> void:
-	if not active_players.has(player_id):
-		return
-	
-	var colors = get_available_colors()
-	var current_color = active_players[player_id].color
-	
-	# Get all currently taken colors
-	var taken_colors = []
-	for p_id in active_players:
-		if p_id != player_id:
-			taken_colors.append(active_players[p_id].color)
-	
-	var idx = 0
-	for i in range(colors.size()):
-		if colors[i].is_equal_approx(current_color):
-			idx = i
-			break
-	
-	# Try next colors until we find one not taken
-	for i in range(colors.size()):
-		idx = (idx + 1) % colors.size()
-		var candidate = colors[idx]
-		
-		var is_taken = false
-		for taken in taken_colors:
-			if taken.is_equal_approx(candidate):
-				is_taken = true
-				break
-		
-		if not is_taken:
-			active_players[player_id].color = candidate
-			return
 
-func get_player_data(player_id: int) -> Dictionary:
-	return active_players.get(player_id, {})
-
-func is_device_joined(device_id: int) -> bool:
-	for p_id in active_players:
-		if active_players[p_id].device_id == device_id:
+func _color_taken(idx: int, except_id: int) -> bool:
+	for info in players.values():
+		if info.player_id != except_id and info.color_index == idx:
 			return true
 	return false
+
+
+# ── Rumble ───────────────────────────────────
+
+func rumble(player_id: int, weak: float, strong: float, duration: float) -> void:
+	if not Settings.get_value("rumble"):
+		return
+	var info: PlayerInfo = players.get(player_id)
+	if info and not info.is_keyboard():
+		Input.start_joy_vibration(info.device_id, weak, strong, duration)

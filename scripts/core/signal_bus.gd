@@ -1,26 +1,22 @@
 extends Node
 
-# ─────────────────────────────────────────────
-#  SIGNAL BUS
-#  Central hub for global decoupled communication.
-# ─────────────────────────────────────────────
+## Central hub for decoupled, game-wide events.
 
-# ── Player Signals ───────────────────────────
+# Players
 signal player_joined(player_id: int, device_id: int)
 signal player_left(player_id: int)
-signal player_ready_state_changed(player_id: int, is_ready: bool)
 signal player_died(player_id: int)
 
-# ── Match Signals ────────────────────────────
-signal match_start_requested(mode_id: String)
+# Match
 signal match_started()
 signal match_ended(results: Dictionary)
 
-# ── Game Event Signals ───────────────────────
+# Gameplay events
 signal block_broken(pos: Vector2)
-signal chain_reaction_occurred(count: int)
+signal chain_reaction_occurred(count: int, pos: Vector2)
+signal screen_shake_requested(strength: float)
 
-# ── UI/System Signals ────────────────────────
+# UI / system
 signal game_paused(is_paused: bool)
-signal menu_back_requested()
-signal toggle_fps_requested()
+signal settings_changed()
+signal bindings_changed()

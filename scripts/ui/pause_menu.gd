@@ -1,31 +1,52 @@
-extends BaseMenu
+class_name PauseMenu
+extends CanvasLayer
 
-@onready var resume_btn = $CenterContainer/PanelContainer/VBoxContainer/ResumeButton
-@onready var restart_btn = $CenterContainer/PanelContainer/VBoxContainer/RestartButton
-@onready var menu_btn = $CenterContainer/PanelContainer/VBoxContainer/MenuButton
+## Pause overlay. Anyone can pause; Start / Esc / B resumes.
+
+var _menu := MenuBase.new()
+var _buttons: Array = []
+
 
 func _ready() -> void:
-	super._ready()
-	SignalBus.game_paused.connect(_on_paused)
+	layer = 20
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	visible = false
+	add_child(_menu)
+	_menu.build_overlay(0.65)
+	_menu.content.add_child(UiTheme.title("PAUSED", 56))
+	var spacer := Control.new()
+	spacer.custom_minimum_size.y = 6
+	_menu.content.add_child(spacer)
+	_buttons = [
+		_menu.add_button("Resume", close),
+		_menu.add_button("Settings", _menu.open_settings),
+		_menu.add_button("Restart", func(): MatchManager.start_match()),
+		_menu.add_button("Change Players", func(): MatchManager.to_lobby()),
+		_menu.add_button("Main Menu", func(): MatchManager.to_menu()),
+	]
+	MenuBase.link_vertical(_buttons)
 
-func _on_paused(is_paused: bool) -> void:
-	visible = is_paused
-	if is_paused:
-		get_tree().paused = true
-		_grab_focus_on_first_button()
-	else:
-		get_tree().paused = false
 
-func _on_resume_pressed() -> void:
-	SignalBus.game_paused.emit(false)
+func open() -> void:
+	if visible:
+		return
+	visible = true
+	get_tree().paused = true
+	Sfx.play("ui_select")
+	_menu.focus_first()
+	SignalBus.game_paused.emit(true)
 
-func _on_restart_pressed() -> void:
+
+func close() -> void:
+	visible = false
 	get_tree().paused = false
-	get_tree().reload_current_scene()
-
-func _on_menu_pressed() -> void:
-	MatchManager.reset_to_menu()
-
-func _on_back_pressed() -> void:
 	SignalBus.game_paused.emit(false)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible or _menu.sub_open:
+		return
+	if event.is_action_pressed("pause") or event.is_action_pressed("ui_cancel"):
+		get_viewport().set_input_as_handled()
+		Sfx.play("ui_back")
+		close()

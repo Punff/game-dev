@@ -1,713 +1,541 @@
-class_name Player extends CharacterBody2D
+class_name Player
+extends CharacterBody2D
 
-const VisualEffects = preload("res://scripts/blocks/visual_effects.gd")
+## A ball with a double jump, a charged jump, a gravity field and a shockwave.
+## Movement constants are public so the map generator and tests can reason
+## about what is reachable.
 
-@export_group("Player Settings")
-var player_data: PlayerData
+signal died(player_id: int)
 
-var jump_action:      String = ""
-var left_action:      String = ""
-var right_action:     String = ""
-var up_action:        String = ""
-var down_action:      String = ""
-var charge_action:    String = ""
-var gravity_action:   String = ""
-var shockwave_action: String = ""
+# ── Movement ─────────────────────────────────
+const RADIUS := 14.0
+const SPEED := 330.0
+const ACCEL := 2400.0
+const AIR_ACCEL := 1700.0
+const FRICTION := 2600.0
+const ICE_ACCEL := 500.0
+const ICE_FRICTION := 160.0
+const GRAVITY := 1500.0
+const JUMP_VELOCITY := 640.0
+const MAX_JUMPS := 2
+const JUMP_CUT := 0.5            ## velocity multiplier when jump is released early
+const COYOTE_TIME := 0.1
+const JUMP_BUFFER := 0.12
+const MAX_FALL := 1100.0
+const FAST_FALL_ACCEL := 3200.0
+const FAST_FALL_MAX := 1700.0
 
-@export_group("Movement")
-@export var speed:             float = 300.0
-@export var acceleration:      float = 18.0
-@export var friction:          float = 16.0
-@export var jump_height:       float = 600.0
-@export var max_jumps:         int   = 2
-@export var jump_force_radius:    float = 200.0
-@export var jump_force_strength:  float = 500.0
-@export var show_force_radius: bool  = true
+# ── Charged jump ─────────────────────────────
+const CHARGE_TIME := 1.0
+const CHARGE_VELOCITY := 980.0   ## at full charge
 
-@export_group("Gravity Field")
-@export var gravity_field_radius:             float = 140.0
-@export var gravity_field_strength:           float = 350.0
-@export var gravity_field_direction_strength: float = 120.0
-@export var upward_lift_force:                float = 1200.0
-@export var platform_gather_force:            float = 400.0
-@export var platform_radius:                  float = 60.0
-@export var fragment_push_force:              float = 400.0
-@export var push_distance_threshold:          float = 80.0
-@export var gravity_field_cooldown:           float = 5.0
-@export var gravity_field_max_duration:       float = 1.0
-@export var show_gravity_field:               bool  = true
+# ── Abilities ────────────────────────────────
+const GRAVITY_COOLDOWN := 4.0
+const GRAVITY_DURATION := 1.4
+const GRAVITY_RADIUS := 170.0
+const SHOCK_COOLDOWN := 3.0
+const SHOCK_RANGE := 430.0
+const SHOCK_FORCE := 1300.0
+const SHOCK_RECOIL := 380.0
+const JUMP_PUSH_RADIUS := 110.0
+const JUMP_PUSH_FORCE := 380.0
 
-@export_group("Shockwave")
-@export var shockwave_range:          float = 450.0
-@export var shockwave_force:          float = 1800.0
-@export var shockwave_fragment_force: float = 300.0
+## Half width of the playable column; set by the game from the map generator.
+static var world_half_width := 700.0
 
-@export_group("Charged Jump")
-@export var max_charge_time: float = 1.5
-@export var max_charge_jump: float = 800.0
-@export var fast_fall_force: float = 3500.0
-@export var max_fall_speed:  float = 4000.0
+var info: PlayerInfo
+var player_id := 1
+var color := Color.WHITE
+var is_dead := false
+var controls_enabled := false
 
-var gravity: float = 1200.0
+var jumps_left := MAX_JUMPS
+var facing := 1.0
+var max_height_px := 0.0
+var spawn_y := 0.0
 
-var jumps_remaining: int  = 0
-var _was_on_floor:   bool = true
-var is_dead:         bool = false
+# Per-frame surface effects, written by blocks in on_player_stand().
+var surface_push := 0.0
+var surface_ice := false
+var _push_applied := 0.0
+var _ice_applied := false
 
-var is_charging_jump: bool  = false
-var charge_time:      float = 0.0
-var charge_visual            = null
+var _coyote := 0.0
+var _jump_buffer := 0.0
+var _was_on_floor := false
+var _reverse_timer := 0.0
+var _charging := false
+var _charge := 0.0
+var gravity_cd := 0.0
+var shock_cd := 0.0
+var _field_time := 0.0
+var _field_active := false
+var _floor_blocks: Array = []
+var _squash := Vector2.ONE
+var _trail: PackedVector2Array = []
+var _blink := 0.0
+var _a: Dictionary = {}          # action name cache
 
-var gravity_field_active:         bool  = false
-var ability_cooldown_timer:       float = 0.0
-var gravity_field_duration_timer: float = 0.0
-var gravity_field_visual                = null
 
-var attracted_fragments:          Array = []
-var fragment_original_properties: Dictionary = {}
-var _grab_time:                   Dictionary = {}
+func _init() -> void:
+	collision_layer = 1
+	collision_mask = 1
+	floor_snap_length = 6.0
+	floor_max_angle = deg_to_rad(50)
+	var cs := CollisionShape2D.new()
+	var circle := CircleShape2D.new()
+	circle.radius = RADIUS
+	cs.shape = circle
+	add_child(cs)
 
-var _movement_lines = null
-var _facing_dir: float = 1.0
-var _current_blocks: Array = []
 
-signal player_died(player_id: int)
+func setup(p: PlayerInfo) -> void:
+	info = p
+	player_id = p.player_id
+	color = p.color
+	name = "Player%d" % player_id
+	for a in Settings.ACTIONS:
+		_a[a] = PlayerManager.action(player_id, a)
+	add_to_group("player")
+
 
 func _ready() -> void:
-	add_to_group("player")
-	if player_data:
-		setup_with_data(player_data)
-	_movement_lines = VisualEffects.MovementLines.new()
-	add_child(_movement_lines)
+	spawn_y = global_position.y
+	z_index = 10
+	_blink = randf_range(1.0, 4.0)
 
-func setup_with_data(data: PlayerData) -> void:
-	player_data = data
-	var prefix := "p%d_" % player_data.player_id
-	jump_action      = prefix + "jump"
-	left_action      = prefix + "left"
-	right_action     = prefix + "right"
-	up_action        = prefix + "up"
-	down_action      = prefix + "down"
-	charge_action    = prefix + "charge"
-	gravity_action   = prefix + "gravity"
-	shockwave_action = prefix + "shockwave"
 
-	add_to_group("player%d" % player_data.player_id)
-	_facing_dir = -1.0 if player_data.player_id == 2 else 1.0
+# ── Input helpers ────────────────────────────
 
-	var rect := get_node_or_null("ColorRect")
-	if rect:
-		rect.color = player_data.color
-	
-	_setup_player_visual()
+func _pressed(a: String) -> bool:
+	return controls_enabled and Input.is_action_pressed(_a[a])
 
-func _setup_player_visual() -> void:
-	if not player_data: return
-	var rect := $ColorRect
-	if not rect: return
-	if player_data: rect.color = player_data.color
-	else: rect.color = Color.WHITE
+func _just_pressed(a: String) -> bool:
+	return controls_enabled and Input.is_action_just_pressed(_a[a])
 
-	# Noir Player Shader: Thick outline + Visor core
-	var shader := Shader.new()
-	shader.code = """
-shader_type canvas_item;
-uniform float outline_width : hint_range(0.01, 0.2) = 0.1;
-uniform vec4  outline_color : source_color = vec4(0.0, 0.0, 0.0, 1.0);
-uniform vec4  visor_color   : source_color = vec4(1.0, 1.0, 1.0, 0.8);
+func _just_released(a: String) -> bool:
+	return controls_enabled and Input.is_action_just_released(_a[a])
 
-void fragment() {
-	float dist    = distance(UV, vec2(0.5));
-	float fill    = smoothstep(0.5, 0.47, dist);
-	float outline = smoothstep(0.5, 0.47, dist - outline_width) - fill;
-	
-	// Visor / Core effect
-	float visor = smoothstep(0.15, 0.05, abs(UV.y - 0.4)) * smoothstep(0.4, 0.35, abs(UV.x - 0.5));
-	
-	vec4 base = COLOR;
-	base = mix(base, visor_color, visor * visor_color.a);
-	
-	COLOR = mix(vec4(0.0), outline_color, outline);
-	COLOR = mix(COLOR, base, fill);
-	COLOR.a = max(fill, outline);
-}
-"""
-	var mat := ShaderMaterial.new()
-	mat.shader = shader
-	mat.set_shader_parameter("outline_width", 0.1)
-	mat.set_shader_parameter("outline_color", Color.BLACK)
-	mat.set_shader_parameter("visor_color", Color(1, 1, 1, 0.8))
-	rect.material = mat
-	
-	_add_player_indicator()
+func _axis(neg: String, pos: String) -> float:
+	if not controls_enabled:
+		return 0.0
+	return Input.get_axis(_a[neg], _a[pos])
 
-func _add_player_indicator() -> void:
-	if not player_data or has_node("Indicator"): return
-	var label = Label.new()
-	label.name = "Indicator"
-	label.text = "P%d" % player_data.player_id
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.custom_minimum_size = Vector2(60, 30)
-	label.position = Vector2(-30, -50) # Positioned above the ball
-	
-	label.add_theme_font_size_override("font_size", 18)
-	label.add_theme_color_override("font_color", Color.WHITE)
-	label.add_theme_color_override("font_outline_color", Color.BLACK)
-	label.add_theme_constant_override("outline_size", 6)
-	
-	add_child(label)
+func aim_vector() -> Vector2:
+	var v := Vector2(_axis("left", "right"), _axis("up", "down"))
+	if _reverse_timer > 0.0:
+		v.x = -v.x
+	return v
 
-func _spawn_trail_fragment() -> void:
-	# Optimization: only spawn fragments at high speed
-	if velocity.length_squared() < 40000: return # Speed > 200
-	if Engine.get_frames_drawn() % 4 != 0: return
-	
-	var trail = ColorRect.new()
-	trail.size = $ColorRect.size * 0.8
-	trail.position = global_position - trail.size/2
-	trail.color = player_data.color
-	trail.color.a = 0.4
-	trail.top_level = true
-	trail.z_index = z_index - 1
-	
-	# Reuse player shader for trail but simpler
-	trail.material = ShaderMaterial.new()
-	trail.material.shader = $ColorRect.material.shader
-	trail.material.set_shader_parameter("outline_width", 0.05)
-	trail.material.set_shader_parameter("visor_color", Color(1, 1, 1, 0))
-	
-	get_tree().current_scene.add_child(trail)
-	
-	var tween = create_tween()
-	tween.tween_property(trail, "scale", Vector2.ZERO, 0.3)
-	tween.parallel().tween_property(trail, "modulate:a", 0.0, 0.3)
-	tween.finished.connect(trail.queue_free)
+
+# ── Main loop ────────────────────────────────
 
 func _physics_process(delta: float) -> void:
-	if is_dead or not player_data or not is_inside_tree():
+	if is_dead:
 		return
+	var on_floor := is_on_floor()
+	gravity_cd = maxf(gravity_cd - delta, 0.0)
+	shock_cd = maxf(shock_cd - delta, 0.0)
+	_reverse_timer = maxf(_reverse_timer - delta, 0.0)
 
-	_spawn_trail_fragment()
+	# Surface effects collected last frame.
+	_push_applied = surface_push
+	_ice_applied = surface_ice
 
-	if ability_cooldown_timer > 0.0:
-		ability_cooldown_timer -= delta
-
-	if gravity_field_active:
-		gravity_field_duration_timer += delta
-		if gravity_field_duration_timer >= gravity_field_max_duration:
-			deactivate_gravity_field()
-
-	if is_on_floor():
-		jumps_remaining = max_jumps
-		# Apply a tiny bit of gravity to keep collision active for detection
-		velocity.y += gravity * delta * 0.1
+	if on_floor:
+		jumps_left = MAX_JUMPS
+		_coyote = COYOTE_TIME
 	else:
-		velocity.y += gravity * delta
+		_coyote -= delta
+		if jumps_left == MAX_JUMPS and _coyote <= 0.0:
+			jumps_left = MAX_JUMPS - 1   # walked off a ledge: only the air jump remains
 
-	_handle_charged_jump(delta)
+	# Gravity (softened while a gravity field is up and you're falling).
+	var g := GRAVITY
+	if _field_active and velocity.y > 0.0:
+		g *= 0.3
+	velocity.y = minf(velocity.y + g * delta, MAX_FALL if not _field_active else 220.0)
 
-	if Input.is_action_just_pressed(jump_action) and jumps_remaining > 0 and not is_charging_jump:
-		velocity.y = -jump_height
-		jumps_remaining -= 1
-		_emit_jump_force()
-		if show_force_radius:
-			_create_force_wave_effect()
+	if not on_floor and _pressed("down"):
+		velocity.y = minf(velocity.y + FAST_FALL_ACCEL * delta, FAST_FALL_MAX)
 
-	if Input.is_action_pressed(gravity_action) and _can_activate_gravity_field():
-		if not gravity_field_active:
-			activate_gravity_field()
-	elif Input.is_action_just_released(gravity_action) and gravity_field_active:
-		deactivate_gravity_field()
-
-	if gravity_field_active:
-		_update_gravity_field(delta)
-
-	if Input.is_action_just_pressed(shockwave_action) and _can_activate_shockwave():
-		_fire_shockwave()
-
-	var direction := Input.get_axis(left_action, right_action)
-	if has_meta("controls_reversed"):
-		direction = -direction
-
-	var target_vx := 0.0
-	if direction != 0.0:
-		target_vx = direction * speed
-		_facing_dir = direction
-
-	var rate := acceleration if direction != 0.0 else friction
-	# We move toward the target horizontal velocity, but we allow 
-	# additive forces (like conveyors/push zones) to be handled by the blocks themselves.
-	velocity.x = move_toward(velocity.x, target_vx, rate * delta * 60.0)
-
-	if not is_on_floor() and Input.is_action_pressed(down_action):
-		velocity.y += fast_fall_force * delta
-		velocity.y = min(velocity.y, max_fall_speed)
-
-	_apply_squash_and_stretch(delta)
-
-	if _movement_lines:
-		_movement_lines.set_velocity(velocity)
+	_handle_horizontal(delta, on_floor)
+	_handle_jump(delta, on_floor)
+	_handle_charge(delta, on_floor)
+	_handle_abilities(delta)
 
 	move_and_slide()
-	_handle_block_interactions(delta)
-	_process_player_collisions()
-	_process_fragment_riding()
 
-	var on_floor_now: bool = is_on_floor()
-	if on_floor_now and not _was_on_floor:
-		_spawn_landing_impact()
+	var x_limit := world_half_width - RADIUS
+	if absf(global_position.x) > x_limit:
+		global_position.x = clampf(global_position.x, -x_limit, x_limit)
+		velocity.x = 0.0
 
-	_was_on_floor = on_floor_now
+	_update_floor_blocks(delta)
+	_push_players_on_contact()
 
-func _process_fragment_riding() -> void:
-	if not is_on_floor(): return
-	for i in get_slide_collision_count():
-		var col = get_slide_collision(i)
-		if not col: continue
-		var body = col.get_collider()
-		if body is RigidBody2D and body.get_meta("rideable", false):
-			velocity.y = body.linear_velocity.y
-			break
-
-func _process_player_collisions():
-	var push_force := 200.0
-	var max_sep_speed := 300.0
-	for i in get_slide_collision_count():
-		var col = get_slide_collision(i)
-		if not col: continue
-		var c = col.get_collider()
-		if c is CharacterBody2D and c.is_in_group("player"):
-			var dir = c.global_position - global_position
-			if dir.length_squared() < 0.01:
-				dir = Vector2(randf_range(-1, 1), 0).normalized()
-			else:
-				dir = dir.normalized()
-			var rel_vel = c.velocity - velocity
-			var rel_along = rel_vel.dot(dir)
-			if rel_along < max_sep_speed:
-				var impulse = dir * push_force
-				c.velocity += impulse
-				velocity -= impulse
-
-func _handle_block_interactions(delta: float):
-	var new_blocks = []
-	
-	for i in get_slide_collision_count():
-		var col = get_slide_collision(i)
-		if not col: continue
-		var collider = col.get_collider()
-		var block = collider
-		while block and not block.is_in_group("blocks") and block != get_tree().current_scene:
-			block = block.get_parent()
-		if block and block.is_in_group("blocks") and not block in new_blocks:
-			new_blocks.append(block)
-	
-	for block in new_blocks:
-		if not block in _current_blocks:
-			if block.has_method("on_player_land"):
-				block.on_player_land(self)
-	
-	for block in new_blocks:
-		if block.has_method("on_player_stand"):
-			block.on_player_stand(self, delta)
-		
-	for block in _current_blocks:
-		if not is_instance_valid(block) or not block in new_blocks:
-			if is_instance_valid(block) and block.has_method("on_player_leave"):
-				block.on_player_leave(self)
-				
-	_current_blocks = new_blocks
-
-func _apply_squash_and_stretch(delta: float) -> void:
-	var sprite := $ColorRect
-	if not sprite: return
 	if is_on_floor() and not _was_on_floor:
-		sprite.scale = Vector2(1.4, 0.6)
-	elif not is_on_floor() and _was_on_floor:
-		sprite.scale = Vector2(0.65, 1.4)
-	sprite.scale = sprite.scale.lerp(Vector2.ONE, 12.0 * delta)
+		_on_landed()
+	elif not is_on_floor() and _was_on_floor and velocity.y < 0.0:
+		_squash = Vector2(0.75, 1.3)
+	_was_on_floor = is_on_floor()
 
-func die() -> void:
-	if is_dead: return
-	is_dead = true
-	velocity = Vector2.ZERO
-	if _movement_lines: _movement_lines.set_velocity(Vector2.ZERO)
-	deactivate_gravity_field()
-	_stop_charge_visual()
+	max_height_px = maxf(max_height_px, spawn_y - global_position.y)
+	_update_visuals(delta)
 
-	modulate.a = 0.0
-	set_collision_layer(0)
-	set_collision_mask(0)
-	process_mode = Node.PROCESS_MODE_DISABLED
 
-	if SignalBus.has_signal("player_died"):
-		SignalBus.player_died.emit(player_data.player_id)
-	player_died.emit(player_data.player_id)
+func _handle_horizontal(delta: float, on_floor: bool) -> void:
+	var dir := aim_vector().x
+	if absf(dir) < 0.2:
+		dir = 0.0
+	if dir != 0.0:
+		facing = signf(dir)
+	var target := dir * SPEED + _push_applied
+	var rate: float
+	if _ice_applied:
+		rate = ICE_ACCEL if dir != 0.0 else ICE_FRICTION
+	elif dir != 0.0:
+		rate = ACCEL if on_floor else AIR_ACCEL
+	else:
+		rate = FRICTION if on_floor else AIR_ACCEL * 0.6
+	# Don't brake momentum from launches/shockwaves faster than air control allows.
+	velocity.x = move_toward(velocity.x, target, rate * delta)
 
-	get_tree().create_timer(2.0).timeout.connect(func():
-		if is_instance_valid(self):
-			queue_free()
-	)
 
-func take_damage(_amount: int) -> void:
-	die()
+func _handle_jump(delta: float, _on_floor: bool) -> void:
+	if _just_pressed("jump"):
+		_jump_buffer = JUMP_BUFFER
+	else:
+		_jump_buffer -= delta
 
-func reset_player() -> void:
-	is_dead                      = false
-	visible                      = true
-	process_mode                 = Node.PROCESS_MODE_INHERIT
-	velocity                     = Vector2.ZERO
-	modulate.a                   = 1.0
-	set_collision_layer(1)
-	set_collision_mask(1)
-	jumps_remaining              = max_jumps
-	is_charging_jump             = false
-	charge_time                  = 0.0
-	gravity_field_active         = false
-	ability_cooldown_timer       = 0.0
-	gravity_field_duration_timer = 0.0
+	if _jump_buffer > 0.0 and not _charging and jumps_left > 0:
+		var grounded_jump := _coyote > 0.0
+		_jump_buffer = 0.0
+		_coyote = 0.0
+		jumps_left -= 1
+		velocity.y = -JUMP_VELOCITY
+		_squash = Vector2(0.7, 1.35)
+		_on_jumped(1.0, grounded_jump)
+		Sfx.play("jump" if grounded_jump else "double_jump", -4.0)
+		if not grounded_jump:
+			Fx.ring(global_position + Vector2(0, RADIUS), Color(color, 0.8), 34.0, 3.0, 0.25)
 
-	for fragment in attracted_fragments:
-		if is_instance_valid(fragment):
-			if fragment.get_meta("controlling_player", null) == self:
-				fragment.remove_meta("controlling_player")
-			_restore_fragment_properties(fragment)
-	attracted_fragments.clear()
-	fragment_original_properties.clear()
-	_grab_time.clear()
-	_stop_charge_visual()
-	if gravity_field_visual:
-		gravity_field_visual.queue_free()
-		gravity_field_visual = null
+	# Variable jump height.
+	if _just_released("jump") and velocity.y < -JUMP_VELOCITY * 0.4:
+		velocity.y *= JUMP_CUT
 
-func _can_activate_gravity_field() -> bool:
-	return ability_cooldown_timer <= 0.0
 
-func _can_activate_shockwave() -> bool:
-	return ability_cooldown_timer <= 0.0
+func _handle_charge(delta: float, on_floor: bool) -> void:
+	if not _charging and on_floor and _just_pressed("charge"):
+		_charging = true
+		_charge = 0.0
+	if not _charging:
+		return
+	if not on_floor and _coyote <= 0.0:
+		_charging = false
+		return
+	_charge = minf(_charge + delta / CHARGE_TIME, 1.0)
+	velocity.x *= 0.85   # plant your feet while charging
+	if not _pressed("charge"):
+		var ratio := _charge
+		_charging = false
+		_coyote = 0.0
+		velocity.y = -lerpf(JUMP_VELOCITY, CHARGE_VELOCITY, ratio)
+		jumps_left = MAX_JUMPS - 1
+		_squash = Vector2(0.6, 1.5)
+		_on_jumped(1.0 + ratio, true)
+		Sfx.play("charge_jump", -3.0, 0.8 + ratio * 0.4)
+		Fx.ring(global_position + Vector2(0, RADIUS), color, 50.0 + ratio * 50.0, 5.0, 0.35)
+		if ratio > 0.9:
+			PlayerManager.rumble(player_id, 0.3, 0.2, 0.12)
 
-func activate_gravity_field() -> void:
-	gravity_field_active         = true
-	gravity_field_duration_timer = 0.0
-	_create_gravity_field_visual()
-	_update_attracted_fragments(0.0)
 
-func deactivate_gravity_field() -> void:
-	if not gravity_field_active: return
-	gravity_field_active         = false
-	ability_cooldown_timer       = gravity_field_cooldown
-	gravity_field_duration_timer = 0.0
+func _handle_abilities(delta: float) -> void:
+	# Gravity field: hold to hover and herd floating debris.
+	if _field_active:
+		_field_time += delta
+		if not _pressed("gravity") or _field_time >= GRAVITY_DURATION:
+			_end_field()
+		else:
+			_update_field(delta)
+	elif _just_pressed("gravity") and gravity_cd <= 0.0:
+		_field_active = true
+		_field_time = 0.0
+		Sfx.play("gravity", -4.0)
 
-	_push_close_fragments()
+	if _just_pressed("shockwave") and shock_cd <= 0.0:
+		_fire_shockwave()
 
-	for fragment in attracted_fragments:
-		if not is_instance_valid(fragment): continue
-		if fragment.get_meta("controlling_player", null) == self:
-			fragment.remove_meta("controlling_player")
-		_restore_fragment_properties(fragment)
 
-	attracted_fragments.clear()
-	fragment_original_properties.clear()
-	_grab_time.clear()
+func _end_field() -> void:
+	_field_active = false
+	gravity_cd = GRAVITY_COOLDOWN
 
-	if gravity_field_visual:
-		gravity_field_visual.queue_free()
-		gravity_field_visual = null
+
+func _update_field(delta: float) -> void:
+	var aim := aim_vector()
+	var frame := Engine.get_physics_frames()
+	for f: Fragment in get_tree().get_nodes_in_group("fragments"):
+		if f.stun > 0.0:
+			continue
+		var d := global_position.distance_to(f.global_position)
+		if d > GRAVITY_RADIUS:
+			continue
+		if f.claim_frame == frame and f.claim_dist < d:
+			continue   # another player's field holds it more tightly
+		f.claim_frame = frame
+		f.claim_dist = d
+		var orbit_a := float(f.get_instance_id() % 628) * 0.01
+		var target := global_position + Vector2(0, 46) + Vector2(aim.x, aim.y * 1.5) * 110.0 \
+			+ Vector2(cos(orbit_a), sin(orbit_a) * 0.4) * 34.0
+		var to_target := target - f.global_position
+		var desired := to_target.normalized() * minf(to_target.length() * 5.0, 650.0) + velocity * 0.4
+		f.linear_velocity = f.linear_velocity.lerp(desired, minf(6.0 * delta, 1.0))
+		f.angular_velocity = lerpf(f.angular_velocity, 0.0, minf(10.0 * delta, 1.0))
+
 
 func _fire_shockwave() -> void:
-	var h = Input.get_axis(left_action, right_action)
-	var v = Input.get_axis(up_action, down_action)
-	var dir = Vector2(h, v)
-	if dir.length_squared() < 0.01: dir = Vector2(_facing_dir, 0)
-	else: dir = dir.normalized()
+	shock_cd = SHOCK_COOLDOWN
+	var dir := aim_vector()
+	dir = Vector2(facing, 0.0) if dir.length_squared() < 0.1 else dir.normalized()
+	var origin := global_position
+	Fx.cone(origin, dir, color.lightened(0.3), SHOCK_RANGE)
+	Sfx.play("shockwave", -2.0)
+	SignalBus.screen_shake_requested.emit(6.0)
+	PlayerManager.rumble(player_id, 0.4, 0.3, 0.15)
 
-	ability_cooldown_timer = gravity_field_cooldown
-	var origin = global_position
+	# Recoil: firing downwards gives a little rocket-jump.
+	velocity -= dir * SHOCK_RECOIL
+	if dir.y > 0.5:
+		velocity.y = minf(velocity.y, -SHOCK_RECOIL)
 
-	var wave = VisualEffects.ShockwaveEffect.new()
-	wave.direction = dir
-	wave.max_distance = shockwave_range
-	get_tree().current_scene.add_child(wave)
-	wave.global_position = origin
-
-	var affected = []
-	for g in ["destructible_blocks", "bouncy_blocks", "reverse_blocks", "ice_blocks", "moving_blocks", "regular_blocks", "player", "fragments"]:
-		affected.append_array(get_tree().get_nodes_in_group(g))
-
-	for node in affected:
-		if node == self: continue
-		var to_node = node.global_position - origin
-		var dist = to_node.length()
-		if dist > shockwave_range or dist < 8.0: continue
-		var node_dir = to_node.normalized()
-		if node_dir.dot(dir) < 0.25: continue
-		var falloff = 1.0 - dist / shockwave_range
-
-		if node.is_in_group("player") and node is CharacterBody2D:
-			node.velocity += node_dir * shockwave_force * falloff
-			if node.gravity_field_active:
-				node.deactivate_gravity_field()
-				node.ability_cooldown_timer = node.gravity_field_cooldown
-		elif node.is_in_group("fragments") and node is RigidBody2D:
-			if node.has_meta("controlling_player"):
-				var controller = node.get_meta("controlling_player")
-				if is_instance_valid(controller):
-					controller.attracted_fragments.erase(node)
-				node.remove_meta("controlling_player")
-			_restore_fragment_properties(node)
-			node.set_meta("shockwave_stun", 0.6)
-			node.linear_damp = 0.8
-			node.angular_damp = 1.0
-			node.apply_central_impulse(node_dir * shockwave_fragment_force * falloff * 2.2)
-		elif node.has_method("on_shockwave"):
-			node.on_shockwave(node_dir, origin, shockwave_range)
-
-func _update_gravity_field(delta: float) -> void:
-	_update_attracted_fragments(delta)
-	for fragment in attracted_fragments:
-		if is_instance_valid(fragment):
-			_apply_gravity_field_to_fragment(fragment, delta)
-
-func _update_attracted_fragments(delta: float) -> void:
-	var new_attracted = []
-	var all_nodes: Array = get_tree().get_nodes_in_group("fragments")
-
-	for fragment in all_nodes:
-		if not is_instance_valid(fragment) or not (fragment is RigidBody2D):
+	var targets: Array = get_tree().get_nodes_in_group("player")
+	targets.append_array(get_tree().get_nodes_in_group("blocks"))
+	targets.append_array(get_tree().get_nodes_in_group("fragments"))
+	for node in targets:
+		if node == self or not is_instance_valid(node):
 			continue
+		var to: Vector2 = node.global_position - origin
+		if node is Block:
+			# Use the closest point on the block so long platforms are hit fairly.
+			var r: Rect2 = node.get_rect_global()
+			to = Vector2(clampf(origin.x, r.position.x, r.end.x), clampf(origin.y, r.position.y, r.end.y)) - origin
+		var dist := to.length()
+		if dist > SHOCK_RANGE or dist < 1.0 or to.normalized().dot(dir) < 0.45:
+			continue
+		var falloff := 1.0 - dist / SHOCK_RANGE
+		if node is Player:
+			node.hit_by_shockwave(to.normalized() * SHOCK_FORCE * (0.35 + 0.65 * falloff), self)
+		elif node is Fragment:
+			node.stun = 0.6
+			node.apply_central_impulse(to.normalized() * 900.0 * (0.4 + falloff))
+		elif node is Block:
+			node.on_shockwave(to.normalized(), origin)
 
-		if fragment.has_meta("shockwave_stun"):
-			var stun_time: float = fragment.get_meta("shockwave_stun")
-			stun_time -= delta
-			if stun_time <= 0.0:
-				fragment.remove_meta("shockwave_stun")
-			else:
-				fragment.set_meta("shockwave_stun", stun_time)
+
+func hit_by_shockwave(impulse: Vector2, _from: Player) -> void:
+	if is_dead:
+		return
+	velocity += impulse
+	if _field_active:
+		_end_field()
+	_charging = false
+	_squash = Vector2(1.3, 0.75)
+	Fx.burst(global_position, color, 8, 220.0, 0.35)
+	PlayerManager.rumble(player_id, 0.6, 0.6, 0.25)
+
+
+func _on_jumped(strength: float, from_ground: bool) -> void:
+	if from_ground:
+		Fx.dust(global_position + Vector2(0, RADIUS), Color(1, 1, 1, 0.6))
+		for b in _floor_blocks:
+			if is_instance_valid(b):
+				b.on_player_jump(self, strength)
+	# Jumping next to someone shoves them away.
+	for other: Player in get_tree().get_nodes_in_group("player"):
+		if other == self or other.is_dead:
+			continue
+		var to := other.global_position - global_position
+		var r := JUMP_PUSH_RADIUS * strength
+		if to.length() < r:
+			var f := 1.0 - to.length() / r
+			other.velocity += to.normalized() * JUMP_PUSH_FORCE * strength * f
+	# Debris gets kicked too.
+	for f: Fragment in get_tree().get_nodes_in_group("fragments"):
+		var to := f.global_position - global_position
+		var r := 140.0 * strength
+		if to.length() < r:
+			f.apply_central_impulse(to.normalized() * 260.0 * (1.0 - to.length() / r) * strength)
+
+
+func _on_landed() -> void:
+	var impact := clampf(absf(get_real_velocity().y) / 900.0, 0.0, 1.0)
+	_squash = Vector2(1.0 + 0.45 * impact + 0.1, 1.0 - 0.4 * impact - 0.05)
+	if impact > 0.25:
+		Fx.dust(global_position + Vector2(0, RADIUS), Color(1, 1, 1, 0.5), 6)
+		Sfx.play("land", -10.0 + impact * 6.0)
+
+
+func _update_floor_blocks(delta: float) -> void:
+	surface_push = 0.0
+	surface_ice = false
+	var now: Array = []
+	if is_on_floor():
+		for i in get_slide_collision_count():
+			var col := get_slide_collision(i)
+			if col.get_normal().y > -0.6:
 				continue
+			var b := col.get_collider()
+			if b is Block and not b in now:
+				now.append(b)
+	for b in now:
+		if not b in _floor_blocks:
+			b.on_player_land(self)
+	for b in now:
+		if is_instance_valid(b):
+			b.on_player_stand(self, delta)
+	for b in _floor_blocks:
+		if is_instance_valid(b) and not b in now:
+			b.on_player_leave(self)
+	_floor_blocks = now
 
-		var dist: float = global_position.distance_to(fragment.global_position)
-		var in_radius = dist <= gravity_field_radius
-		var was_attracted = attracted_fragments.has(fragment) or fragment.has_meta("controlling_player")
-		if not (in_radius or (was_attracted and dist <= gravity_field_radius * 1.15)):
-			continue
 
-		var can_attract = true
+func _push_players_on_contact() -> void:
+	for i in get_slide_collision_count():
+		var c := get_slide_collision(i).get_collider()
+		if c is Player:
+			var dir: Vector2 = (c.global_position - global_position)
+			dir = Vector2(facing, 0) if dir.length_squared() < 0.01 else dir.normalized()
+			c.velocity += dir * 120.0
+			velocity -= dir * 60.0
 
-		if fragment.has_meta("controlling_player"):
-			var controller = fragment.get_meta("controlling_player")
-			if is_instance_valid(controller) and controller != self:
-				var dist_to_controller = controller.global_position.distance_to(fragment.global_position)
-				if dist < dist_to_controller * 0.85:
-					controller.attracted_fragments.erase(fragment)
-				else:
-					can_attract = false
 
-		if can_attract:
-			new_attracted.append(fragment)
-			if not attracted_fragments.has(fragment):
-				fragment.set_meta("controlling_player", self)
-				_grab_time[fragment] = 0.06
-				if not fragment_original_properties.has(fragment):
-					fragment_original_properties[fragment] = {
-						"gravity_scale": fragment.gravity_scale,
-						"linear_damp":   fragment.linear_damp,
-						"angular_damp":  fragment.angular_damp,
-						"lock_rotation": fragment.lock_rotation,
-					}
+# ── Effects from blocks ──────────────────────
 
-	for fragment in attracted_fragments:
-		if is_instance_valid(fragment) and not new_attracted.has(fragment):
-			if fragment.get_meta("controlling_player", null) == self:
-				fragment.remove_meta("controlling_player")
-			_restore_fragment_properties(fragment)
-			_grab_time.erase(fragment)
+func launch(vy: float) -> void:
+	velocity.y = -vy
+	jumps_left = MAX_JUMPS - 1
+	_coyote = 0.0
+	_squash = Vector2(0.6, 1.5)
+	PlayerManager.rumble(player_id, 0.2, 0.0, 0.1)
 
-	attracted_fragments = new_attracted
 
-func _restore_fragment_properties(fragment: RigidBody2D) -> void:
-	if not is_instance_valid(fragment): return
-	if fragment_original_properties.has(fragment):
-		var orig: Dictionary = fragment_original_properties[fragment]
-		fragment.linear_damp   = orig["linear_damp"]
-		fragment.angular_damp  = orig["angular_damp"]
-		fragment.gravity_scale = orig["gravity_scale"]
-		fragment.lock_rotation = orig["lock_rotation"]
-		fragment_original_properties.erase(fragment)
+func reverse_controls(duration: float) -> void:
+	_reverse_timer = maxf(_reverse_timer, duration)
 
-func _apply_gravity_field_to_fragment(fragment: RigidBody2D, delta: float) -> void:
-	var raw_dir := Vector2(Input.get_axis(left_action, right_action), Input.get_axis(up_action, down_action))
-	var dir = Vector2(raw_dir.x, raw_dir.y * 2.0)
 
-	fragment.gravity_scale = 0.0
+func is_reversed() -> bool:
+	return _reverse_timer > 0.0
 
-	var id = fragment.get_instance_id()
-	var angle = (id % 6283) * 0.001
-	var radius = 35.0 + (id % 55)
-	var orbit = Vector2(cos(angle), sin(angle)) * radius
-	var target = global_position + Vector2(0.0, 30.0) + dir * gravity_field_direction_strength + orbit
 
-	var to_target = target - fragment.global_position
-	var dist = to_target.length()
-	var spd = clamp(dist * 4.0, 0.0, 600.0)
-	var target_vel = to_target.normalized() * spd + velocity * 0.3
+func is_charging() -> bool:
+	return _charging
 
-	fragment.linear_velocity  = fragment.linear_velocity.lerp(target_vel, 4.0 * delta)
-	fragment.angular_velocity = lerp(fragment.angular_velocity, 0.0, 20.0 * delta)
-	fragment.rotation         = lerp_angle(fragment.rotation, 0.0, 15.0 * delta)
 
-func _push_close_fragments() -> void:
-	for fragment in attracted_fragments:
-		if not is_instance_valid(fragment): continue
-		var dist := global_position.distance_to(fragment.global_position)
-		if dist <= push_distance_threshold:
-			var dir: Vector2     = (fragment.global_position - global_position).normalized()
-			var impulse: Vector2 = dir * fragment_push_force
-			impulse.y -= fragment_push_force * 0.4
-			fragment.apply_central_impulse(impulse)
+func height_meters() -> int:
+	return int(max_height_px / 50.0)
 
-func _create_gravity_field_visual() -> void:
-	if not show_gravity_field: return
-	gravity_field_visual = VisualEffects.GravityFieldEffect.new()
-	add_child(gravity_field_visual)
 
-func _emit_jump_force(multiplier: float = 1.0) -> void:
-	var affected: Array = (
-		get_tree().get_nodes_in_group("destructible_blocks")
-		+ get_tree().get_nodes_in_group("bouncy_blocks")
-		+ get_tree().get_nodes_in_group("reverse_blocks")
-		+ get_tree().get_nodes_in_group("ice_blocks")
-		+ get_tree().get_nodes_in_group("player")
-	)
+func gravity_ready() -> float:
+	return 1.0 - gravity_cd / GRAVITY_COOLDOWN
 
-	for node in affected:
-		if node == self: continue
-		if node.is_in_group("destructible_blocks"):
-			if _is_player_on_or_near_block(node):
-				node.receive_force(global_position, jump_force_strength * multiplier)
-		elif node.is_in_group("player"):
-			var dist: float = global_position.distance_to(node.global_position)
-			if dist <= jump_force_radius:
-				var dir: Vector2 = (node.global_position - global_position).normalized()
-				node.velocity += dir * jump_force_strength * 0.5 * multiplier
-		else:
-			var dist := global_position.distance_to(node.global_position)
-			if dist <= jump_force_radius:
-				var factor := 1.0 - (dist / jump_force_radius)
-				node.receive_force(global_position, jump_force_strength * factor * multiplier)
 
-	_apply_force_to_fragments(get_tree().get_nodes_in_group("fragments"))
+func shock_ready() -> float:
+	return 1.0 - shock_cd / SHOCK_COOLDOWN
 
-func _is_player_on_or_near_block(block: Node) -> bool:
-	var bp: Vector2 = block.global_position
-	var bw: float = 128.0
-	var bh: float = 64.0
-	
-	var collision = block.get_node_or_null("CollisionShape2D")
-	if collision and collision.shape is RectangleShape2D:
-		bw = collision.shape.size.x
-		bh = collision.shape.size.y
-	
-	var half_w = bw * 0.5
-	var half_h = bh * 0.5
-	var margin: float = 15.0
-	
-	if global_position.x < bp.x - half_w - margin or global_position.x > bp.x + half_w + margin:
-		return false
-		
-	var vert: float = global_position.y - (bp.y - half_h)
-	return vert >= -40.0 and vert <= 20.0
 
-func _apply_force_to_fragments(frags: Array) -> void:
-	for fragment in frags:
-		if not is_instance_valid(fragment): continue
-		if gravity_field_active and fragment.has_meta("controlling_player"):
-			continue
-		var dist := global_position.distance_to(fragment.global_position)
-		if dist > jump_force_radius: continue
-		var factor: float    = 1.0 - (dist / jump_force_radius)
-		var dir: Vector2     = (fragment.global_position - global_position).normalized()
-		var impulse: Vector2 = dir * jump_force_strength * factor * 0.6
-		if impulse.length() < 40.0: impulse = impulse.normalized() * 40.0
-		impulse.y -= 25.0
-		fragment.angular_velocity += randf_range(-4.0, 4.0)
-		fragment.apply_central_impulse(impulse)
+func die() -> void:
+	if is_dead:
+		return
+	is_dead = true
+	_field_active = false
+	velocity = Vector2.ZERO
+	collision_layer = 0
+	collision_mask = 0
+	Fx.burst(global_position, color, 22, 420.0, 0.8)
+	Fx.ring(global_position, color, 120.0, 6.0, 0.5)
+	Sfx.play("death")
+	SignalBus.screen_shake_requested.emit(14.0)
+	PlayerManager.rumble(player_id, 1.0, 1.0, 0.45)
+	died.emit(player_id)
+	SignalBus.player_died.emit(player_id)
+	visible = false
+	set_physics_process(false)
 
-func _spawn_landing_impact() -> void:
-	var impact = VisualEffects.LandingImpact.new()
-	get_parent().add_child(impact)
-	impact.global_position = global_position
 
-func _create_force_wave_effect() -> void:
-	var wave = VisualEffects.JumpWaveEffect.new()
-	get_parent().add_child(wave)
-	wave.global_position = global_position
+# ── Visuals ──────────────────────────────────
 
-func _handle_charged_jump(delta: float) -> void:
-	if Input.is_action_pressed(charge_action) and is_on_floor() and not is_charging_jump:
-		is_charging_jump = true
-		charge_time = 0.0
-		_create_charge_visual()
+func _update_visuals(delta: float) -> void:
+	_squash = _squash.lerp(Vector2.ONE, minf(14.0 * delta, 1.0))
+	_blink -= delta
+	if _blink < -0.12:
+		_blink = randf_range(2.0, 5.0)
+	if not Fx.reduced and velocity.length_squared() > 420.0 * 420.0:
+		_trail.append(global_position)
+	elif not _trail.is_empty():
+		_trail.remove_at(0)
+	if _trail.size() > 8:
+		_trail.remove_at(0)
+	queue_redraw()
 
-	if not is_charging_jump: return
-
-	charge_time = min(charge_time + delta, max_charge_time)
-	_update_charge_visual()
-
-	if Input.is_action_just_released(charge_action):
-		var ratio      := charge_time / max_charge_time
-		velocity.y      = -lerp(jump_height, max_charge_jump, ratio)
-		jumps_remaining = max_jumps - 1
-		_emit_jump_force(1.0 + ratio)
-		_create_charged_force_wave(ratio)
-		_stop_charge_visual()
-
-func _create_charge_visual() -> void:
-	charge_visual = VisualEffects.ChargeEffect.new()
-	add_child(charge_visual)
-
-func _update_charge_visual() -> void:
-	if charge_visual:
-		charge_visual.update_charge(charge_time / max_charge_time)
-
-func _stop_charge_visual() -> void:
-	is_charging_jump = false
-	charge_time      = 0.0
-	if charge_visual:
-		charge_visual.queue_free()
-		charge_visual = null
-
-func _create_charged_force_wave(charge_ratio: float) -> void:
-	var wave = VisualEffects.JumpWaveEffect.new()
-	wave.max_radius = 120.0 + charge_ratio * 60.0
-	wave.base_color = Color.YELLOW.lerp(Color.ORANGE, charge_ratio) \
-		if player_data.player_id == 1 else Color.LIME.lerp(Color.GREEN, charge_ratio)
-	get_parent().add_child(wave)
-	wave.global_position = global_position
-
-func get_gravity_field_cooldown_progress() -> float:
-	if ability_cooldown_timer <= 0.0: return 1.0
-	return 1.0 - (ability_cooldown_timer / gravity_field_cooldown)
-
-func get_jump_force_radius() -> float:
-	return jump_force_radius
 
 func _draw() -> void:
-	if not Engine.is_editor_hint(): return
-	if show_force_radius:
-		var c := Color.RED if (player_data and player_data.player_id == 1) else Color.GREEN
-		draw_circle(Vector2.ZERO, jump_force_radius, Color(c.r, c.g, c.b, 0.1))
-		draw_arc(Vector2.ZERO, jump_force_radius, 0.0, TAU, 32, c, 2.0)
-	if show_gravity_field:
-		var fc := Color.MAGENTA if (player_data and player_data.player_id == 1) else Color.LIME
-		draw_circle(Vector2.ZERO, gravity_field_radius, Color(fc.r, fc.g, fc.b, 0.05))
-		draw_arc(Vector2.ZERO, gravity_field_radius, 0.0, TAU, 32, fc, 2.0)
-		draw_arc(Vector2.ZERO, push_distance_threshold, 0.0, TAU, 32, Color.YELLOW, 1.0)
-		var poff := Vector2(0.0, 45.0)
-		draw_circle(poff, platform_radius, Color(0.0, 1.0, 1.0, 0.1))
-		draw_arc(poff, platform_radius, 0.0, TAU, 32, Color.CYAN, 2.0)
-		var d := Vector2(Input.get_axis(left_action, right_action), Input.get_axis(up_action, down_action) * 2.0)
-		if d != Vector2.ZERO:
-			var aoff := poff + d * gravity_field_direction_strength
-			draw_line(poff, aoff, Color(1.0, 0.5, 0.0, 0.6), 2.0)
-			draw_circle(aoff, 6.0, Color(1.0, 0.5, 0.0, 0.4))
+	# Trail (drawn in world space).
+	var n := _trail.size()
+	for i in n:
+		var t := float(i + 1) / (n + 1)
+		draw_circle(to_local(_trail[i]), RADIUS * (0.35 + 0.5 * t), Color(color, 0.18 * t))
+
+	# Gravity field
+	if _field_active:
+		var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.012)
+		draw_circle(Vector2.ZERO, GRAVITY_RADIUS, Color(color, 0.06 + 0.04 * pulse))
+		draw_arc(Vector2.ZERO, GRAVITY_RADIUS, 0.0, TAU, 48, Color(color, 0.45), 2.0, true)
+		var rot := Time.get_ticks_msec() * 0.003
+		for k in 3:
+			var a0 := rot + k * TAU / 3.0
+			draw_arc(Vector2.ZERO, GRAVITY_RADIUS * 0.72, a0, a0 + 0.9, 12, Color(color, 0.35), 3.0, true)
+
+	# Charge ring
+	if _charging:
+		draw_arc(Vector2.ZERO, RADIUS + 9, -PI * 0.5, -PI * 0.5 + TAU * _charge, 32, Color.WHITE if _charge >= 1.0 else color.lightened(0.4), 4.0, true)
+
+	# Body (squash & stretch around the feet).
+	var base := Vector2(0, RADIUS)
+	draw_set_transform(base - base * _squash, 0.0, _squash)
+	draw_circle(Vector2(0, 3), RADIUS, Color(0, 0, 0, 0.3))
+	draw_circle(Vector2.ZERO, RADIUS + 2.5, Palette.BG_DEEP)
+	draw_circle(Vector2.ZERO, RADIUS, color)
+	draw_circle(Vector2(-4, -5), RADIUS * 0.38, Color(1, 1, 1, 0.28))
+	# Eyes look where you're going.
+	var look := Vector2(facing * 3.0 + velocity.x * 0.004, clampf(velocity.y * 0.004, -3, 3))
+	var eye_h := 1.2 if _blink < 0.0 else 5.0
+	for ex in [-4.5, 4.5]:
+		var c := Vector2(ex, -2) + look
+		draw_rect(Rect2(c - Vector2(2.2, eye_h * 0.5), Vector2(4.4, eye_h)), Palette.BG_DEEP)
+	draw_set_transform(Vector2.ZERO)
+
+	# Reversed-controls warning: orbiting arrows.
+	if _reverse_timer > 0.0:
+		var rc := Palette.BLOCKS["reverse_block"][1]
+		var t := Time.get_ticks_msec() * 0.006
+		for k in 2:
+			var a := t + k * PI
+			var p := Vector2(cos(a), sin(a) * 0.5) * (RADIUS + 12)
+			draw_circle(p, 3.5, rc)
+
+	# Name tag + ability pips
+	var font := UiTheme.heavy()
+	var tag := "P%d" % player_id
+	draw_string_outline(font, Vector2(-30, -RADIUS - 16), tag, HORIZONTAL_ALIGNMENT_CENTER, 60, 16, 5, Palette.BG_DEEP)
+	draw_string(font, Vector2(-30, -RADIUS - 16), tag, HORIZONTAL_ALIGNMENT_CENTER, 60, 16, color)
+	_draw_pip(Vector2(-7, -RADIUS - 8), shock_ready())
+	_draw_pip(Vector2(7, -RADIUS - 8), gravity_ready())
+
+
+func _draw_pip(p: Vector2, ready: float) -> void:
+	draw_circle(p, 4.0, Palette.BG_DEEP)
+	if ready >= 1.0:
+		draw_circle(p, 3.0, color.lightened(0.35))
+	else:
+		draw_arc(p, 2.2, -PI * 0.5, -PI * 0.5 + TAU * ready, 10, Color(color, 0.7), 2.0)

@@ -1,40 +1,44 @@
 extends Node
 
-enum GameState {
-	MENU,
-	LOBBY,
-	STARTING,
-	PLAYING,
-	PAUSED,
-	ENDED
-}
+## Scene flow and match state.
 
-var current_state: GameState = GameState.MENU
-var current_mode: String = "survival"
-var selected_biome: String = "default"
+enum State { MENU, LOBBY, COUNTDOWN, PLAYING, ENDED }
 
-func _ready() -> void:
-	SignalBus.match_start_requested.connect(_on_match_start_requested)
-	SignalBus.game_paused.connect(_on_game_paused)
+const MAIN_MENU := "res://scenes/main_menu.tscn"
+const LOBBY := "res://scenes/lobby.tscn"
+const GAME := "res://scenes/game.tscn"
 
-func _on_match_start_requested(mode_id: String) -> void:
-	current_mode = mode_id
-	current_state = GameState.STARTING
+var state: State = State.MENU
+var last_results: Dictionary = {}
 
-	SignalBus.match_started.emit()
-	current_state = GameState.PLAYING
 
-func _on_game_paused(is_paused: bool) -> void:
-	if is_paused:
-		current_state = GameState.PAUSED
-	else:
-		current_state = GameState.PLAYING
+func goto(path: String) -> void:
+	get_tree().paused = false
+	Engine.time_scale = 1.0
+	get_tree().change_scene_to_file(path)
+
+
+func to_menu() -> void:
+	state = State.MENU
+	goto(MAIN_MENU)
+
+
+func to_lobby() -> void:
+	state = State.LOBBY
+	for info in PlayerManager.players.values():
+		info.is_ready = false
+	goto(LOBBY)
+
+
+func start_match() -> void:
+	PlayerManager.reset_match_stats()
+	state = State.COUNTDOWN
+	goto(GAME)
+
 
 func end_match(results: Dictionary) -> void:
-	current_state = GameState.ENDED
+	if state == State.ENDED:
+		return
+	state = State.ENDED
+	last_results = results
 	SignalBus.match_ended.emit(results)
-
-func reset_to_menu() -> void:
-	current_state = GameState.MENU
-	get_tree().paused = false
-	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")

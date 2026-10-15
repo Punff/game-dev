@@ -1,183 +1,207 @@
-extends BaseMenu
+extends Control
 
-const MAX_PLAYERS := 4
+## Join screen. Each keyboard half and every gamepad can join as its own
+## player, pick a colour, and ready up. When everyone is ready a short
+## countdown starts the match.
 
-@onready var player_row: HBoxContainer = $CenterContainer/VBoxContainer/PlayerRow
-@onready var start_button: Button = $CenterContainer/VBoxContainer/ButtonRow/StartButton
+const AUTO_START := 3.0
 
-var _slot_panels: Array = []
+var _slots: Array = []
+var _status: Label
+var _countdown := -1.0
+var _stick_latch: Dictionary = {}   # device -> last stick direction, for colour cycling
+
 
 func _ready() -> void:
-	PlayerManager.active_players.clear()
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	SignalBus.player_joined.connect(_on_player_changed)
-	SignalBus.player_left.connect(_on_player_changed)
-	start_button.disabled = true
-	_build_slots()
-	_update_player_display()
+	MatchManager.state = MatchManager.State.LOBBY
+	var bg := Background.new()
+	bg.auto_scroll = 25.0
+	add_child(bg)
 
-func _build_slots() -> void:
-	for i in MAX_PLAYERS:
-		var panel := PanelContainer.new()
-		panel.custom_minimum_size = Vector2(200, 280)
-		panel.size_flags_horizontal = Control.SIZE_EXPAND
-		panel.size_flags_vertical = Control.SIZE_EXPAND
+	var col := VBoxContainer.new()
+	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_theme_constant_override("separation", 22)
+	add_child(col)
+	col.add_child(UiTheme.title("WHO'S PLAYING?", 64))
 
-		var vbox := VBoxContainer.new()
-		vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-		vbox.size_flags_horizontal = Control.SIZE_EXPAND
-		vbox.size_flags_vertical = Control.SIZE_EXPAND
-		vbox.add_theme_constant_override("separation", 8)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 18)
+	col.add_child(row)
+	for i in PlayerManager.MAX_PLAYERS:
+		var slot := LobbySlot.new()
+		row.add_child(slot)
+		_slots.append(slot)
 
-		var circle := Control.new()
-		circle.custom_minimum_size = Vector2(72, 72)
-		circle.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		circle.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_status = UiTheme.label("", 26, Palette.TEXT)
+	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(_status)
 
-		var player_label := Label.new()
-		player_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		player_label.add_theme_font_size_override("font_size", 30)
-		player_label.add_theme_color_override("font_color", Color(0.4, 0.5, 0.5, 0.6))
+	var help := UiTheme.label("Jump: join / ready    Left / Right: colour    Down or B: back out    Enter / Start: go!    Esc: menu", 17, Palette.TEXT_DIM)
+	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(help)
 
-		var status_label := Label.new()
-		status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		status_label.text = "Press A/Enter to join"
-		status_label.add_theme_font_size_override("font_size", 20)
-		status_label.add_theme_color_override("font_color", Color(0.4, 0.5, 0.5, 0.5))
+	var buttons := HBoxContainer.new()
+	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
+	buttons.add_theme_constant_override("separation", 16)
+	col.add_child(buttons)
+	for entry in [["Back", _back], ["Start", _try_start]]:
+		var b := UiTheme.button(entry[0], 180)
+		b.focus_mode = Control.FOCUS_NONE   # mouse only: A/Enter are join keys here
+		b.pressed.connect(entry[1])
+		buttons.add_child(b)
 
-		var style := StyleBoxFlat.new()
-		style.bg_color = Color(0.05, 0.1, 0.1, 0.85)
-		style.border_color = Color(0.15, 0.2, 0.2, 0.6)
-		style.border_width_left = 2
-		style.border_width_top = 2
-		style.border_width_right = 2
-		style.border_width_bottom = 2
-		style.corner_radius_top_left = 8
-		style.corner_radius_top_right = 8
-		style.corner_radius_bottom_right = 8
-		style.corner_radius_bottom_left = 8
-		panel.add_theme_stylebox_override("panel", style)
+	SignalBus.player_joined.connect(func(_a, _b): _refresh())
+	SignalBus.player_left.connect(func(_a): _refresh())
+	_refresh()
 
-		var c0 := CenterContainer.new()
-		c0.size_flags_horizontal = Control.SIZE_EXPAND; c0.add_child(circle)
-		var c1 := CenterContainer.new()
-		c1.size_flags_horizontal = Control.SIZE_EXPAND; c1.add_child(player_label)
-		var c2 := CenterContainer.new()
-		c2.size_flags_horizontal = Control.SIZE_EXPAND; c2.add_child(status_label)
-		vbox.add_child(c0)
-		vbox.add_child(c1)
-		vbox.add_child(c2)
-		panel.add_child(vbox)
-		player_row.add_child(panel)
 
-		circle.set_meta("state", "empty")
-		circle.set_meta("color", Color.GRAY)
-		circle.draw.connect(_on_circle_draw.bind(circle))
-		circle.queue_redraw()
+func _refresh() -> void:
+	var infos := PlayerManager.sorted_players()
+	for i in _slots.size():
+		_slots[i].show_player(infos[i] if i < infos.size() else null)
+	var all_ready := not infos.is_empty() and infos.all(func(p): return p.is_ready)
+	if all_ready and _countdown < 0.0:
+		_countdown = AUTO_START
+	elif not all_ready:
+		_countdown = -1.0
+	_update_status()
 
-		_slot_panels.append({
-			panel = panel,
-			circle = circle,
-			player_label = player_label,
-			status_label = status_label,
-			style = style,
-		})
 
-func _on_circle_draw(control: Control) -> void:
-	var color = control.get_meta("color", Color.GRAY)
-	var state = control.get_meta("state", "empty")
-	_draw_circle(control, color, state)
-
-func _update_player_display() -> void:
-	var all_ready := true
-	var idx := 0
-	for p_id in PlayerManager.active_players:
-		var p = PlayerManager.active_players[p_id]
-		var slot = _slot_panels[idx]
-
-		slot.player_label.text = "PLAYER %d" % p_id
-		slot.player_label.add_theme_color_override("font_color", p.color)
-		slot.style.bg_color = Color(0.08, 0.12, 0.12, 0.9) if not p.is_ready else Color(0.05, 0.18, 0.1, 0.95)
-		slot.style.border_color = p.color.darkened(0.3) if not p.is_ready else p.color
-
-		if p.is_ready:
-			slot.status_label.text = "Ready!"
-			slot.status_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.6, 0.9))
-		else:
-			slot.status_label.text = "Ready? Press A/Enter"
-			slot.status_label.add_theme_color_override("font_color", Color(0.3, 1.0, 0.5, 1))
-			all_ready = false
-
-		slot.circle.set_meta("state", "joined")
-		slot.circle.set_meta("color", p.color)
-		slot.circle.queue_redraw()
-		slot.panel.add_theme_stylebox_override("panel", slot.style)
-		idx += 1
-
-	for i in range(idx, MAX_PLAYERS):
-		var slot = _slot_panels[i]
-		slot.player_label.text = ""
-		slot.player_label.add_theme_color_override("font_color", Color(0.4, 0.5, 0.5, 0.6))
-		slot.status_label.text = "Press A/Enter to join"
-		slot.status_label.add_theme_color_override("font_color", Color(0.4, 0.5, 0.5, 0.5))
-		slot.style.bg_color = Color(0.05, 0.1, 0.1, 0.85)
-		slot.style.border_color = Color(0.15, 0.2, 0.2, 0.6)
-		slot.circle.set_meta("state", "empty")
-		slot.circle.set_meta("color", Color.GRAY)
-		slot.circle.queue_redraw()
-		slot.panel.add_theme_stylebox_override("panel", slot.style)
-
-	start_button.disabled = not all_ready or idx == 0
-
-func _draw_circle(control: Control, color: Color, state: String) -> void:
-	var size = control.custom_minimum_size
-	var center = size * 0.5
-	var radius = min(center.x, center.y) - 4
-	if state == "empty":
-		control.draw_circle(center, radius, Color(0.2, 0.25, 0.25, 0.6))
-		control.draw_circle(center, radius * 0.7, Color(0.1, 0.15, 0.15, 0.8))
+func _update_status() -> void:
+	var infos := PlayerManager.sorted_players()
+	if infos.is_empty():
+		_status.text = "Press W / Space, Up, or (A) on a gamepad to join"
+		_status.add_theme_color_override("font_color", Palette.TEXT)
+	elif _countdown >= 0.0:
+		_status.text = "Starting in %d..." % ceili(_countdown)
+		_status.add_theme_color_override("font_color", Palette.GOOD)
 	else:
-		control.draw_circle(center, radius, Color.WHITE)
-		control.draw_circle(center, radius - 2, color)
-		control.draw_arc(center, radius - 2, 0, TAU, 32, Color(1, 1, 1, 0.2), 1)
+		var waiting := infos.filter(func(p): return not p.is_ready).size()
+		_status.text = "Waiting for %d player%s to ready up" % [waiting, "" if waiting == 1 else "s"]
+		_status.add_theme_color_override("font_color", Palette.TEXT)
+
+
+func _process(delta: float) -> void:
+	if _countdown >= 0.0:
+		var before := ceili(_countdown)
+		_countdown -= delta
+		if ceili(_countdown) != before and _countdown > 0.0:
+			Sfx.play("count", -6.0)
+		_update_status()
+		if _countdown <= 0.0:
+			_start()
+
+
+func _try_start() -> void:
+	var infos := PlayerManager.sorted_players()
+	if infos.is_empty():
+		return
+	for p in infos:
+		p.is_ready = true
+	_start()
+
+
+func _start() -> void:
+	set_process(false)
+	Sfx.play("go")
+	MatchManager.start_match()
+
+
+func _back() -> void:
+	Sfx.play("ui_back")
+	PlayerManager.clear()
+	MatchManager.to_menu()
+
+
+# ── Input ────────────────────────────────────
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_echo(): return
-
-	var device_id := -1
-	if event is InputEventJoypadButton or event is InputEventJoypadMotion:
-		device_id = event.device
-
-	var existing_pid := -1
-	for p_id in PlayerManager.active_players:
-		if PlayerManager.active_players[p_id].device_id == device_id:
-			existing_pid = p_id
-			break
-
-	if event.is_action_pressed("ui_accept"):
-		if existing_pid == -1:
-			PlayerManager.join_player(device_id)
-		else:
-			var p = PlayerManager.active_players[existing_pid]
-			if p.is_ready and not start_button.disabled:
-				_on_start_pressed()
+	if event is InputEventKey:
+		if not event.pressed or event.echo:
+			return
+		if event.physical_keycode == KEY_ESCAPE:
+			_back()
+			return
+		if event.physical_keycode in [KEY_ENTER, KEY_KP_ENTER] and _all_ready():
+			_try_start()
+			return
+		for device in [Settings.DEVICE_KB_A, Settings.DEVICE_KB_B]:
+			var cmd := _kb_command(device, event)
+			if cmd != "":
+				_command(device, cmd)
+				get_viewport().set_input_as_handled()
 				return
-			p.is_ready = not p.is_ready
-			SignalBus.player_ready_state_changed.emit(existing_pid, p.is_ready)
-			_update_player_display()
-		return
+		if event.physical_keycode in [KEY_ENTER, KEY_KP_ENTER]:
+			_command(Settings.DEVICE_KB_A, "confirm")
+	elif event is InputEventJoypadButton and event.pressed:
+		match event.button_index:
+			JOY_BUTTON_A: _command(event.device, "confirm")
+			JOY_BUTTON_B: _command(event.device, "back")
+			JOY_BUTTON_START:
+				if _all_ready():
+					_try_start()
+				else:
+					_command(event.device, "confirm")
+			JOY_BUTTON_DPAD_LEFT: _command(event.device, "prev")
+			JOY_BUTTON_DPAD_RIGHT: _command(event.device, "next")
+			JOY_BUTTON_Y: _command(event.device, "next")
+	elif event is InputEventJoypadMotion and event.axis == JOY_AXIS_LEFT_X:
+		var dir := 0
+		if event.axis_value > 0.6:
+			dir = 1
+		elif event.axis_value < -0.6:
+			dir = -1
+		if dir != _stick_latch.get(event.device, 0):
+			_stick_latch[event.device] = dir
+			if dir != 0:
+				_command(event.device, "next" if dir > 0 else "prev")
 
-	if existing_pid != -1 and event is InputEventJoypadButton and event.button_index == JOY_BUTTON_Y and event.pressed:
-		PlayerManager.cycle_player_color(existing_pid)
-		_update_player_display()
 
-func _on_player_changed(p_id: int = -1, d_id: int = -1) -> void:
-	_update_player_display()
+func _all_ready() -> bool:
+	var infos := PlayerManager.sorted_players()
+	return not infos.is_empty() and infos.all(func(p): return p.is_ready)
 
-func _on_start_pressed() -> void:
-	get_tree().change_scene_to_file("res://scenes/game.tscn")
-	SignalBus.match_start_requested.emit.call_deferred("survival")
 
-func _on_back_pressed() -> void:
-	PlayerManager.active_players.clear()
-	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
+## Maps a key press to a lobby command using that keyboard half's bindings.
+func _kb_command(device: int, event: InputEventKey) -> String:
+	var profile := Settings.profile_for_device(device)
+	var map := {"jump": "confirm", "left": "prev", "right": "next", "down": "back"}
+	for action in map:
+		for b in Settings.bindings[profile][action]:
+			var ev := Settings.binding_to_event(b)
+			if ev and ev.is_match(event, false):
+				return map[action]
+	if device == Settings.DEVICE_KB_A and event.physical_keycode == KEY_SPACE:
+		return "confirm"
+	return ""
+
+
+func _command(device: int, cmd: String) -> void:
+	var info := PlayerManager.find_by_device(device)
+	match cmd:
+		"confirm":
+			if info == null:
+				if PlayerManager.join(device) > 0:
+					Sfx.play("join")
+			else:
+				info.is_ready = not info.is_ready
+				Sfx.play("ui_select" if info.is_ready else "ui_back")
+		"back":
+			if info == null:
+				if device >= 0 and PlayerManager.players.is_empty():
+					_back()
+				return
+			if info.is_ready:
+				info.is_ready = false
+				Sfx.play("ui_back")
+			else:
+				PlayerManager.leave(info.player_id)
+				Sfx.play("leave")
+		"prev", "next":
+			if info and not info.is_ready:
+				PlayerManager.cycle_color(info.player_id, -1 if cmd == "prev" else 1)
+				Sfx.play("ui_move")
+				PlayerManager.rumble(info.player_id, 0.2, 0.0, 0.05)
+	_refresh()

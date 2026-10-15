@@ -1,111 +1,197 @@
 extends Node2D
 
-@export var player_scenes: Dictionary = {
-	1: preload("res://scenes/player/player_1.tscn"),
-	2: preload("res://scenes/player/player_2.tscn")
-}
+## Match orchestration: builds the world, runs the countdown, tracks deaths,
+## and decides the winner.
 
-const PlayerUI = preload("res://scenes/player/player_ui.tscn")
+const FLOOR_Y := 0.0
+const COUNTDOWN := 3
+const LAVA_START_BELOW := 420.0
+const LAVA_GRACE := 2.0
+const END_DELAY := 1.4
 
-var active_player_nodes: Dictionary = {}
-var active_ui_nodes: Dictionary = {}
+var background := Background.new()
+var world := Node2D.new()
+var map_gen: Node2D
+var lava := Lava.new()
+var camera := GameCamera.new()
+var hud: Hud
+var pause_menu: PauseMenu
+var end_screen: EndScreen
+
+var players: Array[Player] = []
+var _deaths := 0
+var _match_time := 0.0
+var _countdown := 0.0
+var _ending := false
+
 
 func _ready() -> void:
+	add_child(background)
+	world.name = "World"
+	add_child(world)
+
+	map_gen = preload("res://scripts/game/map_generation.gd").new()
+	map_gen.name = "Map"
+	world.add_child(map_gen)
+	map_gen.generate(FLOOR_Y)
+
+	var fx_layer := Node2D.new()
+	fx_layer.name = "Fx"
+	fx_layer.z_index = 20
+	world.add_child(fx_layer)
+	Fx.layer = fx_layer
+	Fx.reduced = Settings.get_value("reduced_effects")
+
+	world.add_child(lava)
+	lava.surface_y = FLOOR_Y + LAVA_START_BELOW
+	add_child(camera)
+	background.camera = camera
+	background.set_half_width(MapPlanner.HALF_WIDTH + 20.0)
+
+	if PlayerManager.players.is_empty():
+		PlayerManager.join(Settings.DEVICE_KB_A)   # launched directly (editor / tests)
+	_spawn_players()
+
+	hud = Hud.new()
+	hud.game = self
+	add_child(hud)
+	pause_menu = PauseMenu.new()
+	add_child(pause_menu)
+	end_screen = EndScreen.new()
+	add_child(end_screen)
+
 	SignalBus.player_died.connect(_on_player_died)
+	SignalBus.chain_reaction_occurred.connect(_on_chain)
+	SignalBus.settings_changed.connect(func(): Fx.reduced = Settings.get_value("reduced_effects"))
 
-	await get_tree().process_frame
-	await get_tree().physics_frame
+	camera.targets = players
+	camera.lava_y = lava.surface_y
+	camera.snap()
+	_countdown = COUNTDOWN + 0.6
+	MatchManager.state = MatchManager.State.COUNTDOWN
 
-	_init_map()
-	setup_game()
 
-func _init_map() -> void:
-	var map_gen = get_node_or_null("MapGeneration")
-	if map_gen and map_gen.has_method("generate_map"):
-		for child in map_gen.get_children():
-			child.queue_free()
-		map_gen.generate_map()
+func _spawn_players() -> void:
+	var infos := PlayerManager.sorted_players()
+	var n := infos.size()
+	var spacing := minf(160.0, 700.0 / maxf(n, 1))
+	for i in n:
+		var p := Player.new()
+		p.setup(infos[i])
+		p.position = Vector2((i - (n - 1) * 0.5) * spacing, FLOOR_Y - Block.HEIGHT * 0.5 - Player.RADIUS - 1.0)
+		p.facing = -1.0 if p.position.x > 0 else 1.0
+		world.add_child(p)
+		players.append(p)
 
-func setup_game() -> void:
-	for p in get_tree().get_nodes_in_group("player"):
-		p.queue_free()
 
-	for ui in active_ui_nodes.values():
-		if is_instance_valid(ui):
-			ui.queue_free()
-	active_player_nodes.clear()
-	active_ui_nodes.clear()
+func _physics_process(delta: float) -> void:
+	var alive := players.filter(func(p): return not p.is_dead)
+	if MatchManager.state == MatchManager.State.COUNTDOWN:
+		var before := ceili(_countdown - 0.6)
+		_countdown -= delta
+		var after := ceili(_countdown - 0.6)
+		if after != before and after > 0:
+			Sfx.play("count")
+		if _countdown <= 0.6:
+			_start_match()
+	elif MatchManager.state == MatchManager.State.PLAYING:
+		_match_time += delta
+		lava.active = _match_time > LAVA_GRACE
 
-	var players = PlayerManager.active_players
-	if players.is_empty():
-		PlayerManager.join_player(-1)
-		players = PlayerManager.active_players
+	var highest := INF
+	var lowest := -INF
+	for p in alive:
+		highest = minf(highest, p.global_position.y)
+		lowest = maxf(lowest, p.global_position.y)
+		if p.global_position.y > lava.surface_y - 4.0:
+			p.die()
+		p.info.max_height = p.height_meters()
+	if alive.is_empty():
+		highest = camera.global_position.y
+		lowest = highest
 
-	var spawn_points = _get_spawn_points(players.size())
+	lava.update_lava(delta, lowest, camera)
+	camera.lava_y = lava.surface_y
+	map_gen.update_stream(highest, lava.surface_y)
+	background.set_height(map_gen.height_of(camera.global_position.y))
 
-	var i = 0
-	var player_nodes: Array[Node2D] = []
-	for p_id in players:
-		var p_data = players[p_id]
-		var p_node = _spawn_player(p_data, spawn_points[i])
-		active_player_nodes[p_id] = p_node
-		player_nodes.append(p_node)
 
-		var ui = PlayerUI.instantiate()
-		ui.player_id = p_id
-		add_child(ui)
-		active_ui_nodes[p_id] = ui
-		i += 1
+func _start_match() -> void:
+	MatchManager.state = MatchManager.State.PLAYING
+	for p in players:
+		p.controls_enabled = true
+	Sfx.play("go")
+	SignalBus.match_started.emit()
 
-	if player_nodes.is_empty():
-		return
 
-	var pcam = get_node_or_null("PhantomCamera2D")
-	if pcam:
-		pcam.follow_targets = player_nodes
-		if pcam.has_method("update_phantom_camera"):
-			pcam.update_phantom_camera()
+func countdown_value() -> int:
+	return ceili(_countdown - 0.6) if MatchManager.state == MatchManager.State.COUNTDOWN else 0
 
-func _get_spawn_points(count: int) -> Array[Vector2]:
-	match count:
-		1: return [Vector2(0, -200)]
-		2: return [Vector2(-200, -200), Vector2(200, -200)]
-		3: return [Vector2(-300, -200), Vector2(0, -200), Vector2(300, -200)]
-		4: return [Vector2(-450, -200), Vector2(-150, -200), Vector2(150, -200), Vector2(450, -200)]
-	return [Vector2.ZERO]
 
-func _spawn_player(data: PlayerData, pos: Vector2) -> CharacterBody2D:
-	var scene = player_scenes.get(data.player_id, player_scenes.get(1))
-	var player = scene.instantiate()
-	add_child(player)
-	player.global_position = pos
-	if player.has_method("setup_with_data"):
-		player.setup_with_data(data)
-	if not player.is_in_group("player"):
-		player.add_to_group("player")
-	return player
+func show_go() -> bool:
+	return MatchManager.state == MatchManager.State.PLAYING and _match_time < 0.8
+
+
+func leader() -> Player:
+	var best: Player = null
+	for p in players:
+		if not p.is_dead and (best == null or p.max_height_px > best.max_height_px):
+			best = p
+	return best
+
 
 func _on_player_died(player_id: int) -> void:
-	if MatchManager.current_state != MatchManager.GameState.PLAYING:
+	_deaths += 1
+	var info: PlayerInfo = PlayerManager.players.get(player_id)
+	if info:
+		info.death_order = _deaths
+	var alive := players.filter(func(p): return not p.is_dead)
+	var solo := players.size() == 1
+	if solo and alive.is_empty() or not solo and alive.size() <= 1:
+		_finish(alive[0] if alive.size() == 1 else null)
+
+
+func _finish(winner: Player) -> void:
+	if _ending:
 		return
+	_ending = true
+	if winner:
+		winner.controls_enabled = false
+		Fx.popup(winner.global_position + Vector2(0, -60), "WINNER!", winner.color, 40)
+	var standings := PlayerManager.sorted_players()
+	standings.sort_custom(func(a, b):
+		# Survivors first, then whoever died last.
+		var ka: int = 1000 if a.death_order == 0 else a.death_order
+		var kb: int = 1000 if b.death_order == 0 else b.death_order
+		return ka > kb)
+	var best_height := 0
+	for info in standings:
+		best_height = maxi(best_height, info.max_height)
+	var new_record := Settings.record_height(best_height)
+	var results := {
+		"winner": winner.player_id if winner else -1,
+		"solo": players.size() == 1,
+		"standings": standings,
+		"time": _match_time,
+		"best_height": best_height,
+		"new_record": new_record,
+	}
+	await get_tree().create_timer(END_DELAY).timeout
+	lava.active = false
+	if winner:
+		Sfx.play("win")
+	MatchManager.end_match(results)
 
-	# Remove dead player from camera follow targets
-	var pcam = get_node_or_null("PhantomCamera2D")
-	if pcam and active_player_nodes.has(player_id):
-		pcam.erase_follow_targets(active_player_nodes[player_id])
 
-	var alive_count = 0
-	var winner_id = -1
+func _on_chain(count: int, _pos: Vector2) -> void:
+	var at := camera.get_screen_center_position() + Vector2(0, -140)
+	Fx.popup(at, "CHAIN x%d!" % count, Palette.ACCENT, 30 + count * 3)
+	if count == 3:
+		Sfx.play("chain")
+	SignalBus.screen_shake_requested.emit(4.0 + count)
 
-	for p_id in active_player_nodes:
-		if is_instance_valid(active_player_nodes[p_id]) and not active_player_nodes[p_id].is_dead:
-			alive_count += 1
-			winner_id = p_id
 
-	if alive_count <= 1:
-		var results = {"winner": winner_id}
-		MatchManager.end_match(results)
-
-func _input(ev: InputEvent) -> void:
-	if ev.is_action_pressed("ui_cancel"):
-		SignalBus.game_paused.emit(true)
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("pause") and MatchManager.state != MatchManager.State.ENDED:
+		get_viewport().set_input_as_handled()
+		pause_menu.open()
