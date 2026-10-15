@@ -16,6 +16,7 @@ func _ready() -> void:
 	_test_bindings_roundtrip()
 	await _test_jump_physics_matches_envelope()
 	await _test_game_smoke()
+	await _test_chaos()
 	print("\n%d checks, %d failures" % [_checks, _failures])
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -234,6 +235,46 @@ func _test_game_smoke() -> void:
 	check(players.size() == 2, "two players spawned")
 	check(get_tree().get_nodes_in_group("blocks").size() > 20, "map streamed in")
 	check(MatchManager.state == MatchManager.State.PLAYING, "countdown finished and match started")
+	scene.queue_free()
+	await get_tree().process_frame
+	PlayerManager.clear()
+
+
+# ── Chaos: random inputs for every player, exercising all abilities ──
+
+func _test_chaos() -> void:
+	PlayerManager.clear()
+	for d in [Settings.DEVICE_KB_A, Settings.DEVICE_KB_B, 0, 1]:
+		PlayerManager.join(d)
+	var scene: Node = load("res://scenes/game.tscn").instantiate()
+	get_tree().root.add_child(scene)
+	await get_tree().create_timer(4.0).timeout   # countdown
+	Engine.time_scale = 3.0
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var broke := [0]
+	SignalBus.block_broken.connect(func(_p): broke[0] += 1)
+	var max_h := 0
+	for step in 150:
+		for id in PlayerManager.players:
+			for a in Settings.ACTIONS:
+				var act := PlayerManager.action(id, a)
+				if rng.randf() < (0.5 if a in ["jump", "right", "left"] else 0.25):
+					Input.action_press(act)
+				else:
+					Input.action_release(act)
+		await get_tree().create_timer(0.15).timeout
+		for p: Player in scene.players:
+			max_h = maxi(max_h, p.height_meters())
+		if MatchManager.state == MatchManager.State.ENDED:
+			break
+	Engine.time_scale = 1.0
+	for id in PlayerManager.players:
+		for a in Settings.ACTIONS:
+			Input.action_release(PlayerManager.action(id, a))
+	print("Chaos: %d blocks broken, %d fragments alive, best height %d m, state %s" % [broke[0], get_tree().get_nodes_in_group("fragments").size(), max_h, MatchManager.State.keys()[MatchManager.state]])
+	check(get_tree().get_nodes_in_group("blocks").size() > 0, "map still exists after chaos")
+	get_tree().paused = false
 	scene.queue_free()
 	await get_tree().process_frame
 	PlayerManager.clear()

@@ -25,18 +25,24 @@ float rbox(vec2 p, vec2 b, float r) {
 	return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
 }
 
-// Floating island silhouettes in a grid; one island per cell.
+// Floating island silhouettes in a grid; one island per cell. Each island is
+// a flat top slab with a tapering rocky underside (a pointed ellipse).
 float islands(vec2 p, vec2 cell, float seed) {
 	vec2 id = floor(p / cell);
 	vec2 f = p - id * cell - cell * 0.5;
 	float h = hash(id + seed);
 	if (h < 0.45) return 0.0;
-	vec2 jitter = (vec2(hash(id + seed + 3.1), hash(id + seed + 7.7)) - 0.5) * cell * 0.35;
-	vec2 sz = cell * vec2(0.18 + 0.16 * hash(id + 1.3), 0.05 + 0.04 * hash(id + 2.9));
+	vec2 jitter = (vec2(hash(id + seed + 3.1), hash(id + seed + 7.7)) - 0.5) * cell * 0.3;
+	float w = cell.x * (0.14 + 0.14 * hash(id + 1.3));
+	float th = cell.y * (0.035 + 0.02 * hash(id + 2.9));
 	vec2 q = f - jitter;
-	// flat top, tapered rocky underside
-	float top = rbox(q, sz, sz.y * 0.8);
-	float under = rbox(q - vec2(0.0, sz.y * 1.6), vec2(sz.x * 0.55, sz.y * 1.4), sz.y);
+	float top = rbox(q, vec2(w, th), th * 0.9);
+	// Underside: width shrinks with depth, slightly wobbly edge.
+	float depth = w * (0.55 + 0.4 * hash(id + 5.3));
+	float y = clamp(q.y / depth, 0.0, 1.0);
+	float wob = sin(q.y * 0.15 + h * 20.0) * 4.0;
+	float half_w = w * 0.92 * (1.0 - y) * (1.0 - y * 0.3) + wob * (1.0 - y);
+	float under = max(abs(q.x) - half_w, max(-q.y, q.y - depth));
 	float d = min(top, under);
 	return 1.0 - smoothstep(-1.0, 1.0, d);
 }

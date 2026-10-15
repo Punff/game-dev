@@ -87,7 +87,14 @@ var bindings: Dictionary = default_bindings()
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	load_settings()
-	get_tree().root.theme = UiTheme.build()
+	# Merge into the engine default theme so Controls under CanvasLayers
+	# (pause / results overlays) get it too, not just children of the root.
+	var theme := UiTheme.build()
+	ThemeDB.get_default_theme().merge_with(theme)
+	ThemeDB.get_default_theme().default_font = theme.default_font
+	ThemeDB.get_default_theme().default_font_size = theme.default_font_size
+	ThemeDB.fallback_font = theme.default_font
+	get_tree().root.theme = theme
 	apply_all()
 
 
@@ -259,6 +266,9 @@ const PAD_BUTTON_NAMES := {
 	JOY_BUTTON_DPAD_LEFT: "D-Pad Left", JOY_BUTTON_DPAD_RIGHT: "D-Pad Right",
 }
 
+const PRETTY_KEYS := {"Period": ".", "Comma": ",", "Slash": "/", "Minus": "-", "Semicolon": ";",
+	"Apostrophe": "'", "BracketLeft": "[", "BracketRight": "]", "Backslash": "\\", "Equal": "=", "QuoteLeft": "`"}
+
 static func binding_label(b: Dictionary) -> String:
 	if b.is_empty():
 		return "-"
@@ -269,6 +279,7 @@ static func binding_label(b: Dictionary) -> String:
 			var mapped := DisplayServer.keyboard_get_keycode_from_physical(code)
 			if mapped != KEY_NONE:
 				name = OS.get_keycode_string(mapped)
+		name = PRETTY_KEYS.get(name, name)
 		match int(b.get("loc", 0)):
 			KEY_LOCATION_LEFT: name = "L-" + name
 			KEY_LOCATION_RIGHT: name = "R-" + name

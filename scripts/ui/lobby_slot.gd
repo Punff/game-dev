@@ -55,7 +55,10 @@ func show_player(info: PlayerInfo) -> void:
 
 func _control_summary(info: PlayerInfo) -> String:
 	var p := Settings.profile_for_device(info.device_id)
-	var h := func(a): return Settings.action_hint(p, a)
+	var h := func(a): return Settings.action_hint(p, a).replace("L-Stick ", "").replace("D-Pad ", "")
+	if p == "pad":
+		return "Move L-Stick · Jump %s\nCharge %s · Field %s\nShock %s · Aim L-Stick" % [
+			h.call("jump"), h.call("charge"), h.call("gravity"), h.call("shockwave")]
 	return "Move %s %s · Jump %s\nCharge %s · Field %s\nShock %s · Aim %s %s" % [
 		h.call("left"), h.call("right"), h.call("jump"), h.call("charge"),
 		h.call("gravity"), h.call("shockwave"), h.call("up"), h.call("down")]
@@ -76,7 +79,9 @@ func _draw_preview() -> void:
 		return
 	var bounce := absf(sin(_t * (5.0 if _info.is_ready else 2.5))) * (22.0 if _info.is_ready else 8.0)
 	var p := c - Vector2(0, bounce)
-	_preview.draw_circle(c + Vector2(0, 34), 26 - bounce * 0.3, Color(0, 0, 0, 0.25))
+	_preview.draw_set_transform(c + Vector2(0, 36), 0, Vector2(1, 0.25))
+	_preview.draw_circle(Vector2.ZERO, 30 - bounce * 0.4, Color(0, 0, 0, 0.3))
+	_preview.draw_set_transform(Vector2.ZERO)
 	_preview.draw_circle(p, 34, Palette.BG_DEEP)
 	_preview.draw_circle(p, 30, _info.color)
 	_preview.draw_circle(p + Vector2(-9, -11), 10, Color(1, 1, 1, 0.25))

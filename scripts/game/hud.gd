@@ -63,8 +63,8 @@ func _draw_cards(vp: Vector2) -> void:
 			hstr = "OUT  %d m" % p.info.max_height
 		_text(r.position + Vector2(48, 54), hstr, 18, Color(Palette.TEXT, dim), HORIZONTAL_ALIGNMENT_LEFT, -1, false)
 		if not p.is_dead:
-			_ability_bar(Rect2(r.position + Vector2(118, 18), Vector2(70, 10)), p.shock_ready(), p.color, "SHOCK")
-			_ability_bar(Rect2(r.position + Vector2(118, 42), Vector2(70, 10)), p.gravity_ready(), p.color, "FIELD")
+			_ability_bar(Rect2(r.position + Vector2(132, 22), Vector2(58, 9)), p.shock_ready(), p.color, "SHOCK")
+			_ability_bar(Rect2(r.position + Vector2(132, 48), Vector2(58, 9)), p.gravity_ready(), p.color, "FIELD")
 		x += w + gap
 	# Best height reminder
 	var best: int = Settings.get_value("best_height")
@@ -72,7 +72,8 @@ func _draw_cards(vp: Vector2) -> void:
 		_text(Vector2(0, vp.y - 16), "BEST %d m" % best, 16, Color(Palette.TEXT_DIM, 0.8), HORIZONTAL_ALIGNMENT_CENTER, vp.x, false)
 
 
-func _ability_bar(r: Rect2, ready: float, col: Color, _label: String) -> void:
+func _ability_bar(r: Rect2, ready: float, col: Color, label: String) -> void:
+	_canvas.draw_string(_font, r.position + Vector2(0, -3), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(Palette.TEXT_DIM, 0.9 if ready >= 1.0 else 0.55))
 	_canvas.draw_rect(r, Color(Palette.BG_DEEP, 0.9))
 	var fill := Rect2(r.position, Vector2(r.size.x * ready, r.size.y))
 	_canvas.draw_rect(fill, col.lightened(0.3) if ready >= 1.0 else Color(col, 0.55))

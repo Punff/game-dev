@@ -39,7 +39,7 @@ func _ready() -> void:
 	content.add_child(HSeparator.new())
 
 	_scroll = ScrollContainer.new()
-	_scroll.custom_minimum_size = Vector2(0, 430)
+	_scroll.custom_minimum_size = Vector2(0, 470)
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_scroll.follow_focus = true
 	content.add_child(_scroll)
@@ -103,10 +103,16 @@ func _build_general() -> void:
 func _row(label_text: String) -> HBoxContainer:
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 16)
+	h.custom_minimum_size.y = 46
 	var l := UiTheme.label(label_text, 22, Palette.TEXT)
 	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.add_child(l)
 	_body.add_child(h)
+	# Highlight the label of whichever control in the row has focus.
+	h.child_entered_tree.connect(func(c: Node):
+		if c is Control and c != l:
+			c.focus_entered.connect(func(): l.add_theme_color_override("font_color", Palette.ACCENT))
+			c.focus_exited.connect(func(): l.add_theme_color_override("font_color", Palette.TEXT)))
 	return h
 
 
@@ -138,8 +144,15 @@ func _slider_row(label_text: String, key: String, lo: float, hi: float) -> Contr
 
 func _check_row(label_text: String, key: String, custom: Callable = Callable()) -> Control:
 	var h := _row(label_text)
-	var b := UiTheme.button("On" if Settings.get_value(key) else "Off", 160)
+	var b := UiTheme.button("On" if Settings.get_value(key) else "Off", 140)
+	b.custom_minimum_size.y = 44
 	b.toggle_mode = true
+	# "On" is shown in green so it can't be mistaken for keyboard focus.
+	var on_style := UiTheme.box(Palette.GOOD.darkened(0.45), Palette.GOOD.darkened(0.1), 2)
+	b.add_theme_stylebox_override("pressed", on_style)
+	b.add_theme_stylebox_override("hover_pressed", on_style)
+	b.add_theme_color_override("font_pressed_color", Palette.TEXT)
+	b.add_theme_color_override("font_hover_pressed_color", Palette.TEXT)
 	b.button_pressed = Settings.get_value(key)
 	b.toggled.connect(func(on):
 		b.text = "On" if on else "Off"
@@ -180,7 +193,7 @@ func _build_controls() -> void:
 	var grid := GridContainer.new()
 	grid.columns = 3
 	grid.add_theme_constant_override("h_separation", 14)
-	grid.add_theme_constant_override("v_separation", 8)
+	grid.add_theme_constant_override("v_separation", 6)
 	_body.add_child(grid)
 	var rows: Array = []
 	for action in Settings.ACTIONS:
@@ -190,7 +203,7 @@ func _build_controls() -> void:
 		var row: Array = []
 		for slot in Settings.SLOTS:
 			var b := UiTheme.button("", 200)
-			b.custom_minimum_size.y = 46
+			b.custom_minimum_size.y = 42
 			b.add_theme_font_size_override("font_size", 18)
 			b.pressed.connect(_start_listen.bind(action, slot, b))
 			grid.add_child(b)
