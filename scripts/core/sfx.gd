@@ -72,7 +72,6 @@ func _build_bank() -> void:
 		"bounce": func(): return _tone(0.22, 160.0, 380.0, 0.12, true),
 		"shockwave": func(): return _mix([_tone(0.25, 110.0, 40.0, 0.35), _noise(0.22, 0.12, 900.0)]),
 		"break": func(): return _crumble(),
-		"crack": func(): return _mix([_noise(0.12, 0.08, 700.0), _tone(0.08, 140.0, 70.0, 0.12)]),
 		"gravity": func(): return _vibes([E4], 0.35, 0.05),
 		"throw": func(): return _whoosh(0.2, 0.1),
 		"hit": func(): return _mix([_tone(0.08, 160.0, 80.0, 0.25), _noise(0.05, 0.08, 1500.0)]),

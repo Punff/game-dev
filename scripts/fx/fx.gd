@@ -6,7 +6,7 @@ extends Node2D
 ## Everything is flat ink-and-colour drawn with _draw: no particles,
 ## no shaders, cheap on the web build.
 
-enum Kind { RING, BURST, CONE, TEXT, DUST, LINES, POOF }
+enum Kind { RING, BURST, CONE, TEXT, DUST, LINES }
 
 var kind := Kind.RING
 var color := Color.WHITE
@@ -66,18 +66,6 @@ static func dust(pos: Vector2, col: Color, count := 6) -> void:
 	for i in count:
 		var side := -1.0 if i % 2 == 0 else 1.0
 		fx._parts.append({"p": Vector2(side * 4, 0), "v": Vector2(side * randf_range(80, 220), randf_range(-70, -10)), "r": randf_range(3.0, 6.0), "rot": 0.0})
-	_spawn(fx, pos)
-
-
-## Soft round puffs that swell and fade - the "you fell" / "it crumbled" poof.
-static func poof(pos: Vector2, col: Color, count := 7) -> void:
-	var fx := Fx.new()
-	fx.kind = Kind.POOF
-	fx.color = col
-	fx.duration = 0.55
-	for i in count:
-		var a := randf() * TAU
-		fx._parts.append({"p": Vector2(cos(a), sin(a)) * randf_range(4, 18), "v": Vector2(cos(a), sin(a)) * randf_range(40, 140), "r": randf_range(10.0, 20.0), "rot": 0.0})
 	_spawn(fx, pos)
 
 
@@ -148,10 +136,6 @@ func _draw() -> void:
 				draw_rect(Rect2(-s - 1.5, -s - 1.5, s * 2 + 3, s * 2 + 3), Color(Palette.INK, a))
 				draw_rect(Rect2(-s, -s, s * 2, s * 2), Color(color, a))
 			draw_set_transform(Vector2.ZERO)
-		Kind.POOF:
-			for p in _parts:
-				var r: float = p.r * (0.6 + e * 0.9)
-				draw_circle(p.p, r, Color(color, a * 0.85))
 		Kind.CONE:
 			var base := direction.angle()
 			var spread := PI * 0.3

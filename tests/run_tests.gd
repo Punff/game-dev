@@ -18,7 +18,6 @@ func _ready() -> void:
 	await _test_game_smoke()
 	await _test_chaos()
 	await _test_knockout()
-	await _test_wear_and_hazard()
 	print("\n%d checks, %d failures" % [_checks, _failures])
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -247,7 +246,7 @@ func _test_game_smoke() -> void:
 	await get_tree().create_timer(5.0).timeout
 	var players := get_tree().get_nodes_in_group("player")
 	check(players.size() == 2, "two players spawned")
-	check(get_tree().get_nodes_in_group("blocks").size() > 12, "map streamed in")
+	check(get_tree().get_nodes_in_group("blocks").size() > 20, "map streamed in")
 	check(MatchManager.state == MatchManager.State.PLAYING, "countdown finished and match started")
 	scene.queue_free()
 	await get_tree().process_frame
@@ -305,53 +304,4 @@ func _test_knockout() -> void:
 	await get_tree().physics_frame
 	check(p.is_dead, "knocked past the arena edge = out")
 	p.queue_free()
-	PlayerManager.clear()
-
-
-func _test_wear_and_hazard() -> void:
-	var world := Node2D.new()
-	get_tree().root.add_child(world)
-	Fx.layer = world
-	var b := StaticPlatform.new()
-	b.set_block_size(Vector2(200, Block.HEIGHT))
-	world.add_child(b)
-	b.add_wear(0.5)
-	check(b.wear_stage() == 2 and is_instance_valid(b), "half-worn block shows cracks but holds")
-	var before := get_tree().get_nodes_in_group("fragments").size()
-	b.add_wear(0.6)
-	await get_tree().create_timer(Block.CRUMBLE_WARNING + 0.2).timeout
-	check(not is_instance_valid(b) or b.is_queued_for_deletion(), "fully worn block crumbles")
-	check(get_tree().get_nodes_in_group("fragments").size() > before, "crumbling leaves crumbly bits")
-
-	# Standing on a block wears it out in a few seconds; the floor is tougher.
-	PlayerManager.clear()
-	var id := PlayerManager.join(Settings.DEVICE_KB_A)
-	var plat := StaticPlatform.new()
-	plat.set_block_size(Vector2(300, Block.HEIGHT))
-	plat.position = Vector2(0, 0)
-	world.add_child(plat)
-	var p := Player.new()
-	p.setup(PlayerManager.players[id])
-	world.add_child(p)
-	p.global_position = Vector2(0, -Block.HEIGHT * 0.5 - Player.RADIUS - 2)
-	await get_tree().create_timer(2.0).timeout
-	check(is_instance_valid(plat) and plat.wear > 0.1 and plat.wear < 1.0, "standing wears a block gradually (%.2f after 2 s)" % (plat.wear if is_instance_valid(plat) else -1.0))
-
-	# Red block: touching it stuns and throws.
-	var hz := HazardBlock.new()
-	hz.set_block_size(Vector2(160, Block.HEIGHT))
-	hz.position = Vector2(400, -300)
-	world.add_child(hz)
-	p.global_position = Vector2(400 - 80 - Player.RADIUS - 4, -300)
-	p.velocity = Vector2(600, 0)
-	p.controls_enabled = true
-	var stunned := false
-	for i in 30:
-		await get_tree().physics_frame
-		if p._stun > 0.0:
-			stunned = true
-			break
-	check(stunned, "touching a red block from the side stuns")
-	check(p.velocity.x < 0.0, "red block throws you back")
-	world.queue_free()
 	PlayerManager.clear()

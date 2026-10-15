@@ -10,9 +10,7 @@ mid-air), ground pound (fast-fall shatters concrete), aimed shockwave
 (knockback, shatters concrete, launches debris, rocket-jump downward) and a
 gravity field (grab debris, stack it under you, hurl it on release). Fast
 debris knocks players around and smashes more concrete — chain reactions.
-Every block wears down as you land, stand and jump on it, cracks, and
-crumbles away — the route falls apart behind the leader. Red blocks stun and
-throw you on touch. There are no side walls: shove someone far enough off the edge and they're out.
+There are no side walls: shove someone far enough off the edge and they're out.
 Every few rows the route funnels onto one contested platform (or a tight pair).
 
 Godot **4.7**, GL Compatibility renderer (same look on desktop and web).

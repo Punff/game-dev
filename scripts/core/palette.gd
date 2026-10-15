@@ -27,7 +27,6 @@ const ACCENT := MUSTARD
 const ACCENT_2 := RUST
 const GOOD := Color("8fb04a")
 const LAVA := RUST
-const POOF := Color("f08cb4")   ## pink "you're out" poof
 
 const PLAYER_COLORS: Array[Color] = [
 	Color("e8452c"), # red
@@ -54,5 +53,4 @@ const BLOCKS := {
 	"ice_block": [Color("9cc8d8"), Color("ffffff")],
 	"moving_platform": [Color("4b6a8c"), Color("d8e4f0")],
 	"reverse_block": [Color("7e1f2c"), Color("f08a9a")],
-	"hazard_block": [Color("d83a2c"), Color("0e0c0b")],
 }
