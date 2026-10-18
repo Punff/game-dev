@@ -15,7 +15,6 @@ func _ready() -> void:
 	_test_planner_determinism()
 	_test_bindings_roundtrip()
 	await _test_bricks()
-	await _test_debris_feel()
 	await _test_jump_physics_matches_envelope()
 	await _test_game_smoke()
 	await _test_chaos()
@@ -286,89 +285,6 @@ func _test_bricks() -> void:
 	check(not is_instance_valid(w), "a wall with no bricks left is removed")
 	for f in get_tree().get_nodes_in_group("fragments"):
 		f.free()
-
-
-# ── Debris vs. player abilities ──────────────
-
-func _brick_at(pos: Vector2) -> Fragment:
-	var f := Fragment.new()
-	var hs := Vector2(30, 14)
-	f.setup(PackedVector2Array([-hs, Vector2(hs.x, -hs.y), hs, Vector2(-hs.x, hs.y)]), Color.WHITE, Color.WHITE)
-	get_tree().root.add_child(f)
-	f.global_position = pos
-	return f
-
-
-func _test_debris_feel() -> void:
-	PlayerManager.clear()
-	var id := PlayerManager.join(Settings.DEVICE_KB_A)
-	var floor_block := StaticPlatform.new()
-	floor_block.position = Vector2(0, -8000)
-	floor_block.set_block_size(Vector2(1200, 60))
-	get_tree().root.add_child(floor_block)
-	var p := Player.new()
-	p.setup(PlayerManager.players[id])
-	get_tree().root.add_child(p)
-	var top := floor_block.position.y - 30.0 - Player.RADIUS
-	p.global_position = Vector2(0, top)
-	await get_tree().physics_frame
-
-	# Jump kick: a plain jump shoves nearby debris, a charged jump makes it a projectile.
-	var f := _brick_at(Vector2(70, top - 10))
-	p._on_jumped(1.0, true)
-	var plain := f.linear_velocity.length()
-	f.linear_velocity = Vector2.ZERO
-	p._on_jumped(2.0, true)
-	var charged := f.linear_velocity.length()
-	print("Debris: jump kick %.0f px/s, charged kick %.0f px/s" % [plain, charged])
-	check(plain > 250.0, "a jump visibly kicks nearby debris")
-	check(charged > Fragment.IMPACT_SPEED, "a charged jump launches debris hard enough to hurt")
-	check(f.thrown_by == p, "kicked debris doesn't hit the kicker")
-	f.free()
-
-	# Gravity field: bricks swing in and settle into a flat floor under you.
-	var bricks: Array[Fragment] = []
-	for i in 6:
-		bricks.append(_brick_at(Vector2(-120 + i * 48, top - 120 - (i % 2) * 40)))
-	p.global_position = Vector2(0, top - 200)
-	p.controls_enabled = true
-	Input.action_press(PlayerManager.action(id, "gravity"))
-	for i in 80:   # ~1.3 s
-		await get_tree().physics_frame
-	var held := p.held_count()
-	var spread := 0.0
-	var tilt := 0.0
-	var speed := 0.0
-	for b in bricks:
-		spread = maxf(spread, absf(b.global_position.y - p.global_position.y))
-		tilt = maxf(tilt, absf(wrapf(b.rotation, -PI * 0.5, PI * 0.5)))
-		speed = maxf(speed, (b.linear_velocity - p.velocity).length())
-	print("Field: holding %d, max depth below %.0f px, max tilt %.0f°, max rel. speed %.0f px/s" % [held, spread, rad_to_deg(tilt), speed])
-	check(held == bricks.size(), "the field gathers every brick in range")
-	check(spread < 110.0, "held bricks pack under the player")
-	check(tilt < deg_to_rad(15), "bricks packed under you lie flat")
-	check(speed < 150.0, "held bricks settle instead of jittering")
-	Input.action_release(PlayerManager.action(id, "gravity"))
-	await get_tree().physics_frame
-
-	# Ground pound into a pile splashes it.
-	for b in bricks:
-		b.global_position = Vector2(randf_range(-60, 60), top - 5)
-		b.linear_velocity = Vector2.ZERO
-	p.gravity_cd = 0.0
-	p.global_position = Vector2(0, top - 4)
-	p.last_impact = 2000.0
-	p._on_landed()
-	var fastest := 0.0
-	for b in bricks:
-		fastest = maxf(fastest, b.linear_velocity.length())
-	check(fastest > Fragment.IMPACT_SPEED, "a ground pound sends nearby debris flying")
-	for b in bricks:
-		b.free()
-	p.queue_free()
-	floor_block.queue_free()
-	await get_tree().process_frame
-	PlayerManager.clear()
 
 
 # ── Smoke test: the real game scene runs ─────

@@ -129,24 +129,6 @@ func _do_action(scene: Node, action: String) -> void:
 			ps[0].velocity = Vector2.ZERO
 			ps[0].facing = 1.0
 			ps[0]._fire_shockwave()
-		"field":
-			# P1 hovers in open air among loose bricks and holds the field;
-			# P2 charge-jumps out of a pile next to them.
-			await get_tree().create_timer(4.0).timeout
-			var ps: Array = scene.players
-			var c: Vector2 = ps[0].global_position + Vector2(0, -330)
-			ps[0].global_position = c
-			ps[0].velocity = Vector2.ZERO
-			for i in 8:
-				var f := Fragment.new()
-				var hs := Vector2(30, 14)
-				f.setup(PackedVector2Array([-hs, Vector2(hs.x, -hs.y), hs, Vector2(-hs.x, hs.y)]), Palette.BLOCKS["breakable_block"][0], Palette.BLOCKS["breakable_block"][1])
-				f.brick_outline = Block.rough_rect(Rect2(-hs, hs * 2.0), i * 17, 1.1)
-				scene.world.add_child(f)
-				f.global_position = c + Vector2(randf_range(-150, 150), randf_range(-120, 120))
-				f.rotation = randf_range(-1.2, 1.2)
-			scene.camera.snap()
-			Input.action_press(PlayerManager.action(1, "gravity"))
 		"climb":
 			# Teleport players upward to preview later biomes.
 			await get_tree().create_timer(4.0).timeout

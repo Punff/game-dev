@@ -44,21 +44,6 @@ const SHOCK_RECOIL := 420.0
 const JUMP_PUSH_RADIUS := 200.0
 const JUMP_PUSH_FORCE := 260.0
 
-# ── Debris ───────────────────────────────────
-const KICK_RADIUS := 150.0        ## jumping kicks debris this close (scales with charge)
-const KICK_SPEED := 650.0         ## at point blank, per unit of jump strength
-const SPLASH_RADIUS := 120.0      ## hard landings scatter debris this close
-const SPLASH_SPEED := 0.6         ## fraction of landing speed passed to debris
-const BUMP := 0.5                 ## fraction of your speed into debris passed on contact
-const WEIGHT := 55.0              ## px/s² debris you stand on sinks
-const FIELD_SPRING := 55.0        ## gravity field pull towards a slot (underdamped: it swings)
-const FIELD_DAMP := 7.0
-const FIELD_MAX_ACCEL := 5000.0
-const FLOOR_COLS := 5             ## bricks per row when the field packs a floor under you
-const FLOOR_SLOT := Vector2(66, 32)
-const FIELD_LURE := 1.6           ## debris out to this many field radii drifts in
-const FIELD_LURE_ACCEL := 700.0
-
 ## Half width of the arena; past this (plus a margin) you've been knocked out.
 static var world_half_width := 800.0
 const OUT_OF_BOUNDS := 500.0
@@ -101,8 +86,7 @@ var _a: Dictionary = {}          # action name cache
 
 func _init() -> void:
 	collision_layer = 1
-	collision_mask = 3           # world + debris
-	platform_floor_layers = 1    # ride moving platforms, not drifting debris
+	collision_mask = 1
 	floor_snap_length = 6.0
 	floor_max_angle = deg_to_rad(50)
 	var cs := CollisionShape2D.new()
@@ -188,9 +172,7 @@ func _physics_process(delta: float) -> void:
 	_handle_abilities(delta)
 
 	var fall_speed := velocity.y
-	var pre_slide := velocity
 	move_and_slide()
-	_push_debris_on_contact(pre_slide, delta)
 
 	# No walls: get shoved far enough off the side and you're out.
 	if absf(global_position.x) > world_half_width + OUT_OF_BOUNDS:
@@ -333,57 +315,20 @@ func _update_field(delta: float) -> void:
 		f.claim_dist = d
 		f.held_by = self
 		held.append(f)
-	# Chunks gather where you aim; with no aim they pack under your feet into
-	# a floor. Each one takes the slot nearest to where it already is, so
-	# their paths don't cross and tangle.
-	var aimed := aim.length_squared() > 0.2
-	var slots := _field_slots(held, aim) if aimed else _floor_slots(held)
-	for i in held.size():
-		var f := held[i]
-		var to_target: Vector2 = global_position + slots[i] - f.global_position
-		var acc := to_target * FIELD_SPRING - (f.linear_velocity - velocity) * FIELD_DAMP
-		f.linear_velocity += acc.limit_length(FIELD_MAX_ACCEL) * delta
-		# Packed under your feet, bricks turn flat.
-		var spin := f.angular_velocity * 0.6 if aimed else -wrapf(f.rotation, -PI * 0.5, PI * 0.5) * 12.0
-		f.angular_velocity = lerpf(f.angular_velocity, spin, minf(10.0 * delta, 1.0))
+		# Chunks gather where you aim; with no aim they pack under your feet
+		# into a platform you can stand on.
+		var idx := held.size() - 1
+		var base := Vector2(0, RADIUS + 34)
+		if aim.length_squared() > 0.2:
+			base = aim.normalized() * 95.0
+		var spread := Vector2((idx % 4 - 1.5) * 44.0, -(idx / 4) * 30.0) if aim.length_squared() <= 0.2 \
+			else Vector2(cos(idx * 2.4), sin(idx * 2.4)) * (20.0 + idx * 4.0)
+		var target := global_position + base + spread
+		var to_target := target - f.global_position
+		var desired := to_target.normalized() * minf(to_target.length() * 7.0, 900.0) + velocity
+		f.linear_velocity = f.linear_velocity.lerp(desired, minf(8.0 * delta, 1.0))
+		f.angular_velocity = lerpf(f.angular_velocity, 0.0, minf(10.0 * delta, 1.0))
 	_held = held
-	# Loose debris just outside the field drifts in.
-	for f: Fragment in get_tree().get_nodes_in_group("fragments"):
-		if f.held_by == self or f.stun > 0.0:
-			continue
-		var to := global_position - f.global_position
-		var d := to.length()
-		if d > GRAVITY_RADIUS and d < GRAVITY_RADIUS * FIELD_LURE:
-			var k := 1.0 - (d - GRAVITY_RADIUS) / (GRAVITY_RADIUS * (FIELD_LURE - 1.0))
-			f.linear_velocity += to / d * FIELD_LURE_ACCEL * k * delta
-
-
-## Offsets (from the player) of a floor of bricks under your feet: rows of
-## FLOOR_COLS, filled top row first by whoever is highest, left to right,
-## with a brick right under you (not a seam).
-func _floor_slots(held: Array[Fragment]) -> Array:
-	var order := range(held.size())
-	order.sort_custom(func(a, b): return held[a].global_position.y < held[b].global_position.y)
-	var slots := []
-	slots.resize(held.size())
-	for row_start in range(0, order.size(), FLOOR_COLS):
-		var row: Array = order.slice(row_start, row_start + FLOOR_COLS)
-		row.sort_custom(func(a, b): return held[a].global_position.x < held[b].global_position.x)
-		for c in row.size():
-			slots[row[c]] = Vector2((c - row.size() / 2) * FLOOR_SLOT.x, RADIUS + 16.0 + (row_start / FLOOR_COLS) * FLOOR_SLOT.y)
-	return slots
-
-
-## A loose cluster out in front of you, where you aim.
-func _field_slots(held: Array[Fragment], aim: Vector2) -> Array:
-	var order := range(held.size())
-	var a := aim.normalized()
-	order.sort_custom(func(i, j): return (held[i].global_position - global_position).dot(a) > (held[j].global_position - global_position).dot(a))
-	var slots := []
-	slots.resize(held.size())
-	for k in order.size():
-		slots[order[k]] = a * 95.0 + Vector2(cos(k * 2.4), sin(k * 2.4)) * (20.0 + k * 4.0)
-	return slots
 
 
 func _fire_shockwave() -> void:
@@ -462,20 +407,14 @@ func _on_jumped(strength: float, from_ground: bool) -> void:
 		var r := JUMP_PUSH_RADIUS * strength
 		if to.length() < r:
 			other.velocity += to.normalized() * JUMP_PUSH_FORCE * strength
-	# Debris gets kicked too - what you jump off is shoved down and away, and
-	# a charged jump launches it hard enough to hurt.
-	var r := KICK_RADIUS * strength
+	# Debris gets kicked too.
 	for f: Fragment in get_tree().get_nodes_in_group("fragments"):
 		if f.held_by == self:
 			continue
 		var to := f.global_position - global_position
-		var d := to.length()
-		if d >= r:
-			continue
-		var dir := to / d if d > 1.0 else Vector2.DOWN
-		if to.y > 0.0:
-			dir = (dir + Vector2.DOWN).normalized()
-		f.kick(self, dir * KICK_SPEED * strength * (1.0 - d / r))
+		var r := 180.0 * strength
+		if to.length() < r:
+			f.apply_central_impulse(to.normalized() * 900.0 * (1.0 - to.length() / r) * strength)
 
 
 func _on_landed() -> void:
@@ -486,16 +425,6 @@ func _on_landed() -> void:
 		Sfx.play("land", -8.0 + impact * 6.0)
 	if last_impact > 1000.0:
 		SignalBus.screen_shake_requested.emit(5.0)
-	# Hard landings splash nearby debris outwards (ground pounds most of all).
-	if last_impact > 450.0:
-		for f: Fragment in get_tree().get_nodes_in_group("fragments"):
-			if f.held_by == self:
-				continue
-			var to := f.global_position - global_position
-			var d := to.length()
-			if d < SPLASH_RADIUS:
-				var dir := (to / maxf(d, 1.0) + Vector2.UP * 0.6).normalized()
-				f.kick(self, dir * last_impact * SPLASH_SPEED * (1.0 - d / SPLASH_RADIUS))
 
 
 func _update_floor_blocks(delta: float) -> void:
@@ -520,21 +449,6 @@ func _update_floor_blocks(delta: float) -> void:
 		if is_instance_valid(b) and not b in now:
 			b.on_player_leave(self)
 	_floor_blocks = now
-
-
-## The ball shoves debris it runs or lands into, and what you stand on sinks.
-func _push_debris_on_contact(pre_slide: Vector2, delta: float) -> void:
-	for i in get_slide_collision_count():
-		var col := get_slide_collision(i)
-		var f := col.get_collider() as Fragment
-		if f == null or f.held_by == self:
-			continue
-		var n := col.get_normal()
-		var into := pre_slide.dot(-n) - f.linear_velocity.dot(-n)
-		if into > 0.0:
-			f.linear_velocity += -n * into * BUMP
-		if n.y < -0.6:
-			f.linear_velocity.y += WEIGHT * delta
 
 
 func _push_players_on_contact() -> void:

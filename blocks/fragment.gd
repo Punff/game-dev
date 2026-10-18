@@ -33,8 +33,8 @@ func setup(poly: PackedVector2Array, body: Color, hi: Color) -> void:
 	mass = 10.0
 	linear_damp = 1.6
 	angular_damp = 3.0
-	collision_layer = 2          # its own layer so players stand on it without riding it
-	collision_mask = 3
+	collision_layer = 1
+	collision_mask = 1
 	contact_monitor = true
 	max_contacts_reported = 3
 	continuous_cd = RigidBody2D.CCD_MODE_CAST_RAY
@@ -50,16 +50,6 @@ func throw(by: Player, velocity: Vector2) -> void:
 	_thrown_time = 0.35
 	linear_velocity = velocity
 	angular_velocity = randf_range(-8, 8)
-
-
-## Shoved by a player (jump, landing): moves fast enough to hurt others,
-## but never the one who kicked it.
-func kick(by: Player, dv: Vector2) -> void:
-	linear_velocity += dv
-	angular_velocity += randf_range(-4, 4) * minf(dv.length() / 400.0, 1.0)
-	if dv.length() > IMPACT_SPEED * 0.5:
-		thrown_by = by
-		_thrown_time = 0.25
 
 
 func _physics_process(delta: float) -> void:
@@ -83,7 +73,7 @@ func _on_body_entered(body: Node) -> void:
 	if body is BreakableBlock:
 		body.hit_by_debris(global_position, linear_velocity)
 	elif body is Player:
-		if body == held_by or (body == thrown_by and _thrown_time > 0.0):
+		if body == thrown_by and _thrown_time > 0.0:
 			return
 		body.hit_by_chunk(linear_velocity * 0.55, self)
 		linear_velocity *= 0.35
