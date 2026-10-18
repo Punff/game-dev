@@ -15,7 +15,6 @@ var size := Vector2(160.0, HEIGHT)
 var animated := false
 
 var _shape := RectangleShape2D.new()
-var _cs := CollisionShape2D.new()
 var _seed := 0
 var _outline := PackedVector2Array()
 
@@ -23,8 +22,9 @@ var _outline := PackedVector2Array()
 func _init() -> void:
 	collision_layer = 1
 	collision_mask = 0
-	_cs.shape = _shape
-	add_child(_cs)
+	var cs := CollisionShape2D.new()
+	cs.shape = _shape
+	add_child(cs)
 	_shape.size = size
 
 
@@ -59,10 +59,7 @@ func on_player_stand(_player: Player, _delta: float) -> void: pass
 func on_player_leave(_player: Player) -> void: pass
 ## Player jumped while standing on this block.
 func on_player_jump(_player: Player, _strength: float) -> void: pass
-## A shockwave fired from `origin` in direction `dir` reached this block.
 func on_shockwave(_dir: Vector2, _origin: Vector2) -> void: pass
-## Called every physics frame a player's gravity field overlaps this block.
-func on_gravity_field(_player: Player, _delta: float) -> void: pass
 
 
 # ── Drawing ──────────────────────────────────

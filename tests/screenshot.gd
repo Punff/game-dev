@@ -102,33 +102,6 @@ func _do_action(scene: Node, action: String) -> void:
 			Input.action_release(PlayerManager.action(1, "shockwave"))
 			if scene.players.size() > 2:
 				Input.action_press(PlayerManager.action(3, "jump"))
-		"bricks":
-			# Brick walls taking local damage: P1 ground-pounds one, P2 pries
-			# bricks out of another with the gravity field, then P1 blasts it.
-			await get_tree().create_timer(4.0).timeout
-			var walls := []
-			for b in get_tree().get_nodes_in_group("blocks"):
-				if b is BreakableBlock and b.size.x > 150 and b.global_position.y < -150 and b.global_position.y > -2000:
-					walls.append(b)
-			walls.sort_custom(func(a, b): return a.global_position.y > b.global_position.y)
-			if walls.size() < 2:
-				return
-			var a: Block = walls[0]
-			var w: Block = walls[1]
-			var ps: Array = scene.players
-			var top := a.global_position.y - a.size.y * 0.5 - Player.RADIUS - 1
-			ps[0].global_position = Vector2(a.global_position.x - a.size.x * 0.2, top - 140)
-			ps[0].velocity = Vector2(0, 1500)
-			ps[1].global_position = Vector2(w.global_position.x + w.size.x * 0.5 + 60, w.global_position.y)
-			scene.lava.surface_y = top + 600
-			scene.camera.snap()
-			Input.action_press(PlayerManager.action(2, "gravity"))
-			await get_tree().create_timer(1.2).timeout
-			Input.action_release(PlayerManager.action(2, "gravity"))
-			ps[0].global_position = Vector2(w.global_position.x - w.size.x * 0.5 - 120, w.global_position.y)
-			ps[0].velocity = Vector2.ZERO
-			ps[0].facing = 1.0
-			ps[0]._fire_shockwave()
 		"climb":
 			# Teleport players upward to preview later biomes.
 			await get_tree().create_timer(4.0).timeout

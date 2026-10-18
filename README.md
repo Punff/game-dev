@@ -5,16 +5,11 @@ concrete and steel, smash it apart, throw the debris at each other and stay
 ahead of the rising slag. Last one standing wins; solo runs chase a saved
 best height.
 
-Concrete is built from bricks that come loose one at a time where they're
-hit, so walls get chewed apart instead of vanishing whole.
-
 Core toys: double jump, charge jump (keeps charging off ledges, fire it
-mid-air), ground pound (fast-fall punches a hole through bricks), aimed
-shockwave (knockback, bites bricks out of walls, launches debris,
-rocket-jump downward) and a gravity field (pries bricks out of nearby walls,
-grabs debris, stacks it under you, hurls it on release). Jumping off concrete
-kicks out the bricks under your feet. Fast debris knocks players around and
-knocks out more bricks — chain reactions.
+mid-air), ground pound (fast-fall shatters concrete), aimed shockwave
+(knockback, shatters concrete, launches debris, rocket-jump downward) and a
+gravity field (grab debris, stack it under you, hurl it on release). Fast
+debris knocks players around and smashes more concrete — chain reactions.
 There are no side walls: shove someone far enough off the edge and they're out.
 Every few rows the route funnels onto one contested platform (or a tight pair).
 

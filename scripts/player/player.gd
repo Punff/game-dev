@@ -290,18 +290,9 @@ func _end_field(allow_throw: bool) -> void:
 		SignalBus.screen_shake_requested.emit(3.0 + thrown)
 
 
-func held_count() -> int:
-	return _held.size()
-
-
 func _update_field(delta: float) -> void:
 	var aim := aim_vector()
 	var frame := Engine.get_physics_frames()
-	for b: Block in get_tree().get_nodes_in_group("blocks"):
-		var r := b.get_rect_global()
-		var closest := Vector2(clampf(global_position.x, r.position.x, r.end.x), clampf(global_position.y, r.position.y, r.end.y))
-		if closest.distance_to(global_position) < GRAVITY_RADIUS:
-			b.on_gravity_field(self, delta)
 	var held: Array[Fragment] = []
 	for f: Fragment in get_tree().get_nodes_in_group("fragments"):
 		if f.stun > 0.0:
@@ -367,7 +358,7 @@ func _fire_shockwave() -> void:
 			node.stun = 0.4
 			node.throw(self, (to.normalized() * 0.6 + dir * 0.4).normalized() * 1000.0 * (0.5 + falloff))
 		elif node is Block:
-			node.on_shockwave(dir, origin)
+			node.on_shockwave(to.normalized(), origin)
 
 
 func hit_by_shockwave(impulse: Vector2, _from: Player) -> void:

@@ -14,7 +14,6 @@ func _ready() -> void:
 	_test_planner_invariants()
 	_test_planner_determinism()
 	_test_bindings_roundtrip()
-	await _test_bricks()
 	await _test_jump_physics_matches_envelope()
 	await _test_game_smoke()
 	await _test_chaos()
@@ -233,58 +232,6 @@ func _bot_jump(dx: float, dy: float) -> bool:
 	PlayerManager.clear()
 	await get_tree().process_frame
 	return success
-
-
-# ── Brick walls ──────────────────────────────
-
-func _make_wall(pos: Vector2, size: Vector2) -> BreakableBlock:
-	var b := BreakableBlock.new()
-	b.position = pos
-	b.set_block_size(size)
-	get_tree().root.add_child(b)
-	return b
-
-
-func _alive_bricks(b: BreakableBlock) -> Array:
-	return b._bricks.filter(func(k): return k.alive)
-
-
-func _test_bricks() -> void:
-	# Layout: bricks tile the block exactly, in courses, with staggered joints.
-	for sz in [Vector2(160, 60), Vector2(420, 60), Vector2(300, 120), Vector2(90, 60)]:
-		var b := _make_wall(Vector2(1000, -5000), sz)
-		var area := 0.0
-		for k in b._bricks:
-			area += k.rect.get_area()
-			check(Rect2(-sz * 0.5, sz).grow(0.01).encloses(k.rect), "brick inside its block (%s)" % sz)
-			check(k.rect.size.x > BreakableBlock.BRICK_W * 0.25, "no sliver bricks (%s)" % sz)
-		check(absf(area - sz.x * sz.y) < 1.0, "bricks cover the whole block (%s)" % sz)
-		check(b._bricks.size() >= roundi(sz.y / BreakableBlock.COURSE_H) * (2 if sz.x >= 160 else 1), "several bricks per block (%s)" % sz)
-		b.free()
-	var wa := _make_wall(Vector2(300, -5000), Vector2(420, 60))
-	var wb := _make_wall(Vector2(300, -5000), Vector2(420, 60))
-	check(wa._bricks.size() == wb._bricks.size() and wa._bricks[1].rect == wb._bricks[1].rect, "same block position gives the same bricks")
-	wa.free()
-	wb.free()
-
-	# Damage is local.
-	var w := _make_wall(Vector2(0, -5000), Vector2(600, 60))
-	var total := w._bricks.size()
-	w.hit_by_debris(Vector2(-280, -5000), Vector2(900, 0))
-	var left := _alive_bricks(w).size()
-	check(left < total and left >= total - 3, "a flying chunk knocks out one or two bricks")
-	w.on_shockwave(Vector2.LEFT, Vector2(420, -5000))
-	var after_shock := _alive_bricks(w)
-	check(after_shock.size() < left and after_shock.size() > 0, "a shockwave bites into the wall without levelling it")
-	for k in after_shock:
-		check(k.rect.end.x + w.position.x < 420 - BreakableBlock.SHOCK_BITE + 40, "only bricks inside the bite came loose")
-	await get_tree().physics_frame
-	check(get_tree().get_nodes_in_group("fragments").size() >= total - after_shock.size() , "loose bricks became debris")
-	w.break_apart(Vector2(0, -4900))
-	await get_tree().process_frame
-	check(not is_instance_valid(w), "a wall with no bricks left is removed")
-	for f in get_tree().get_nodes_in_group("fragments"):
-		f.free()
 
 
 # ── Smoke test: the real game scene runs ─────
