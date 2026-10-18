@@ -7,8 +7,12 @@ extends RigidBody2D
 
 const LIFETIME := 30.0
 const IMPACT_SPEED := 420.0
+const REF_AREA := 3600.0         ## a shard this big weighs MASS
+const MASS := 10.0
 
 var _poly: PackedVector2Array
+## Local bounding box as cut (rotation 0): lets a gravity field line chunks up.
+var extent := Rect2()
 var _body := Color.WHITE
 var _hi := Color.WHITE
 var _age := 0.0
@@ -25,12 +29,17 @@ var _was_fast := false
 
 func setup(poly: PackedVector2Array, body: Color, hi: Color) -> void:
 	_poly = poly
+	extent = Rect2(poly[0], Vector2.ZERO)
+	for v in poly:
+		extent = extent.expand(v)
 	_body = body
 	_hi = hi
 	gravity_scale = 0.0
-	mass = 10.0
-	linear_damp = 1.6
-	angular_damp = 3.0
+	# Heavier the bigger it is: big slabs carry momentum and hit hard,
+	# slivers flutter.
+	mass = clampf(MASS * BreakableBlock._area(poly) / REF_AREA, 3.0, 30.0)
+	linear_damp = 1.1
+	angular_damp = 2.0
 	collision_layer = 1
 	collision_mask = 1
 	contact_monitor = true
@@ -73,8 +82,9 @@ func _on_body_entered(body: Node) -> void:
 	elif body is Player:
 		if body == thrown_by and _thrown_time > 0.0:
 			return
-		body.hit_by_chunk(linear_velocity * 0.55, self)
-		linear_velocity *= 0.35
+		var weight := clampf(mass / MASS, 0.5, 2.0)
+		body.hit_by_chunk(linear_velocity * 0.55 * weight, self)
+		linear_velocity *= lerpf(0.2, 0.65, (weight - 0.5) / 1.5)   # heavy ones plough on
 
 
 func _draw() -> void:
@@ -96,3 +106,5 @@ func _draw() -> void:
 	# a crack across the chunk
 	if _poly.size() >= 4:
 		draw_line(_poly[0].lerp(_poly[2], 0.3), _poly[1].lerp(_poly[3], 0.6), Color(Palette.INK, 0.5), 2.0)
+	else:
+		draw_line(_poly[0].lerp(_poly[1], 0.5), _poly[2].lerp(_poly[0], 0.4), Color(Palette.INK, 0.5), 2.0)

@@ -14,6 +14,7 @@ func _ready() -> void:
 	_test_planner_invariants()
 	_test_planner_determinism()
 	_test_bindings_roundtrip()
+	await _test_field_holds_player()
 	await _test_jump_physics_matches_envelope()
 	await _test_game_smoke()
 	await _test_chaos()
@@ -232,6 +233,53 @@ func _bot_jump(dx: float, dy: float) -> bool:
 	PlayerManager.clear()
 	await get_tree().process_frame
 	return success
+
+
+# ── Gravity field: debris under your feet holds you up ──
+
+func _test_field_holds_player() -> void:
+	PlayerManager.clear()
+	var id := PlayerManager.join(Settings.DEVICE_KB_A)
+	var block := BreakableBlock.new()
+	block.position = Vector2(0, -8000)
+	block.set_block_size(Vector2(340, 60))
+	get_tree().root.add_child(block)
+	var p := Player.new()
+	p.setup(PlayerManager.players[id])
+	get_tree().root.add_child(p)
+	p.global_position = Vector2(0, -8000 - 30 - Player.RADIUS - 1)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var start_y := p.global_position.y
+	# Jump off it (it shatters) and hold the field on the way up.
+	p.controls_enabled = true
+	Input.action_press(PlayerManager.action(id, "jump"))
+	await get_tree().physics_frame
+	Input.action_release(PlayerManager.action(id, "jump"))
+	Input.action_press(PlayerManager.action(id, "gravity"))
+	var on_floor_frames := 0
+	var apex := INF
+	var lowest := -INF
+	var highest := INF
+	for i in 90:   # 1.5 s, field lasts 1.6 s
+		await get_tree().physics_frame
+		if apex == INF:
+			if p.velocity.y >= 0.0:
+				apex = p.global_position.y
+			continue
+		if p.is_on_floor():
+			on_floor_frames += 1
+		lowest = maxf(lowest, p.global_position.y)
+		highest = minf(highest, p.global_position.y)
+	Input.action_release(PlayerManager.action(id, "gravity"))
+	print("Field hold: on debris %d frames after the apex, then sank %.0f px, rose %.0f px" % [on_floor_frames, lowest - apex, apex - highest])
+	check(on_floor_frames > 40, "debris gathered under you holds you up while the field is on")
+	check(lowest - apex < 120.0, "you don't sink through your own debris floor")
+	check(apex - highest < 30.0, "debris doesn't push you upwards")
+	for f in get_tree().get_nodes_in_group("fragments"):
+		f.free()
+	p.free()
+	PlayerManager.clear()
 
 
 # ── Smoke test: the real game scene runs ─────
