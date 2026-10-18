@@ -10,7 +10,7 @@ var BLOCKS := [
 	[ConveyorBlock, "Conveyor", "Drags you. Shockwave flips it."],
 	[PushZone, "Gust", "Wind that changes direction."],
 	[IceBlock, "Ice", "Slippery. Plan your stops."],
-	[BreakableBlock, "Concrete", "Jump off, ground-pound, blast or chunk it: shatters into floating debris."],
+	[BreakableBlock, "Brick wall", "Breaks brick by brick."],
 	[VanishingBlock, "Ghost", "Vanishes after you land. Comes back."],
 	[MovingPlatform, "Mover", "Slides side to side."],
 	[ReverseBlock, "Scrambler", "Flips left and right for a few seconds."],
@@ -32,9 +32,9 @@ func _ready() -> void:
 	for pair in [
 		["Double Jump", "Jump again in mid-air. Jumping next to someone shoves them."],
 		["Charge Jump", "Hold to charge - start on the ground, keep it running off ledges - release anywhere to launch."],
-		["Ground Pound", "Fast-fall onto concrete and it shatters under you (and anyone standing on it)."],
-		["Shockwave", "Aimed blast: knocks players back, shatters concrete, flings debris. Aim down to rocket-jump."],
-		["Gravity Field", "Hold to hover and grab debris - it stacks under you. Release while aiming to hurl it."],
+		["Ground Pound", "Fast-fall onto concrete to punch a hole through the bricks under you."],
+		["Shockwave", "Aimed blast: knocks players back, blows bricks loose, flings debris. Aim down to rocket-jump."],
+		["Gravity Field", "Hold to hover, pull bricks out of walls and grab debris. Release while aiming to hurl it."],
 	]:
 		var l := UiTheme.label(pair[0], 20, Palette.ACCENT)
 		abilities.add_child(l)

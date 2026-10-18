@@ -1,7 +1,7 @@
 class_name Fragment
 extends RigidBody2D
 
-## A chunk of broken concrete. Zero gravity and damped: it drifts to a stop
+## A brick knocked out of a concrete wall. Zero gravity and damped: it drifts to a stop
 ## and hangs in the air as a stepping stone. Fast-moving chunks are
 ## projectiles - they knock players around and smash other breakable blocks.
 
@@ -9,6 +9,8 @@ const LIFETIME := 30.0
 const IMPACT_SPEED := 420.0
 
 var _poly: PackedVector2Array
+## Hand-drawn outline when this is a brick (drawn like the wall it came from).
+var brick_outline := PackedVector2Array()
 var _body := Color.WHITE
 var _hi := Color.WHITE
 var _age := 0.0
@@ -69,7 +71,7 @@ func _on_body_entered(body: Node) -> void:
 	if speed < IMPACT_SPEED:
 		return
 	if body is BreakableBlock:
-		body.break_apart(global_position, speed * 0.6)
+		body.hit_by_debris(global_position, linear_velocity)
 	elif body is Player:
 		if body == thrown_by and _thrown_time > 0.0:
 			return
@@ -89,6 +91,9 @@ func _draw() -> void:
 	for i in shadow.size():
 		shadow[i] += Vector2(6, 6).rotated(-rotation)
 	draw_colored_polygon(shadow, Color(Palette.INK, 0.5))
+	if not brick_outline.is_empty():
+		BreakableBlock.draw_brick(self, Rect2(_poly[0], _poly[2] - _poly[0]), brick_outline, _body.lightened(0.12) if fast else _body)
+		return
 	var outline := _poly.duplicate()
 	outline.append(_poly[0])
 	draw_colored_polygon(Block._shifted(_poly, Block.MISREG), _body.lightened(0.12) if fast else _body)
