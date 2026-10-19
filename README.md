@@ -31,20 +31,53 @@ Two people can share one keyboard; every gamepad is its own player.
 In the lobby press your jump key/button to join, again to ready up,
 left/right to change colour.
 
+## Online
+
+The server runs the whole match and streams snapshots; clients send their controls and
+draw what they get. Each computer brings one player (either keyboard half or any gamepad).
+
+- **Rooms** (browsers anywhere, the itch.io build): Online → Create room shows a code;
+  friends pick Join room and type it. The creator's game hosts the match, so their tab
+  must stay open and in front. Connections go straight between players over WebRTC;
+  the free Cloudflare service in `signaling/` only introduces them (see its README to
+  run or deploy it). Desktop builds use Godot's WebRTC add-on in `addons/webrtc`.
+  There's no TURN relay yet, so a few strict networks can't connect directly.
+- **Direct connect** (LAN / dedicated server, over WebSocket): Online → Direct connect.
+  Host (desktop only) and others join `ws://<your IP>:7777`, or run a dedicated server
+  that any build can join:
+
+```bash
+godot --headless --path . -- --server --port=7777
+```
+
+Not there yet: client-side prediction (guests see their own ball react after a round
+trip), sound on clients, and rejoining a match in progress.
+
+Smoke tests (bots join, play a whole match and check the results come back):
+
+```bash
+godot --headless --path . res://tests/net_bot.tscn -- --name=bot1
+godot --headless --path . res://tests/net_bot.tscn -- --room=create --code-file=room.txt --signaling=ws://127.0.0.1:8787
+godot --headless --path . res://tests/net_bot.tscn -- --room=room.txt --signaling=ws://127.0.0.1:8787
+```
+
 ## Project layout
 
 ```
 blocks/            Block base class + one script per block type (self-drawn)
 scripts/core/      Autoloads: Settings (persisted options + bindings), PlayerManager
                    (joined players, per-player InputMap actions), MatchManager (scene
-                   flow), Sfx (silent hook: drop audio files named after events into
+                   flow), Net (online: rooms over WebRTC via RoomLink, or direct
+                   WebSocket; snapshots), Sfx (silent hook: drop audio files named after events into
                    assets/sfx/), Grit (film-grain overlay), SignalBus, Palette
 scripts/game/      Game loop, MapPlanner (pure level generator), MapGeneration
                    (streams blocks), camera, lava, background, HUD
 scripts/player/    Player controller
 scripts/ui/        Code-built menus sharing one theme (UiTheme)
 shaders/           background.gdshader, lava.gdshader
-tests/             Headless test suite + screenshot helper
+tests/             Headless test suite, screenshot helper, online bot (net_bot)
+signaling/         Cloudflare Worker that matches room codes for online play
+addons/webrtc/     Godot's WebRTC extension (desktop only; browsers have it built in)
 ```
 
 ## Tests

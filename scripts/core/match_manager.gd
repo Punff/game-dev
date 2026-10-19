@@ -19,11 +19,13 @@ func goto(path: String) -> void:
 
 
 func to_menu() -> void:
+	Net.leave()
 	state = State.MENU
 	goto(MAIN_MENU)
 
 
 func to_lobby() -> void:
+	Net.leave()
 	state = State.LOBBY
 	for info in PlayerManager.players.values():
 		info.is_ready = false

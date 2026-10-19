@@ -18,6 +18,9 @@ var text := ""
 var _t := 0.0
 var _parts: Array = []
 
+## Online, every effect the server spawns is replayed on the clients
+## (Net.relay_fx), so gameplay code never has to think about it.
+
 ## Where effects get spawned. Set by the game scene.
 static var layer: Node2D
 static var reduced := false
@@ -33,6 +36,8 @@ static func _spawn(fx: Fx, pos: Vector2) -> Fx:
 
 
 static func ring(pos: Vector2, col: Color, r := 60.0, w := 4.0, dur := 0.35) -> void:
+	if Net.is_server():
+		Net.relay_fx(&"ring", [pos, col, r, w, dur])
 	var fx := Fx.new()
 	fx.kind = Kind.RING
 	fx.color = col
@@ -44,6 +49,8 @@ static func ring(pos: Vector2, col: Color, r := 60.0, w := 4.0, dur := 0.35) -> 
 
 ## Square debris flecks.
 static func burst(pos: Vector2, col: Color, count := 10, speed := 260.0, dur := 0.5) -> void:
+	if Net.is_server():
+		Net.relay_fx(&"burst", [pos, col, count, speed, dur])
 	if reduced:
 		count = int(count * 0.5)
 	var fx := Fx.new()
@@ -57,6 +64,8 @@ static func burst(pos: Vector2, col: Color, count := 10, speed := 260.0, dur := 
 
 
 static func dust(pos: Vector2, col: Color, count := 6) -> void:
+	if Net.is_server():
+		Net.relay_fx(&"dust", [pos, col, count])
 	if reduced:
 		count = int(count * 0.5)
 	var fx := Fx.new()
@@ -70,6 +79,8 @@ static func dust(pos: Vector2, col: Color, count := 6) -> void:
 
 
 static func cone(pos: Vector2, dir: Vector2, col: Color, r: float) -> void:
+	if Net.is_server():
+		Net.relay_fx(&"cone", [pos, dir, col, r])
 	var fx := Fx.new()
 	fx.kind = Kind.CONE
 	fx.color = col
@@ -81,6 +92,8 @@ static func cone(pos: Vector2, dir: Vector2, col: Color, r: float) -> void:
 
 ## Manga-style action lines radiating opposite to a direction of travel.
 static func speed_lines(pos: Vector2, dir: Vector2, col: Color) -> void:
+	if Net.is_server():
+		Net.relay_fx(&"speed_lines", [pos, dir, col])
 	var fx := Fx.new()
 	fx.kind = Kind.LINES
 	fx.color = col
@@ -92,6 +105,8 @@ static func speed_lines(pos: Vector2, dir: Vector2, col: Color) -> void:
 
 
 static func popup(pos: Vector2, txt: String, col: Color, size := 34.0) -> void:
+	if Net.is_server():
+		Net.relay_fx(&"popup", [pos, txt, col, size])
 	var fx := Fx.new()
 	fx.kind = Kind.TEXT
 	fx.text = txt.to_upper()

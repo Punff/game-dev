@@ -22,6 +22,20 @@ func on_player_land(_player: Player) -> void:
 		_state = S.WARNING
 		_timer = WARN_TIME
 		set_process(true)
+		net_changed()
+
+
+func net_state() -> int:
+	return _state
+
+
+func apply_net_state(state: int) -> void:
+	if state == _state:
+		return
+	_state = state as S
+	_timer = WARN_TIME if _state == S.WARNING else GONE_TIME
+	collision_layer = 0 if _state == S.GONE else 1
+	set_process(true)
 
 
 func _process(delta: float) -> void:

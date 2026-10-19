@@ -17,11 +17,11 @@ func _init() -> void:
 
 func _ready() -> void:
 	super._ready()
-	_phase = randf() * PERIOD * 2.0
+	_phase = posmod(_seed, 4800) / 1000.0
 
 
 func direction() -> float:
-	var t := Time.get_ticks_msec() / 1000.0 + _phase
+	var t := Block.clock + _phase
 	return 1.0 if fmod(t, PERIOD * 2.0) < PERIOD else -1.0
 
 

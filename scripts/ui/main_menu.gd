@@ -27,7 +27,7 @@ func _ready() -> void:
 	col.add_child(spacer)
 
 	var list: Array = []
-	for entry in [["Play", _on_play], ["How to play", _on_help], ["Settings", open_settings], ["Quit", func(): get_tree().quit()]]:
+	for entry in [["Play", _on_play], ["Online", _on_online], ["How to play", _on_help], ["Settings", open_settings], ["Quit", func(): get_tree().quit()]]:
 		var b := UiTheme.button(entry[0], 300)
 		b.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -47,6 +47,12 @@ func _ready() -> void:
 
 func _on_play() -> void:
 	MatchManager.to_lobby()
+
+
+func _on_online() -> void:
+	Net.status = ""
+	MatchManager.state = MatchManager.State.LOBBY
+	MatchManager.goto(Net.ONLINE_LOBBY)
 
 
 func _on_help() -> void:

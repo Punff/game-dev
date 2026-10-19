@@ -24,6 +24,17 @@ var BLOCK_TYPES := {
 var planner: MapPlanner
 var floor_y := 0.0
 var _blocks: Array[Block] = []
+var _by_net_id := {}
+var _next_net_id := 0
+
+
+func _physics_process(delta: float) -> void:
+	Block.clock += delta
+
+
+func block_by_net_id(id: int) -> Block:
+	var b: Block = _by_net_id.get(id)
+	return b if is_instance_valid(b) else null
 
 
 func generate(start_floor_y: float) -> void:
@@ -31,6 +42,9 @@ func generate(start_floor_y: float) -> void:
 		if is_instance_valid(b):
 			b.queue_free()
 	_blocks.clear()
+	_by_net_id.clear()
+	_next_net_id = 0
+	Block.clock = 0.0
 	planner = MapPlanner.new(map_seed)
 	floor_y = start_floor_y
 	_spawn_row(planner.start(floor_y))
@@ -58,6 +72,7 @@ func update_stream(highest_y: float, lava_y: float) -> void:
 		if not is_instance_valid(b):
 			_blocks.remove_at(i)
 		elif b.position.y > limit:
+			_by_net_id.erase(b.net_id)
 			b.queue_free()
 			_blocks.remove_at(i)
 	for f in get_tree().get_nodes_in_group("fragments"):
@@ -78,8 +93,12 @@ func _spawn_row(row: Dictionary) -> void:
 		block.set_block_size(Vector2(w, p.h))
 		if block is MovingPlatform:
 			block.travel = p.travel
-			block.speed = randf_range(0.7, 1.2)
+			# From the position rather than randf() so every peer agrees.
+			block.speed = 0.7 + posmod(hash(Vector2i(block.position)), 1000) / 2000.0
 		elif block is SpeedBlock or block is ConveyorBlock:
 			block.direction = p.get("dir", 1.0)
+		_next_net_id += 1
+		block.net_id = _next_net_id
+		_by_net_id[_next_net_id] = block
 		add_child(block)
 		_blocks.append(block)

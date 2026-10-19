@@ -43,6 +43,18 @@ func clear() -> void:
 		leave(id)
 
 
+## Online clients: take the roster the server sent. Only our own player
+## needs input actions; the rest are driven by the server.
+func replace_all(infos: Array[PlayerInfo]) -> void:
+	for id in players.keys():
+		_clear_actions(id)
+	players.clear()
+	for info in infos:
+		players[info.player_id] = info
+		if info.is_local():
+			_build_actions(info)
+
+
 func find_by_device(device_id: int) -> PlayerInfo:
 	for info in players.values():
 		if info.device_id == device_id:

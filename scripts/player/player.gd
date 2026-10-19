@@ -81,7 +81,13 @@ var _floor_blocks: Array = []
 var _squash := Vector2.ONE
 var _trail: PackedVector2Array = []
 var _hit_flash := 0.0
-var _a: Dictionary = {}          # action name cache
+var input := PlayerInput.new()   ## where controls come from: this machine or the network
+
+## Online clients don't simulate: the ball just shows where the server says it is.
+var puppet := false
+var _net_from := Vector2.ZERO
+var _net_to := Vector2.ZERO
+var _net_t := 1.0
 
 
 func _init() -> void:
@@ -101,8 +107,7 @@ func setup(p: PlayerInfo) -> void:
 	player_id = p.player_id
 	color = p.color
 	name = "Player%d" % player_id
-	for a in Settings.ACTIONS:
-		_a[a] = PlayerManager.action(player_id, a)
+	input = PlayerInput.new(player_id, p.is_local())
 	add_to_group("player")
 
 
@@ -114,21 +119,16 @@ func _ready() -> void:
 # ── Input helpers ────────────────────────────
 
 func _pressed(a: String) -> bool:
-	return controls_enabled and Input.is_action_pressed(_a[a])
+	return controls_enabled and input.pressed(a)
 
 func _just_pressed(a: String) -> bool:
-	return controls_enabled and Input.is_action_just_pressed(_a[a])
+	return controls_enabled and input.just_pressed(a)
 
 func _just_released(a: String) -> bool:
-	return controls_enabled and Input.is_action_just_released(_a[a])
-
-func _axis(neg: String, pos: String) -> float:
-	if not controls_enabled:
-		return 0.0
-	return Input.get_axis(_a[neg], _a[pos])
+	return controls_enabled and input.just_released(a)
 
 func aim_vector() -> Vector2:
-	var v := Vector2(_axis("left", "right"), _axis("up", "down"))
+	var v := input.move if controls_enabled else Vector2.ZERO
 	if _reverse_timer > 0.0:
 		v.x = -v.x
 	return v
@@ -139,6 +139,12 @@ func aim_vector() -> Vector2:
 func _physics_process(delta: float) -> void:
 	if is_dead:
 		return
+	if puppet:
+		_net_t = minf(_net_t + delta / Net.snapshot_interval(), 1.0)
+		global_position = _net_from.lerp(_net_to, _net_t)
+		_update_visuals(delta)
+		return
+	input.update()
 	var on_floor := is_on_floor()
 	gravity_cd = maxf(gravity_cd - delta, 0.0)
 	shock_cd = maxf(shock_cd - delta, 0.0)
@@ -495,15 +501,61 @@ func die() -> void:
 	velocity = Vector2.ZERO
 	collision_layer = 0
 	collision_mask = 0
-	Fx.burst(global_position, color, 22, 480.0, 0.8)
-	Fx.ring(global_position, Palette.PAPER, 140.0, 8.0, 0.5)
+	if not puppet:   # online, the server's effects are replayed for us
+		Fx.burst(global_position, color, 22, 480.0, 0.8)
+		Fx.ring(global_position, Palette.PAPER, 140.0, 8.0, 0.5)
+		SignalBus.screen_shake_requested.emit(16.0)
 	Sfx.play("death")
-	SignalBus.screen_shake_requested.emit(16.0)
 	PlayerManager.rumble(player_id, 1.0, 1.0, 0.45)
 	died.emit(player_id)
 	SignalBus.player_died.emit(player_id)
 	visible = false
 	set_physics_process(false)
+
+
+# ── Network state ────────────────────────────
+
+const NET_STRIDE := 13
+enum NetFlag { DEAD = 1, FIELD = 2, CHARGING = 4, REVERSED = 8 }
+
+
+## Server: append this player's state to a snapshot.
+func write_net(out: PackedFloat32Array) -> void:
+	var flags := 0
+	if is_dead: flags |= NetFlag.DEAD
+	if _field_active: flags |= NetFlag.FIELD
+	if _charging: flags |= NetFlag.CHARGING
+	if _reverse_timer > 0.0: flags |= NetFlag.REVERSED
+	out.append_array([player_id, global_position.x, global_position.y, velocity.x, velocity.y, facing,
+		flags, _charge, _field_time, gravity_cd, shock_cd, _hit_flash, max_height_px])
+
+
+## Client: take the server's state (data[i] is this player's id).
+func read_net(data: PackedFloat32Array, i: int) -> void:
+	var pos := Vector2(data[i + 1], data[i + 2])
+	var vel := Vector2(data[i + 3], data[i + 4])
+	if vel.y < -400.0 and velocity.y > -100.0:
+		_squash = Vector2(0.65, 1.4)   # just jumped
+	elif vel.y >= 0.0 and velocity.y > 500.0 and absf(vel.y) < 50.0:
+		_squash = Vector2(1.3, 0.75)   # just landed
+	_net_from = global_position
+	_net_to = pos
+	_net_t = 0.0
+	velocity = vel
+	facing = data[i + 5]
+	var flags := int(data[i + 6])
+	_field_active = flags & NetFlag.FIELD != 0
+	_charging = flags & NetFlag.CHARGING != 0
+	_reverse_timer = 1.0 if flags & NetFlag.REVERSED else 0.0
+	_charge = data[i + 7]
+	_field_time = data[i + 8]
+	gravity_cd = data[i + 9]
+	shock_cd = data[i + 10]
+	_hit_flash = data[i + 11]
+	max_height_px = data[i + 12]
+	if flags & NetFlag.DEAD and not is_dead:
+		global_position = pos
+		die()
 
 
 # ── Visuals ──────────────────────────────────

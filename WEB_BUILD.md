@@ -23,7 +23,7 @@ cd ../build/web && python3 -m http.server 8060 --bind 127.0.0.1
 | Setting | Value |
 |---|---|
 | Threads | single-threaded — no COOP/COEP headers needed, works on itch.io, GitHub Pages, any static host |
-| GDExtension | off (none used) |
+| GDExtension | off. The WebRTC add-on in `addons/webrtc` is desktop-only and excluded from web exports (browsers have WebRTC built in) |
 | Renderer | GL Compatibility / WebGL 2 — the project uses it on desktop too, so what you see in the editor is what the browser shows |
 | Loading page | dark themed via `html/head_include` |
 

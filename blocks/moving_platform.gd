@@ -6,7 +6,7 @@ extends Block
 var travel := 120.0      ## half of the horizontal range
 var speed := 1.0         ## radians / second of the sine motion
 var _origin := Vector2.ZERO
-var _t := 0.0
+var _phase := 0.0
 
 
 func _init() -> void:
@@ -17,12 +17,11 @@ func _init() -> void:
 func _ready() -> void:
 	super._ready()
 	_origin = position
-	_t = randf() * TAU
+	_phase = posmod(_seed, 6283) / 1000.0
 
 
-func _physics_process(delta: float) -> void:
-	_t += delta * speed
-	position.x = _origin.x + sin(_t) * travel
+func _physics_process(_delta: float) -> void:
+	position.x = _origin.x + sin(_phase + Block.clock * speed) * travel
 
 
 func _draw_icon() -> void:

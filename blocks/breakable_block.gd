@@ -45,6 +45,7 @@ func break_apart(origin: Vector2, force := 260.0) -> void:
 	Sfx.play("break", -1.0, randf_range(0.85, 1.1))
 	Fx.burst(global_position, Palette.PAPER_DIM, 10, 260.0, 0.5)
 	_track_chain(global_position)
+	net_changed()
 
 	var parent := get_parent()
 	var live := get_tree().get_nodes_in_group("fragments").size()
@@ -84,6 +85,18 @@ func break_apart(origin: Vector2, force := 260.0) -> void:
 			f.linear_velocity = away * force * rng.randf_range(0.5, 1.0) + Vector2(0, rng.randf_range(-90, -20))
 			f.angular_velocity = rng.randf_range(-4, 4)
 	queue_free()
+
+
+func net_state() -> int:
+	return 1 if _broken else 0
+
+
+func apply_net_state(state: int) -> void:
+	if state == 1 and not _broken:
+		_broken = true
+		collision_layer = 0
+		visible = false
+		queue_free()   # the server sends the chunks
 
 
 static func _track_chain(pos: Vector2) -> void:

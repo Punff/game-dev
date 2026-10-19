@@ -26,6 +26,8 @@ const SLOTS := 2
 ## Device ids used by PlayerManager for the two keyboard halves.
 const DEVICE_KB_A := -1
 const DEVICE_KB_B := -2
+## An online client's single local player: both keyboard halves and every pad.
+const DEVICE_ANY := -3
 
 # Binding dictionaries: {"k": physical_keycode, "loc": KeyLocation} | {"b": button} | {"a": axis, "v": -1/1}
 static func _k(code: int, loc: int = KEY_LOCATION_UNSPECIFIED) -> Dictionary: return {"k": code, "loc": loc}
@@ -213,6 +215,10 @@ func reset_bindings(profile: String) -> void:
 ## Builds InputEvents for a profile/action, bound to a specific device.
 func events_for(profile: String, action: String, device_id: int) -> Array[InputEvent]:
 	var out: Array[InputEvent] = []
+	if device_id == DEVICE_ANY:
+		for p in PROFILES:
+			out.append_array(events_for(p, action, -1))
+		return out
 	for b in bindings[profile][action]:
 		var ev := binding_to_event(b, device_id)
 		if ev:
@@ -275,7 +281,7 @@ static func binding_label(b: Dictionary) -> String:
 	if b.has("k"):
 		var code := int(b.k)
 		var name := OS.get_keycode_string(code)
-		if not is_web():
+		if not is_web() and DisplayServer.get_name() != "headless":
 			var mapped := DisplayServer.keyboard_get_keycode_from_physical(code)
 			if mapped != KEY_NONE:
 				name = OS.get_keycode_string(mapped)

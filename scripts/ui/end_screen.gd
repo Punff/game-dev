@@ -44,11 +44,19 @@ func _show(results: Dictionary) -> void:
 	var spacer := Control.new()
 	spacer.custom_minimum_size.y = 6
 	c.add_child(spacer)
-	var buttons := [
-		_menu.add_button("Rematch", func(): MatchManager.start_match()),
-		_menu.add_button("Change Players", func(): MatchManager.to_lobby()),
-		_menu.add_button("Main Menu", func(): MatchManager.to_menu()),
-	]
+	var buttons: Array
+	if Net.is_online():
+		# The server reopens the lobby for everyone after a few seconds.
+		c.add_child(_centered(UiTheme.label("Back to the lobby in a moment...", 20, Palette.TEXT_DIM)))
+		buttons = [_menu.add_button("Leave", func():
+			Net.leave()
+			MatchManager.to_menu())]
+	else:
+		buttons = [
+			_menu.add_button("Rematch", func(): MatchManager.start_match()),
+			_menu.add_button("Change Players", func(): MatchManager.to_lobby()),
+			_menu.add_button("Main Menu", func(): MatchManager.to_menu()),
+		]
 	MenuBase.link_vertical(buttons)
 	visible = true
 	get_tree().paused = true

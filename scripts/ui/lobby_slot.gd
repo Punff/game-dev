@@ -4,6 +4,9 @@ extends PanelContainer
 ## One player card in the lobby.
 
 var _info: PlayerInfo
+## Online lobby: players join from other computers and ready up with the
+## Ready button, so the couch join/ready hints don't apply.
+var online := false
 var _preview := Control.new()
 var _name := UiTheme.title("", 34)
 var _device := UiTheme.label("", 16)
@@ -36,7 +39,7 @@ func show_player(info: PlayerInfo) -> void:
 		_name.add_theme_color_override("font_color", Palette.TEXT_DIM)
 		_device.text = ""
 		_colour.text = ""
-		_state.text = "Join with"
+		_state.text = "Waiting for a player" if online else "Join with"
 		_state.add_theme_color_override("font_color", Palette.TEXT_DIM)
 		var lines: Array[String] = []
 		if PlayerManager.find_by_device(Settings.DEVICE_KB_A) == null:
@@ -44,7 +47,7 @@ func show_player(info: PlayerInfo) -> void:
 		if PlayerManager.find_by_device(Settings.DEVICE_KB_B) == null:
 			lines.append("%s  (Arrows side)" % Settings.action_hint("kb_b", "jump"))
 		lines.append("(A) on a gamepad")
-		_controls.text = "\n".join(lines)
+		_controls.text = "" if online else "\n".join(lines)
 	else:
 		var border := Palette.GOOD if info.is_ready else info.color
 		add_theme_stylebox_override("panel", UiTheme.box(Color(Palette.INK, 0.94), border, 4 if info.is_ready else 2, 0, Vector2(16, 16)))
@@ -52,14 +55,16 @@ func show_player(info: PlayerInfo) -> void:
 		_name.add_theme_color_override("font_color", info.color)
 		_device.text = info.device_label()
 		_colour.text = Palette.PLAYER_COLOR_NAMES[info.color_index] if info.is_ready else "<  %s  >" % Palette.PLAYER_COLOR_NAMES[info.color_index]
-		_state.text = "READY!" if info.is_ready else "Press Jump to ready"
+		_state.text = "READY!" if info.is_ready else ("Not ready" if online else "Press Jump to ready")
 		_state.add_theme_color_override("font_color", Palette.GOOD if info.is_ready else Palette.TEXT_DIM)
-		_controls.text = _control_summary(info)
+		_controls.text = _control_summary(info) if info.is_local() else ""
 	_preview.queue_redraw()
 
 
 func _control_summary(info: PlayerInfo) -> String:
 	var p := Settings.profile_for_device(info.device_id)
+	if info.device_id == Settings.DEVICE_ANY and Input.get_connected_joypads().is_empty():
+		p = "kb_a"   # online player on any device: show the keyboard unless a pad is plugged in
 	var h := func(a): return Settings.action_hint(p, a).replace("L-Stick ", "").replace("D-Pad ", "")
 	if p == "pad":
 		return "Move L-Stick · Jump %s\nCharge %s · Field %s\nShock %s · Aim L-Stick" % [

@@ -13,6 +13,12 @@ var block_id := "static_platform"
 var size := Vector2(160.0, HEIGHT)
 ## Blocks that animate their icon redraw every frame; static ones draw once.
 var animated := false
+## Spawn order within a match; identical on every peer for the same map seed.
+var net_id := 0
+
+## Shared clock for anything that moves on a timer, advanced by the map and
+## kept in step with the server online, so moving blocks match on every screen.
+static var clock := 0.0
 
 var _shape := RectangleShape2D.new()
 var _seed := 0
@@ -60,6 +66,19 @@ func on_player_leave(_player: Player) -> void: pass
 ## Player jumped while standing on this block.
 func on_player_jump(_player: Player, _strength: float) -> void: pass
 func on_shockwave(_dir: Vector2, _origin: Vector2) -> void: pass
+
+
+# ── Online ───────────────────────────────────
+
+## Blocks with gameplay state (broken, vanished...) report it as a small int.
+func net_state() -> int: return 0
+## Client: show the state the server reported.
+func apply_net_state(_state: int) -> void: pass
+
+## Call after net_state() changes so the server tells the clients.
+func net_changed() -> void:
+	if Net.is_server() and Net.game:
+		Net.game.queue_block_state(self)
 
 
 # ── Drawing ──────────────────────────────────
