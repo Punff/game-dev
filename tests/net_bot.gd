@@ -7,6 +7,8 @@ extends Node
 ## Rooms (WebRTC): --room=create --code-file=<f> makes a room and writes its
 ## code to <f>; --room=<f> waits for that file and joins the code in it.
 ## Point at a local signaling service with --signaling=ws://127.0.0.1:8787.
+## --wait-players=N: don't ready up until N players are in (e.g. waiting
+## for a person in a browser to join).
 ## --smash (on the hosting bot) breaks a few blocks one second into the match,
 ## so the guests can check that debris reaches them.
 ## Run a bot without --headless and add --shot=<file.png> to save what it
@@ -27,6 +29,8 @@ func _ready() -> void:
 			bot.hosting = true
 		elif a.begins_with("--room="):
 			bot.room = a.trim_prefix("--room=")
+		elif a.begins_with("--wait-players="):
+			bot.wait_players = int(a.trim_prefix("--wait-players="))
 		elif a == "--smash":
 			bot.smash = true
 		elif a.begins_with("--code-file="):
@@ -37,7 +41,7 @@ func _ready() -> void:
 
 
 class Bot extends Node:
-	const TIMEOUT := 120.0
+	const TIMEOUT := 160.0
 
 	var url := Net.DEFAULT_ADDRESS
 	var tag := "bot"
@@ -46,6 +50,7 @@ class Bot extends Node:
 	var room := ""          ## "create", or a file holding the code to join
 	var code_file := ""
 	var smash := false
+	var wait_players := 0
 	var _game_time := 0.0
 	var _t := 0.0
 	var _joined := false
@@ -91,7 +96,7 @@ class Bot extends Node:
 			f.close()
 			code_file = ""
 		var me := Net.local_info()
-		if me and not _readied and MatchManager.state == MatchManager.State.LOBBY:
+		if me and not _readied and MatchManager.state == MatchManager.State.LOBBY 				and PlayerManager.players.size() >= wait_players:
 			_readied = true
 			_max_peers_seen = maxi(_max_peers_seen, PlayerManager.players.size())
 			# Give other bots a moment to join before everyone is ready.

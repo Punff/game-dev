@@ -11,12 +11,19 @@ Godot engine (`index.wasm`, ~39 MB uncompressed, ~9 MB gzipped).
 
 ## Test locally
 
-Must be served over HTTP (`file://` won't work):
+Must be served over HTTP (`file://` won't work). On Windows, Python's plain
+`http.server` sends `.js` files as `text/plain`, which breaks the audio
+worklets, so register the right type:
 
 ```bash
-cd ../build/web && python3 -m http.server 8060 --bind 127.0.0.1
+cd ../build/web && python -c "import http.server,mimetypes; mimetypes.add_type('application/javascript','.js'); http.server.test(HandlerClass=http.server.SimpleHTTPRequestHandler, port=8060, bind='127.0.0.1')"
 # open http://127.0.0.1:8060/index.html
 ```
+
+Online rooms work from a local build too (they use the live room service).
+To try two players, open the page in two separate browser windows side by
+side: a tab hidden behind another counts as backgrounded, and if it's the
+host the match stalls.
 
 ## Preset settings
 
