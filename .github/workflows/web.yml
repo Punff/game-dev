@@ -1,0 +1,80 @@
+# Builds the web version on every push / PR and uploads it to itch.io from main.
+# Setup (repo Settings -> Secrets and variables -> Actions):
+#   secret   BUTLER_API_KEY  - from https://itch.io/user/settings/api-keys
+#   variable ITCH_USER       - itch.io username
+#   variable ITCH_GAME       - project slug (optional, defaults to ultimate-cakum-pakum)
+# "Run workflow" on the Actions tab builds and uploads from any branch.
+name: Web build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Godot
+        id: godot-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-${{ env.GODOT_VERSION }}
+
+      - name: Download Godot + export templates
+        if: steps.godot-cache.outputs.cache-hit != 'true'
+        run: |
+          base=https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable
+          mkdir -p ~/godot && cd ~/godot
+          curl -sSfL -o godot.zip "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          curl -sSfL -o templates.tpz "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q godot.zip && mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 godot
+          unzip -q templates.tpz && rm godot.zip templates.tpz
+
+      - name: Install Godot
+        run: |
+          echo ~/godot >> "$GITHUB_PATH"
+          mkdir -p ~/.local/share/godot/export_templates
+          ln -sfn ~/godot/templates ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+
+      # --import, not --editor: a first-time editor run drops the Net autoload.
+      - name: Import
+        run: godot --headless --import
+
+      - name: Export
+        run: |
+          mkdir -p build/web
+          godot --headless --export-release "Web" build/web/index.html
+          test -s build/web/index.pck && test -s build/web/index.wasm
+          git diff --exit-code project.godot
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ultimate-cakum-pakum-web
+          path: build/web
+
+      - name: Upload to itch.io
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+          ITCH_USER: ${{ vars.ITCH_USER }}
+          ITCH_GAME: ${{ vars.ITCH_GAME || 'ultimate-cakum-pakum' }}
+        run: |
+          if [ -z "$BUTLER_API_KEY" ] || [ -z "$ITCH_USER" ]; then
+            echo "::warning::BUTLER_API_KEY or ITCH_USER not set - skipping itch.io upload"
+            exit 0
+          fi
+          curl -sSfL -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip -q butler.zip -d butler && chmod +x butler/butler
+          version="$(grep -oP 'config/version="\K[^"]+' project.godot)+${GITHUB_SHA::7}"
+          butler/butler push build/web "$ITCH_USER/$ITCH_GAME:html5" --userversion "$version"
