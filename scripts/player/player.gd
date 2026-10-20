@@ -51,6 +51,9 @@ const JUMP_PUSH_FORCE := 260.0
 
 ## Half width of the arena; past this (plus a margin) you've been knocked out.
 static var world_half_width := 800.0
+## The lava's surface, for the heat glow (INF when there's no lava).
+static var lava_y := INF
+const HEAT_RANGE := 220.0
 const OUT_OF_BOUNDS := 500.0
 
 var info: PlayerInfo
@@ -128,7 +131,7 @@ func _ready() -> void:
 	z_index = 10
 	# Name tag as a Label: shaped once, instead of outlined text redrawn every frame.
 	var tag := Label.new()
-	tag.text = name_tag if name_tag != "" else "P%d" % player_id
+	tag.text = _tag_text()
 	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tag.add_theme_font_override("font", UiTheme.heavy())
 	tag.add_theme_font_size_override("font_size", 16)
@@ -572,6 +575,22 @@ func height_meters() -> int:
 	return int(max_height_px / 50.0)
 
 
+func _tag_text() -> String:
+	return name_tag if name_tag != "" else "P%d" % player_id
+
+
+## A point pulled inside the camera's view, so a knock-out far off the side
+## still gets its callout where people can read it.
+func _on_screen(p: Vector2) -> Vector2:
+	var cam := get_viewport().get_camera_2d()
+	if cam == null:
+		return p
+	var half := get_viewport_rect().size / cam.zoom * 0.5
+	var c := cam.get_screen_center_position()
+	var m := Vector2(minf(160.0, half.x), minf(80.0, half.y))
+	return p.clamp(c - half + m, c + half - m)
+
+
 func gravity_ready() -> float:
 	return 1.0 - gravity_cd / GRAVITY_COOLDOWN
 
@@ -591,7 +610,11 @@ func die() -> void:
 	collision_mask = 0
 	if not puppet:   # online, the server's effects are replayed for us
 		Fx.burst(global_position, color, 22, 480.0, 0.8)
-		Fx.ring(global_position, Palette.PAPER, 140.0, 8.0, 0.5)
+		if global_position.y > lava_y - 30.0:
+			Fx.splash(Vector2(global_position.x, lava_y), color)
+		else:
+			Fx.ring(global_position, Palette.PAPER, 140.0, 8.0, 0.5)
+		Fx.popup(_on_screen(global_position + Vector2(0, -50)), "%s out" % _tag_text(), color, 30)
 		SignalBus.screen_shake_requested.emit(16.0)
 	Sfx.play("death")
 	PlayerManager.rumble(player_id, 1.0, 1.0, 0.45)
@@ -690,6 +713,20 @@ func _draw() -> void:
 			if on:
 				draw_arc(Vector2.ZERO, RADIUS + 12, a0 + 0.06, a0 + TAU / segs - 0.06, 6, Palette.PAPER if _charge >= 1.0 else color, 4.5)
 
+	# Lava heat: a hot glow under the ball and wisps of smoke as it gets close.
+	var heat := clampf(1.0 - (lava_y - global_position.y - RADIUS) / HEAT_RANGE, 0.0, 1.0)
+	if heat > 0.0:
+		var t := Time.get_ticks_msec() * 0.001
+		var pulse := 0.5 + 0.5 * sin(t * (6.0 + 8.0 * heat))
+		draw_circle(Vector2(0, 2), RADIUS + 9.0 + 5.0 * pulse * heat, Color(Palette.RUST, 0.3 * heat))
+		draw_circle(Vector2(0, 2), RADIUS + 4.0 + 3.0 * pulse * heat, Color(Palette.MUSTARD, 0.35 * heat))
+		for k in 3:
+			var f := fposmod(t * 1.1 + k / 3.0, 1.0)
+			var p := Vector2((k - 1) * 9.0 + sin(t * 3.0 + k * 2.0) * 4.0, -RADIUS - 2.0 - f * 34.0)
+			var r := 3.0 + f * 5.0
+			draw_circle(p, r + 1.5, Color(Palette.INK, (1.0 - f) * 0.5 * heat))
+			draw_circle(p, r, Color(Palette.PAPER_DIM, (1.0 - f) * 0.8 * heat))
+
 	# Body: hand-drawn ball whose ink line "boils" ~10 times a second, colour
 	# fill slightly out of register, a visor slash. Squash around the feet.
 	var base := Vector2(0, RADIUS)
@@ -702,6 +739,8 @@ func _draw() -> void:
 	draw_colored_polygon(Block._shifted(ring, Vector2(4, 5)), Color(Palette.INK, 0.4))
 	draw_colored_polygon(Block._shifted(ring, Vector2(-1.5, 1.5)), Palette.PAPER if _hit_flash > 0.0 else color)
 	draw_arc(Vector2(2, 2), RADIUS - 3.5, 0.3, 1.8, 8, color.darkened(0.3), 3.0)
+	if heat > 0.0:
+		draw_arc(Vector2.ZERO, RADIUS - 1.5, 0.2, PI - 0.2, 10, Color(Palette.MUSTARD, heat), 4.0)
 	draw_polyline(ring, Palette.INK, 2.5)
 	var v := Vector2(facing * 3.0, -2.5)
 	draw_line(v + Vector2(-6, 0.5), v + Vector2(6, -0.5), Palette.INK, 5.0)

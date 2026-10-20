@@ -105,6 +105,7 @@ func _exit_tree() -> void:
 	if Net.game == self:
 		Net.game = null
 	PlayerInput.suspended = false
+	Player.lava_y = INF
 
 
 func player_by_id(id: int) -> Player:
@@ -146,6 +147,7 @@ func _physics_process(delta: float) -> void:
 
 	lava.update_lava(delta, lowest, camera)
 	camera.lava_y = lava.surface_y
+	Player.lava_y = lava.surface_y
 	map_gen.update_stream(highest, lava.surface_y)
 	background.set_height(map_gen.height_of(camera.global_position.y))
 
@@ -374,5 +376,6 @@ func _client_tick(_delta: float) -> void:
 	lava.active = false   # its height comes from the server
 	lava.update_lava(0.0, lowest, camera)
 	camera.lava_y = lava.surface_y
+	Player.lava_y = lava.surface_y
 	map_gen.update_stream(highest, lava.surface_y)
 	background.set_height(map_gen.height_of(camera.global_position.y))

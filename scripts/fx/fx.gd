@@ -6,7 +6,7 @@ extends Node2D
 ## Everything is flat ink-and-colour drawn with _draw: no particles,
 ## no shaders, cheap on the web build.
 
-enum Kind { RING, BURST, CONE, TEXT, DUST, LINES }
+enum Kind { RING, BURST, CONE, TEXT, DUST, LINES, SPLASH }
 
 var kind := Kind.RING
 var color := Color.WHITE
@@ -78,6 +78,21 @@ static func dust(pos: Vector2, col: Color, count := 6) -> void:
 	_spawn(fx, pos)
 
 
+## Molten drops thrown up out of the lava, falling back under gravity.
+static func splash(pos: Vector2, col: Color) -> void:
+	if Net.is_server():
+		Net.relay_fx(&"splash", [pos, col])
+	var fx := Fx.new()
+	fx.kind = Kind.SPLASH
+	fx.color = col
+	fx.duration = 0.9
+	for i in (8 if reduced else 16):
+		var a := randf_range(-PI * 0.82, -PI * 0.18)
+		var c: Color = [Palette.MUSTARD, Palette.RUST, col][i % 3]
+		fx._parts.append({"p": Vector2(randf_range(-10, 10), 0), "v": Vector2(cos(a), sin(a)) * randf_range(250, 620), "r": randf_range(3.0, 7.0), "c": c})
+	_spawn(fx, pos)
+
+
 static func cone(pos: Vector2, dir: Vector2, col: Color, r: float) -> void:
 	if Net.is_server():
 		Net.relay_fx(&"cone", [pos, dir, col, r])
@@ -127,7 +142,10 @@ func _process(delta: float) -> void:
 		queue_free()
 		return
 	for p in _parts:
-		if p.has("v"):
+		if kind == Kind.SPLASH:
+			p.p += p.v * delta
+			p.v.y += 1500.0 * delta
+		elif p.has("v"):
 			p.p += p.v * delta
 			p.v *= 1.0 - 4.0 * delta
 			p.rot += delta * 6.0
@@ -151,6 +169,13 @@ func _draw() -> void:
 				draw_rect(Rect2(-s - 1.5, -s - 1.5, s * 2 + 3, s * 2 + 3), Color(Palette.INK, a))
 				draw_rect(Rect2(-s, -s, s * 2, s * 2), Color(color, a))
 			draw_set_transform(Vector2.ZERO)
+		Kind.SPLASH:
+			for p in _parts:
+				var s: float = p.r * (1.0 - _t * 0.5)
+				draw_circle(p.p, s + 2.0, Color(Palette.INK, a))
+				draw_circle(p.p, s, Color(p.c, a))
+			var w := 30.0 + 50.0 * e
+			draw_arc(Vector2.ZERO, w, PI, TAU, 20, Color(Palette.MUSTARD, a), 4.0)
 		Kind.CONE:
 			var base := direction.angle()
 			var spread := PI * 0.3

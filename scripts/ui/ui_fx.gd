@@ -84,7 +84,7 @@ static func _press(b: Button) -> void:
 
 
 static func _retween(c: Control) -> Tween:
-	var old: Tween = c.get_meta("ui_fx_tween", null)
+	var old: Tween = c.get_meta("ui_fx_tween") if c.has_meta("ui_fx_tween") else null
 	if old and old.is_valid():
 		old.kill()
 	var tw := c.create_tween()

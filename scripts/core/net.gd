@@ -523,6 +523,7 @@ func _fx(kind: StringName, a: Array) -> void:
 		&"cone": Fx.cone(a[0], a[1], a[2], a[3])
 		&"speed_lines": Fx.speed_lines(a[0], a[1], a[2])
 		&"popup": Fx.popup(a[0], a[1], a[2], a[3])
+		&"splash": Fx.splash(a[0], a[1])
 
 
 func _on_shake(strength: float) -> void:

@@ -66,6 +66,13 @@ func _do_action(scene: Node, action: String) -> void:
 			await get_tree().create_timer(4.5).timeout
 			for p in scene.players.slice(1):
 				p.die()
+		"lava":
+			# Lava right under the players, then one falls in and one is knocked off.
+			await get_tree().create_timer(4.5).timeout
+			scene.lava.surface_y = scene.players[0].global_position.y + 70.0
+			await get_tree().create_timer(1.0).timeout
+			scene.players[1].global_position.y = scene.lava.surface_y + 2.0
+			scene.players[2].global_position.x = 2000.0
 		"blast":
 			# Shatter nearby concrete and fire a shockwave to preview debris.
 			await get_tree().create_timer(4.2).timeout
