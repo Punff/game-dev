@@ -313,8 +313,8 @@ func apply_state(header: PackedFloat32Array, pdata: PackedFloat32Array, fdata: P
 			p.read_net(pdata, i)
 
 	for i in range(0, fdata.size(), 6):
-		var f: Fragment = _puppet_fragments.get(int(fdata[i]))
-		if f and is_instance_valid(f):
+		var f := _puppet_fragment(int(fdata[i]))
+		if f:
 			f.set_net_target(Vector2(fdata[i + 1], fdata[i + 2]), fdata[i + 3], Vector2(fdata[i + 4], fdata[i + 5]))
 			f.visible = true
 
@@ -330,8 +330,8 @@ func apply_events(spawns: Array, gone: PackedInt32Array, blocks: PackedInt32Arra
 		map_gen.add_child(f)
 		_puppet_fragments[s[0]] = f
 	for id in gone:
-		var f: Fragment = _puppet_fragments.get(id)
-		if f and is_instance_valid(f):
+		var f := _puppet_fragment(id)
+		if f:
 			f.queue_free()
 		_puppet_fragments.erase(id)
 
@@ -339,6 +339,19 @@ func apply_events(spawns: Array, gone: PackedInt32Array, blocks: PackedInt32Arra
 		var b: Block = map_gen.block_by_net_id(blocks[i])
 		if b:
 			b.apply_net_state(blocks[i + 1])
+
+
+## Client: the puppet chunk for a net id, or null. Chunks can be freed
+## locally (map streaming culls them below the lava) before the server says
+## they're gone, so stale entries are dropped here.
+func _puppet_fragment(id: int) -> Fragment:
+	var f: Variant = _puppet_fragments.get(id)
+	if f == null:
+		return null
+	if not is_instance_valid(f):
+		_puppet_fragments.erase(id)
+		return null
+	return f
 
 
 ## Client tick: send our controls, keep the map and camera following the
