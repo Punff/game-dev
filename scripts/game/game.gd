@@ -11,6 +11,7 @@ const COUNTDOWN := 3
 const LAVA_START_BELOW := 650.0
 const LAVA_GRACE := 3.5
 const END_DELAY := 1.4
+const CROWN_SLACK := 40.0
 
 var background := Background.new()
 var world := Node2D.new()
@@ -148,8 +149,28 @@ func _physics_process(delta: float) -> void:
 	lava.update_lava(delta, lowest, camera)
 	camera.lava_y = lava.surface_y
 	Player.lava_y = lava.surface_y
+	_update_crown()
 	map_gen.update_stream(highest, lava.surface_y)
 	background.set_height(map_gen.height_of(camera.global_position.y))
+
+
+## The crown goes to whoever is highest right now (with some slack so it
+## doesn't flicker between two balls side by side). Not in solo play.
+func _update_crown() -> void:
+	var alive := players.filter(func(p): return not p.is_dead)
+	var holder: Player = null
+	var top: Player = null
+	for p in alive:
+		if p.crowned:
+			holder = p
+		if top == null or p.global_position.y < top.global_position.y:
+			top = p
+	if alive.size() < 2 or MatchManager.state != MatchManager.State.PLAYING:
+		top = null
+	elif holder and top.global_position.y > holder.global_position.y - CROWN_SLACK:
+		top = holder
+	for p in players:
+		p.crowned = p == top
 
 
 func _start_match() -> void:
@@ -377,5 +398,6 @@ func _client_tick(_delta: float) -> void:
 	lava.update_lava(0.0, lowest, camera)
 	camera.lava_y = lava.surface_y
 	Player.lava_y = lava.surface_y
+	_update_crown()
 	map_gen.update_stream(highest, lava.surface_y)
 	background.set_height(map_gen.height_of(camera.global_position.y))

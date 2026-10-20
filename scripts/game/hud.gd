@@ -14,6 +14,8 @@ var _arrow_tags := {}    # player_id -> Label in an off-screen arrow
 var _countdown: Label
 var _fps: Label
 var _last_count := -1
+var _callout: Label
+var _alive := -1
 
 
 func _ready() -> void:
@@ -26,6 +28,9 @@ func _ready() -> void:
 	_countdown = _label("", 110, Palette.PAPER, HORIZONTAL_ALIGNMENT_CENTER)
 	_countdown.add_theme_font_override("font", UiTheme.title_font())
 	_countdown.visible = false
+	_callout = _label("", 64, Palette.MUSTARD, HORIZONTAL_ALIGNMENT_CENTER)
+	_callout.add_theme_font_override("font", UiTheme.title_font())
+	_callout.visible = false
 	_fps = _label("", 16, Palette.TEXT_DIM, HORIZONTAL_ALIGNMENT_RIGHT, false)
 
 
@@ -79,10 +84,30 @@ func _process(_delta: float) -> void:
 		else:
 			_countdown.visible = false
 	_last_count = n
+	_place(_callout, Vector2(0, vp.y * 0.22), vp.x)
+	_check_last_two()
 	_fps.visible = Settings.get_value("show_fps")
 	if _fps.visible:
 		_fps.text = "%d FPS" % Engine.get_frames_per_second()
 		_place(_fps, Vector2(vp.x - 110, vp.y - 16), 100)
+
+
+## Down to the last two of a bigger match: a stamped callout.
+func _check_last_two() -> void:
+	var alive := 0
+	for p: Player in game.players:
+		if not p.is_dead:
+			alive += 1
+	if alive == 2 and _alive > 2 and MatchManager.state == MatchManager.State.PLAYING:
+		_callout.text = "Last two!"
+		_callout.visible = true
+		_callout.modulate.a = 1.0
+		UiFx.stamp(_callout, 1.9, -6.0)
+		var tw := _callout.create_tween()
+		tw.tween_interval(1.1)
+		tw.tween_property(_callout, "modulate:a", 0.0, 0.3)
+		tw.tween_callback(func(): _callout.visible = false)
+	_alive = alive
 
 
 func _draw_hud() -> void:

@@ -16,6 +16,9 @@ var active := false
 var _time := 0.0
 var _rect := ColorRect.new()
 var _mat := ShaderMaterial.new()
+var _embers := Node2D.new()
+const EMBERS := 18
+const EMBER_LIFE := 2.2
 
 
 func _ready() -> void:
@@ -24,6 +27,8 @@ func _ready() -> void:
 	_rect.material = _mat
 	_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_rect)
+	_embers.draw.connect(_draw_embers)
+	add_child(_embers)
 
 
 func update_lava(delta: float, lowest_player_y: float, cam: Camera2D) -> void:
@@ -47,3 +52,28 @@ func update_lava(delta: float, lowest_player_y: float, cam: Camera2D) -> void:
 	_mat.set_shader_parameter("rect_size", size)
 	_mat.set_shader_parameter("surface", GLOW)
 	_mat.set_shader_parameter("world_x", _rect.position.x)
+	_ember_left = _rect.position.x
+	_ember_width = size.x
+	_embers.queue_redraw()
+
+
+var _ember_left := 0.0
+var _ember_width := 0.0
+
+
+## Sparks drifting up off the surface. Each one is a pure function of the
+## clock and its index, so there's nothing to simulate or sync.
+func _draw_embers() -> void:
+	var now := Time.get_ticks_msec() * 0.001
+	var n := EMBERS / 2 if Fx.reduced else EMBERS
+	for i in n:
+		var cycle := now / EMBER_LIFE + i * 0.618
+		var gen := floorf(cycle)
+		var f := cycle - gen   # 0..1 through this ember's life
+		var h := fposmod(sin((gen + i * 13.0) * 12.9898) * 43758.5453, 1.0)
+		var x := _ember_left + h * _ember_width + sin(now * 1.7 + i) * 14.0 * f
+		var y := surface_y - 10.0 - f * (90.0 + 120.0 * h)
+		var a := (1.0 - f) * minf(f * 6.0, 1.0)
+		var r := 3.2 * (1.0 - f * 0.6)
+		_embers.draw_rect(Rect2(x - r - 1.0, y - r - 1.0, r * 2.0 + 2.0, r * 2.0 + 2.0), Color(Palette.INK, a * 0.7))
+		_embers.draw_rect(Rect2(x - r, y - r, r * 2.0, r * 2.0), Color(Palette.MUSTARD if i % 3 else Palette.PAPER, a))
