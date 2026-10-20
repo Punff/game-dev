@@ -66,8 +66,6 @@ var name_tag := ""               ## shown over the ball instead of "P<id>"
 var jumps_left := MAX_JUMPS
 var facing := 1.0
 var max_height_px := 0.0
-var crowned := false            ## highest ball right now (set by the game)
-var _crown := 0.0               ## 0..1, pops in and out
 var spawn_y := 0.0
 var last_impact := 0.0           ## downward speed at the moment of the last landing
 
@@ -675,7 +673,6 @@ func read_net(data: PackedFloat32Array, i: int) -> void:
 
 func _update_visuals(delta: float) -> void:
 	_squash = _squash.lerp(Vector2.ONE, minf(12.0 * delta, 1.0))
-	_crown = move_toward(_crown, 1.0 if crowned else 0.0, delta * 5.0)
 	if not Fx.reduced and velocity.length_squared() > 520.0 * 520.0:
 		_trail.append(global_position)
 	elif not _trail.is_empty():
@@ -760,26 +757,9 @@ func _draw() -> void:
 			draw_circle(p, 5.0, Palette.INK)
 			draw_circle(p, 3.0, rc)
 
-	if _crown > 0.0:
-		_draw_crown(Vector2(0, -RADIUS - 46), _crown)
-
 	# Ability pips (the name tag is a Label child)
 	_draw_pip(Vector2(-8, -RADIUS - 9), shock_ready())
 	_draw_pip(Vector2(8, -RADIUS - 9), gravity_ready())
-
-
-## Three-point paper crown, popping up (overshoot) as `t` goes 0 -> 1.
-func _draw_crown(at: Vector2, t: float) -> void:
-	var s := 1.35 * t * (1.0 + 0.35 * sin(t * PI))
-	var bob := sin(Time.get_ticks_msec() * 0.004) * 1.5
-	draw_set_transform(at + Vector2(0, bob + (1.0 - t) * 10.0), sin(Time.get_ticks_msec() * 0.003) * 0.08, Vector2(s, s))
-	var pts := PackedVector2Array([Vector2(-9, 4), Vector2(-10, -6), Vector2(-4.5, -1), Vector2(0, -9),
-		Vector2(4.5, -1), Vector2(10, -6), Vector2(9, 4)])
-	draw_colored_polygon(Block._shifted(pts, Vector2(2, 2)), Color(Palette.INK, 0.5))
-	draw_colored_polygon(pts, Palette.MUSTARD)
-	pts.append(pts[0])
-	draw_polyline(pts, Palette.INK, 2.0)
-	draw_set_transform(Vector2.ZERO)
 
 
 static func _wobbly_circle(r: float, seed_value: int) -> PackedVector2Array:

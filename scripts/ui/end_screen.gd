@@ -21,6 +21,7 @@ func _show(results: Dictionary) -> void:
 	var winner: PlayerInfo = PlayerManager.players.get(results.winner)
 
 	var headline: Label
+	var crown: Crown = null
 	var rows: Array[Control] = []
 	if results.solo:
 		var info: PlayerInfo = standings[0]
@@ -29,6 +30,10 @@ func _show(results: Dictionary) -> void:
 		var sub := "New best" if results.new_record else "Best: %d m" % int(Settings.get_value("best_height"))
 		c.add_child(_centered(UiTheme.label(sub, 24, Palette.GOOD if results.new_record else Palette.TEXT_DIM)))
 	else:
+		if winner:
+			crown = Crown.new(64.0)
+			crown.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			c.add_child(crown)
 		headline = UiTheme.title("P%d wins" % winner.player_id if winner else "draw", 60, winner.color if winner else Palette.PAPER)
 		c.add_child(headline)
 		c.add_child(_centered(UiTheme.label("Survived %s" % _fmt_time(results.time), 20)))
@@ -36,7 +41,7 @@ func _show(results: Dictionary) -> void:
 		list.add_theme_constant_override("separation", 6)
 		var place := 1
 		for info: PlayerInfo in standings:
-			var row := _row(place, info)
+			var row := _row(place, info, winner != null and info == winner)
 			list.add_child(row)
 			rows.append(row)
 			place += 1
@@ -68,6 +73,8 @@ func _show(results: Dictionary) -> void:
 	tw.tween_property(_menu, "modulate:a", 1.0, 0.25)
 	# The winner is stamped on, then the standings unfold top to bottom.
 	UiFx.stamp.call_deferred(headline, 1.7, -7.0, 0.1)
+	if crown:
+		UiFx.stamp.call_deferred(crown, 2.4, 14.0, 0.3)
 	for i in rows.size():
 		UiFx.reveal.call_deferred(rows[i], 0.3 + i * 0.09)
 	# Players are usually still mashing jump (= Space / A = accept) when the
@@ -80,7 +87,7 @@ func _show(results: Dictionary) -> void:
 	_menu.focus_first()
 
 
-func _row(place: int, info: PlayerInfo) -> Control:
+func _row(place: int, info: PlayerInfo, won := false) -> Control:
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 14)
 	var medal := UiTheme.label("#%d" % place, 26, Palette.ACCENT if place == 1 else Palette.TEXT_DIM)
@@ -92,8 +99,15 @@ func _row(place: int, info: PlayerInfo) -> Control:
 	dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	h.add_child(dot)
 	var name := UiTheme.label("P%d" % info.player_id, 26, info.color)
-	name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.add_child(name)
+	if won:
+		var c := Crown.new(30.0)
+		c.bob = false
+		c.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		h.add_child(c)
+	var gap := Control.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	h.add_child(gap)
 	h.add_child(UiTheme.label("%d m" % info.max_height, 26, Palette.TEXT))
 	return h
 
