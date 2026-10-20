@@ -248,8 +248,10 @@ func _test_field_holds_player() -> void:
 	p.setup(PlayerManager.players[id])
 	get_tree().root.add_child(p)
 	p.global_position = Vector2(0, -8000 - 30 - Player.RADIUS - 1)
-	await get_tree().physics_frame
-	await get_tree().physics_frame
+	for i in 30:   # settle onto the block, so the jump is from the ground
+		await get_tree().physics_frame
+		if p.is_on_floor():
+			break
 	var start_y := p.global_position.y
 	# Jump off it (it shatters) and hold the field on the way up.
 	p.controls_enabled = true
