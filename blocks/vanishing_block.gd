@@ -19,7 +19,7 @@ func _init() -> void:
 
 
 func on_player_land(_player: Player) -> void:
-	if _state == S.SOLID:
+	if _state == S.SOLID and not Net.is_client():
 		_state = S.WARNING
 		_timer = WARN_TIME
 		set_process(true)
@@ -34,7 +34,7 @@ func apply_net_state(state: int) -> void:
 	if state == _state:
 		return
 	_state = state as S
-	_timer = WARN_TIME if _state == S.WARNING else GONE_TIME
+	_timer = (WARN_TIME if _state == S.WARNING else GONE_TIME) - Net.lead_time   # we run ahead of the host
 	collision_layer = 0 if _state == S.GONE else 1
 	set_process(true)
 

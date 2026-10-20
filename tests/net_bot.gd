@@ -9,6 +9,9 @@ extends Node
 ## Point at a local signaling service with --signaling=ws://127.0.0.1:8787.
 ## --wait-players=N: don't ready up until N players are in (e.g. waiting
 ## for a person in a browser to join).
+## --calm: only run, jump and charge (no abilities), to measure how well the
+## guest's prediction matches the host without hits muddying it.
+## Faking a bad connection: add --lag=<ms> --jitter=<ms> --loss=<%> (see Net).
 ## --smash (on the hosting bot) breaks a few blocks one second into the match,
 ## so the guests can check that debris reaches them.
 ## Run a bot without --headless and add --shot=<file.png> to save what it
@@ -33,6 +36,8 @@ func _ready() -> void:
 			bot.wait_players = int(a.trim_prefix("--wait-players="))
 		elif a == "--smash":
 			bot.smash = true
+		elif a == "--calm":
+			bot.calm = true
 		elif a.begins_with("--code-file="):
 			bot.code_file = a.trim_prefix("--code-file=")
 		elif a.begins_with("--shot="):
@@ -50,6 +55,7 @@ class Bot extends Node:
 	var room := ""          ## "create", or a file holding the code to join
 	var code_file := ""
 	var smash := false
+	var calm := false
 	var wait_players := 0
 	var _game_time := 0.0
 	var _t := 0.0
@@ -133,6 +139,8 @@ class Bot extends Node:
 			_next_mash = _t + _rng.randf_range(0.1, 0.4)
 			for a in Settings.ACTIONS:
 				var act := PlayerManager.action(me.player_id, a)
+				if calm and a in ["shockwave", "gravity", "down"]:
+					continue
 				if _rng.randf() < (0.6 if a in ["shockwave", "down", "right"] else 0.3):
 					Input.action_press(act)
 				else:
@@ -143,6 +151,9 @@ class Bot extends Node:
 		print("[%s] %s  players seen: %d  ball moved: %d px  most chunks: %d  winner: %s  %s" % [
 			tag, "PASS" if ok else "FAIL", _max_peers_seen, int(_moved), _max_frags,
 			str(_results.get("winner", "?")), why])
+		var s := Net.stats
+		print("[%s] prediction: %d corrections (avg %.1f px, max %.0f px), %d snaps; others past newest snapshot: %d ball-ticks; late frames: %d stalls, %d skips" % [
+			tag, s.corrections, s.error_sum / maxf(s.corrections, 1), s.error_max, s.snaps, s.extrapolated, s.stalls, s.skips])
 		var t0 := Time.get_ticks_msec()
 		Net.leave()
 		print("[%s] left in %d ms" % [tag, Time.get_ticks_msec() - t0])

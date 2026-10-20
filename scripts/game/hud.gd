@@ -89,7 +89,9 @@ func _process(_delta: float) -> void:
 	_fps.visible = Settings.get_value("show_fps")
 	if _fps.visible:
 		_fps.text = "%d FPS" % Engine.get_frames_per_second()
-		_place(_fps, Vector2(vp.x - 110, vp.y - 16), 100)
+		if Net.is_client():
+			_fps.text = "%d ms   %s" % [roundi(Net.lead_time * 1000.0), _fps.text]   # how far ahead of the host we run
+		_place(_fps, Vector2(vp.x - 210, vp.y - 16), 200)
 
 
 ## Down to the last two of a bigger match: a stamped callout.

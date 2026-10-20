@@ -32,12 +32,14 @@ func _ready() -> void:
 
 
 func on_player_jump(player: Player, _strength: float) -> void:
+	if Net.is_client():
+		return   # the host breaks it
 	# Small delay so the jump itself still pushes off solid ground.
 	get_tree().create_timer(BREAK_DELAY).timeout.connect(break_apart.bind(player.global_position, 220.0))
 
 
 func on_player_land(player: Player) -> void:
-	if player.last_impact >= POUND_SPEED:
+	if player.last_impact >= POUND_SPEED and not Net.is_client():
 		break_apart(player.global_position, 380.0)
 		SignalBus.screen_shake_requested.emit(10.0)
 

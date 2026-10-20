@@ -64,14 +64,29 @@ func setup(poly: PackedVector2Array, body: Color, hi: Color) -> void:
 
 
 ## Client side: no physics of its own, just a picture of the server's chunk.
+var _phasing_for_us := false
+
+
 func make_puppet(id: int) -> void:
 	net_id = id
 	puppet = true
 	freeze_mode = RigidBody2D.FREEZE_MODE_KINEMATIC
 	freeze = true
-	collision_layer = 0
+	collision_layer = 1   # solid, so our own (predicted) ball can stand on it
 	collision_mask = 0
 	contact_monitor = false
+
+
+## Guest: let our predicted ball pass through while the host says this chunk
+## is being pulled through it by a gravity field.
+func phase_through(p: Player, on: bool) -> void:
+	if on == _phasing_for_us:
+		return
+	_phasing_for_us = on
+	if on:
+		add_collision_exception_with(p)
+	else:
+		remove_collision_exception_with(p)
 
 
 func set_net_target(pos: Vector2, rot: float, vel: Vector2) -> void:

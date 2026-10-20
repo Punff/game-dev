@@ -98,11 +98,20 @@ var _ring := PackedVector2Array()   # the boiling outline, rebuilt ~10 times a s
 var _ring_boil := -1
 var input := PlayerInput.new()   ## where controls come from: this machine or the network
 
-## Online clients don't simulate: the ball just shows where the server says it is.
+## Online guests don't simulate other players' balls: a puppet just shows
+## where the host says it is, a few ticks in the past so there's always a
+## pair of snapshots to blend between.
 var puppet := false
-var _net_from := Vector2.ZERO
-var _net_to := Vector2.ZERO
-var _net_t := 1.0
+var _snaps: Array = []            # [host tick, position], oldest first
+## Online guest: this machine's own ball, simulated here the moment a key is
+## pressed and quietly corrected by what the host reports.
+var predicted := false
+var _history := {}                # input frame -> {"s": state right after that step, "in": packed frame}
+var _replaying := false
+var _host_report: Array = []      # newest [ack, position, velocity], handled on the next physics tick
+var _vis_offset := Vector2.ZERO   # drawn offset that eases a correction in instead of jumping
+var _tag: Label
+const SNAP_CORRECTION := 600.0    ## further off than this and the ball just jumps to the host's
 
 
 func _init() -> void:
@@ -142,21 +151,22 @@ func _ready() -> void:
 	tag.position = Vector2(-30, -RADIUS - 16 - UiTheme.heavy().get_ascent(16))
 	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(tag)
+	_tag = tag
 
 
 # ── Input helpers ────────────────────────────
 
 func _pressed(a: String) -> bool:
-	return controls_enabled and input.pressed(a)
+	return controls_enabled and input.allowed and input.pressed(a)
 
 func _just_pressed(a: String) -> bool:
-	return controls_enabled and input.just_pressed(a)
+	return controls_enabled and input.allowed and input.just_pressed(a)
 
 func _just_released(a: String) -> bool:
 	return controls_enabled and input.just_released(a)
 
 func aim_vector() -> Vector2:
-	var v := input.move if controls_enabled else Vector2.ZERO
+	var v := input.move if controls_enabled and input.allowed else Vector2.ZERO
 	if _reverse_timer > 0.0:
 		v.x = -v.x
 	return v
@@ -168,11 +178,27 @@ func _physics_process(delta: float) -> void:
 	if is_dead:
 		return
 	if puppet:
-		_net_t = minf(_net_t + delta / Net.snapshot_interval(), 1.0)
-		global_position = _net_from.lerp(_net_to, _net_t)
+		_follow_snapshots()
 		_update_visuals(delta)
 		return
-	input.update()
+	if not _host_report.is_empty():
+		_reconcile(_host_report[0], _host_report[1], _host_report[2])
+		_host_report = []
+	# A guest's ball on the host runs one step per frame of controls received,
+	# so it stays in step with the guest's own simulation of it.
+	for k in input.steps_due():
+		input.update()
+		_step(delta)
+		if is_dead:
+			return
+	if predicted:
+		var frame := input.pack()
+		_history[input.seq] = {"s": _capture(), "in": frame}
+		Net.send_frame(self, frame)
+	_update_visuals(delta)
+
+
+func _step(delta: float) -> void:
 	var on_floor := is_on_floor()
 	gravity_cd = maxf(gravity_cd - delta, 0.0)
 	shock_cd = maxf(shock_cd - delta, 0.0)
@@ -217,7 +243,7 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 
 	# No walls: get shoved far enough off the side and you're out.
-	if absf(global_position.x) > world_half_width + OUT_OF_BOUNDS:
+	if absf(global_position.x) > world_half_width + OUT_OF_BOUNDS and not Net.is_client():
 		die()
 		return
 
@@ -231,7 +257,6 @@ func _physics_process(delta: float) -> void:
 	_was_on_floor = is_on_floor()
 
 	max_height_px = maxf(max_height_px, spawn_y - global_position.y)
-	_update_visuals(delta)
 
 
 func _handle_horizontal(delta: float, on_floor: bool) -> void:
@@ -267,7 +292,9 @@ func _handle_jump(delta: float) -> void:
 		_on_jumped(1.0, grounded_jump)
 		Sfx.play("jump" if grounded_jump else "double_jump", -3.0)
 		if not grounded_jump:
+			_own_fx(true)
 			Fx.ring(global_position + Vector2(0, RADIUS), color, 46.0, 4.0, 0.25)
+			_own_fx(false)
 
 
 
@@ -289,10 +316,12 @@ func _handle_charge(delta: float, on_floor: bool) -> void:
 		_squash = Vector2(0.6, 1.5)
 		_on_jumped(1.0 + ratio, on_floor)
 		Sfx.play("charge_jump", -2.0, 0.85 + ratio * 0.3)
+		_own_fx(true)
 		Fx.ring(global_position + Vector2(0, RADIUS), color, 60.0 + ratio * 70.0, 6.0, 0.35)
 		Fx.speed_lines(global_position, Vector2.DOWN, color)
+		_own_fx(false)
 		if ratio > 0.9:
-			PlayerManager.rumble(player_id, 0.3, 0.2, 0.12)
+			_rumble(0.3, 0.2, 0.12)
 
 
 func _handle_abilities(delta: float) -> void:
@@ -301,7 +330,7 @@ func _handle_abilities(delta: float) -> void:
 		_field_time += delta
 		if not _pressed("gravity") or _field_time >= GRAVITY_DURATION:
 			_end_field(true)
-		else:
+		elif not Net.is_client():   # the host moves the chunks
 			_update_field(delta)
 	elif _pressed("gravity") and gravity_cd <= 0.0 and _just_pressed("gravity"):
 		_field_active = true
@@ -320,7 +349,7 @@ func _end_field(allow_throw: bool) -> void:
 	if aim.length_squared() <= 0.2 and _last_aim_time > 0.0:
 		aim = _last_aim   # let go of the aim a hair before the field: still a throw
 	var thrown := 0
-	if allow_throw and aim.length_squared() > 0.2:
+	if allow_throw and aim.length_squared() > 0.2 and not Net.is_client():
 		for f in _held:
 			if is_instance_valid(f):
 				f.throw(self, aim.normalized().rotated(randf_range(-0.12, 0.12)) * THROW_SPEED * randf_range(0.85, 1.1) + velocity * 0.3)
@@ -332,7 +361,7 @@ func _end_field(allow_throw: bool) -> void:
 	if thrown > 0:
 		Sfx.play("throw", -2.0)
 		Fx.speed_lines(global_position, aim.normalized(), color)
-		SignalBus.screen_shake_requested.emit(3.0 + thrown)
+		_shake(3.0 + thrown)
 
 
 func _update_field(delta: float) -> void:
@@ -423,16 +452,20 @@ func _fire_shockwave() -> void:
 	var dir := aim_vector()
 	dir = Vector2(facing, 0.0) if dir.length_squared() < 0.1 else dir.normalized()
 	var origin := global_position
+	_own_fx(true)
 	Fx.cone(origin, dir, color, SHOCK_RANGE)
+	_shake(8.0)
+	_own_fx(false)
 	Sfx.play("shockwave", 0.0)
-	SignalBus.screen_shake_requested.emit(8.0)
-	PlayerManager.rumble(player_id, 0.4, 0.3, 0.15)
+	_rumble(0.4, 0.3, 0.15)
 
 	# Recoil: firing downwards gives a rocket-jump.
 	velocity -= dir * SHOCK_RECOIL
 	if dir.y > 0.5:
 		velocity.y = minf(velocity.y, -SHOCK_RECOIL * 1.4)
 		_rocket_time = ROCKET_NO_FASTFALL
+	if Net.is_client():
+		return   # what it hits is up to the host
 
 	var targets: Array = get_tree().get_nodes_in_group("player")
 	targets.append_array(get_tree().get_nodes_in_group("blocks"))
@@ -478,12 +511,17 @@ func _take_hit(impulse: Vector2) -> void:
 	_charging = false
 	_squash = Vector2(1.35, 0.7)
 	_hit_flash = 0.15
-	PlayerManager.rumble(player_id, 0.6, 0.6, 0.25)
+	_rumble(0.6, 0.6, 0.25)
 
 
 func _on_jumped(strength: float, from_ground: bool) -> void:
 	if from_ground:
+		_own_fx(true)
 		Fx.dust(global_position + Vector2(0, RADIUS), Palette.PAPER_DIM)
+		_own_fx(false)
+	if Net.is_client():
+		return   # shoving people and blocks is up to the host
+	if from_ground:
 		for b in _floor_blocks:
 			if is_instance_valid(b):
 				b.on_player_jump(self, strength)
@@ -508,11 +546,30 @@ func _on_jumped(strength: float, from_ground: bool) -> void:
 func _on_landed() -> void:
 	var impact := clampf(last_impact / 1100.0, 0.0, 1.0)
 	_squash = Vector2(1.0 + 0.4 * (0.5 + impact), 1.0 - 0.4 * (0.5 + impact) * 0.9)
+	_own_fx(true)
 	if impact > 0.25:
 		Fx.dust(global_position + Vector2(0, RADIUS), Palette.PAPER_DIM, 8)
 		Sfx.play("land", -8.0 + impact * 6.0)
 	if last_impact > 1000.0:
-		SignalBus.screen_shake_requested.emit(5.0)
+		_shake(5.0)
+	_own_fx(false)
+
+
+## The guest driving this ball already showed its own jumps, landings and
+## blasts (it predicts them), so the host marks those effects as theirs and
+## they aren't drawn twice. Everything else it causes is shown to everyone.
+func _shake(strength: float) -> void:
+	if not _replaying:
+		SignalBus.screen_shake_requested.emit(strength)
+
+
+func _rumble(weak: float, strong: float, duration: float) -> void:
+	if not _replaying:
+		PlayerManager.rumble(player_id, weak, strong, duration)
+
+
+func _own_fx(on: bool) -> void:
+	Fx.owner_peer = info.peer_id if on and info and Net.is_server() and not input.is_local else 0
 
 
 func _update_floor_blocks(delta: float) -> void:
@@ -556,7 +613,7 @@ func launch(vy: float) -> void:
 	jumps_left = MAX_JUMPS - 1
 	_coyote = 0.0
 	_squash = Vector2(0.6, 1.5)
-	PlayerManager.rumble(player_id, 0.2, 0.0, 0.1)
+	_rumble(0.2, 0.0, 0.1)
 
 
 func reverse_controls(duration: float) -> void:
@@ -608,16 +665,16 @@ func die() -> void:
 	velocity = Vector2.ZERO
 	collision_layer = 0
 	collision_mask = 0
-	if not puppet:   # online, the server's effects are replayed for us
+	if not Net.is_client():   # online, the host's effects are replayed for us
 		Fx.burst(global_position, color, 22, 480.0, 0.8)
 		if global_position.y > lava_y - 30.0:
 			Fx.splash(Vector2(global_position.x, lava_y), color)
 		else:
 			Fx.ring(global_position, Palette.PAPER, 140.0, 8.0, 0.5)
 		Fx.popup(_on_screen(global_position + Vector2(0, -50)), "%s out" % _tag_text(), color, 30)
-		SignalBus.screen_shake_requested.emit(16.0)
+		_shake(16.0)
 	Sfx.play("death")
-	PlayerManager.rumble(player_id, 1.0, 1.0, 0.45)
+	_rumble(1.0, 1.0, 0.45)
 	died.emit(player_id)
 	SignalBus.player_died.emit(player_id)
 	visible = false
@@ -626,7 +683,7 @@ func die() -> void:
 
 # ── Network state ────────────────────────────
 
-const NET_STRIDE := 13
+const NET_STRIDE := 14
 enum NetFlag { DEAD = 1, FIELD = 2, CHARGING = 4, REVERSED = 8 }
 
 
@@ -638,23 +695,36 @@ func write_net(out: PackedFloat32Array) -> void:
 	if _charging: flags |= NetFlag.CHARGING
 	if _reverse_timer > 0.0: flags |= NetFlag.REVERSED
 	out.append_array([player_id, global_position.x, global_position.y, velocity.x, velocity.y, facing,
-		flags, _charge, _field_time, gravity_cd, shock_cd, _hit_flash, max_height_px])
+		flags, _charge, _field_time, gravity_cd, shock_cd, _hit_flash, max_height_px, input.seq])
 
 
 ## Client: take the server's state (data[i] is this player's id).
-func read_net(data: PackedFloat32Array, i: int) -> void:
+func read_net(data: PackedFloat32Array, i: int, tick: int) -> void:
 	var pos := Vector2(data[i + 1], data[i + 2])
 	var vel := Vector2(data[i + 3], data[i + 4])
+	var flags := int(data[i + 6])
+	_hit_flash = maxf(_hit_flash, data[i + 11])
+	max_height_px = maxf(max_height_px, data[i + 12])
+	if flags & NetFlag.DEAD and not is_dead:
+		global_position = pos
+		die()
+		return
+	if predicted:
+		# Rewinding has to happen inside a physics tick (move_and_slide
+		# takes its time step from there), so it waits for the next one.
+		var ack := int(data[i + 13])
+		if _host_report.is_empty() or ack >= _host_report[0]:
+			_host_report = [ack, pos, vel]
+		return
 	if vel.y < -400.0 and velocity.y > -100.0:
 		_squash = Vector2(0.65, 1.4)   # just jumped
 	elif vel.y >= 0.0 and velocity.y > 500.0 and absf(vel.y) < 50.0:
 		_squash = Vector2(1.3, 0.75)   # just landed
-	_net_from = global_position
-	_net_to = pos
-	_net_t = 0.0
 	velocity = vel
+	_snaps.append([tick, pos])
+	if _snaps.size() > 12:
+		_snaps.pop_front()
 	facing = data[i + 5]
-	var flags := int(data[i + 6])
 	_field_active = flags & NetFlag.FIELD != 0
 	_charging = flags & NetFlag.CHARGING != 0
 	_reverse_timer = 1.0 if flags & NetFlag.REVERSED else 0.0
@@ -662,17 +732,130 @@ func read_net(data: PackedFloat32Array, i: int) -> void:
 	_field_time = data[i + 8]
 	gravity_cd = data[i + 9]
 	shock_cd = data[i + 10]
-	_hit_flash = data[i + 11]
-	max_height_px = data[i + 12]
-	if flags & NetFlag.DEAD and not is_dead:
-		global_position = pos
-		die()
+
+
+## Puppet: blend between the two snapshots around the guest's render clock
+## (a few ticks behind the newest), so jitter in arrival doesn't show.
+func _follow_snapshots() -> void:
+	if _snaps.is_empty():
+		return
+	var t := Net.render_tick
+	var a: Array = _snaps[0]
+	if t <= a[0]:
+		global_position = a[1]
+		return
+	for k in range(1, _snaps.size()):
+		var b: Array = _snaps[k]
+		if b[0] >= t:
+			global_position = (a[1] as Vector2).lerp(b[1], (t - a[0]) / maxf(b[0] - a[0], 1.0))
+			return
+		a = b
+	# Past the newest snapshot (one is late): carry on a moment at its speed.
+	Net.stats.extrapolated += 1
+	global_position = (a[1] as Vector2) + velocity * minf(t - a[0], 6.0) / Engine.physics_ticks_per_second
+
+
+## Predicted ball: the host has used our controls up to frame `ack` and put
+## the ball at `pos` going `vel`. If that's not where we had it after the
+## same frame (a hit, a shove, a chunk that wasn't where we thought), rewind
+## to the host's version of that moment and play our frames since then again,
+## silently. The drawing eases from where the ball was to where it now is.
+func _reconcile(ack: int, pos: Vector2, vel: Vector2) -> void:
+	for n in _history.keys():
+		if n < ack:
+			_history.erase(n)
+	if not _history.has(ack):
+		# Nothing to compare with (the match just started): only fix a big gap.
+		if global_position.distance_to(pos) > SNAP_CORRECTION * 2.0:
+			_snap_to(pos, vel)
+		return
+	Net.note_lead(input.seq - ack)
+	# (The same frame can be reported twice while the host waits for a late
+	# one, so the entry stays, corrected, until a newer frame is used.)
+	var then: Dictionary = _history[ack]
+	var err: Vector2 = pos - then.s[0]
+	if err.length_squared() < 0.04 and (vel - then.s[1]).length_squared() < 1.0:
+		return
+	if err.length() > SNAP_CORRECTION:
+		_snap_to(pos, vel)
+		return
+	Net.stats.corrections += 1
+	Net.stats.error_sum += err.length()
+	Net.stats.error_max = maxf(Net.stats.error_max, err.length())
+	var shown := global_position
+	var now_frame: int = input.seq
+	then.s[0] = pos
+	then.s[1] = vel
+	_restore(then.s)
+	_replaying = true
+	Fx.muted = true
+	Sfx.muted = true
+	var prev: int = then.in
+	var dt := 1.0 / Engine.physics_ticks_per_second
+	for n in range(ack + 1, now_frame + 1):
+		var h: Dictionary = _history.get(n, {})
+		if h.is_empty():
+			break
+		input.load_frame(h.in, prev)
+		prev = h.in
+		_step(dt)
+		h.s = _capture()
+	_replaying = false
+	Fx.muted = false
+	Sfx.muted = false
+	_vis_offset += shown - global_position
+
+
+## Everything a step of movement depends on, to rewind to (see _reconcile).
+func _capture() -> Array:
+	return [global_position, velocity, is_on_floor(), jumps_left, _coyote, _jump_buffer, _was_on_floor,
+		_reverse_timer, _charging, _charge, gravity_cd, shock_cd, _field_time, _field_active,
+		_rocket_time, _last_aim, _last_aim_time, facing]
+
+
+func _restore(st: Array) -> void:
+	global_position = st[0]
+	# CharacterBody2D keeps whether it's on the floor from its last move:
+	# nudge it down (or up) a hair so that matches the moment we rewind to.
+	velocity = Vector2(0, 30) if st[2] else Vector2(0, -30)
+	move_and_slide()
+	global_position = st[0]
+	velocity = st[1]
+	jumps_left = st[3]
+	_coyote = st[4]
+	_jump_buffer = st[5]
+	_was_on_floor = st[6]
+	_reverse_timer = st[7]
+	_charging = st[8]
+	_charge = st[9]
+	gravity_cd = st[10]
+	shock_cd = st[11]
+	_field_time = st[12]
+	_field_active = st[13]
+	_rocket_time = st[14]
+	_last_aim = st[15]
+	_last_aim_time = st[16]
+	facing = st[17]
+
+
+func _snap_to(pos: Vector2, vel: Vector2) -> void:
+	if _history.size() > 0:
+		Net.stats.snaps += 1
+	global_position = pos
+	velocity = vel
+	_vis_offset = Vector2.ZERO
+	_history.clear()
+	reset_physics_interpolation()
 
 
 # ── Visuals ──────────────────────────────────
 
 func _update_visuals(delta: float) -> void:
 	_squash = _squash.lerp(Vector2.ONE, minf(12.0 * delta, 1.0))
+	_vis_offset = _vis_offset.lerp(Vector2.ZERO, minf(10.0 * delta, 1.0))
+	if _tag:
+		_tag.position.x = -30.0 + _vis_offset.x
+		_tag.position.y = -RADIUS - 16 - UiTheme.heavy().get_ascent(16) + _vis_offset.y
 	if not Fx.reduced and velocity.length_squared() > 520.0 * 520.0:
 		_trail.append(global_position)
 	elif not _trail.is_empty():
@@ -683,6 +866,7 @@ func _update_visuals(delta: float) -> void:
 
 
 func _draw() -> void:
+	draw_set_transform(_vis_offset)
 	# Comic speed lines trailing behind fast movement.
 	if _trail.size() >= 2:
 		var tail := to_local(_trail[0])
@@ -730,7 +914,7 @@ func _draw() -> void:
 	# Body: hand-drawn ball whose ink line "boils" ~10 times a second, colour
 	# fill slightly out of register, a visor slash. Squash around the feet.
 	var base := Vector2(0, RADIUS)
-	draw_set_transform(base - base * _squash, 0.0, _squash)
+	draw_set_transform(_vis_offset + base - base * _squash, 0.0, _squash)
 	var boil := int(Time.get_ticks_msec() / 100) + player_id * 31
 	if boil != _ring_boil:
 		_ring_boil = boil
@@ -745,7 +929,7 @@ func _draw() -> void:
 	var v := Vector2(facing * 3.0, -2.5)
 	draw_line(v + Vector2(-6, 0.5), v + Vector2(6, -0.5), Palette.INK, 5.0)
 	draw_line(v + Vector2(-4, 0.5), v + Vector2(4, -0.5), Palette.PAPER, 2.0)
-	draw_set_transform(Vector2.ZERO)
+	draw_set_transform(_vis_offset)
 
 	# Reversed-controls warning: orbiting ink marks.
 	if _reverse_timer > 0.0:

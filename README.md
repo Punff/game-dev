@@ -33,8 +33,25 @@ left/right to change colour.
 
 ## Online
 
-The server runs the whole match and streams snapshots; clients send their controls and
-draw what they get. Each computer brings one player (either keyboard half or any gamepad).
+The host runs the real match; each computer brings one player (either keyboard half or
+any gamepad).
+
+How it stays responsive for guests:
+
+- **Your own ball reacts instantly.** A guest's game simulates its own ball the moment a
+  key is pressed, numbering every tick of controls (a *frame*) and sending the last six
+  each tick so a lost packet costs nothing.
+- **The host stays in charge.** It plays each guest's frames in order, one step per frame
+  (waiting a moment for a late one), and every snapshot says which frame it has used up
+  to. The guest compares that with where it had its ball after the same frame; if they
+  differ (a hit, a shove, debris that wasn't where it looked), it rewinds to the host's
+  version, replays its frames since then silently, and eases the drawing over.
+- **Everything else is shown as the host has it**: players at 60 Hz, drawn a few ticks in
+  the past so there's always a pair of snapshots to blend between; debris at 30 Hz.
+  Blocks only break and vanish when the host says so. A guest's world clock (moving
+  platforms, vanishing blocks) runs ahead by its lead, so the predicted ball meets things
+  where the host will have them.
+- With *Show FPS* on, guests also see that lead in ms (about one round trip).
 
 - **Rooms** (browsers anywhere, the itch.io build): Online → Create room shows a code;
   friends pick Join room and type it. The creator's game hosts the match, so their tab
@@ -50,8 +67,9 @@ draw what they get. Each computer brings one player (either keyboard half or any
 godot --headless --path . -- --server --port=7777
 ```
 
-Not there yet: client-side prediction (guests see their own ball react after a round
-trip), sound on clients, and rejoining a match in progress.
+Not there yet: sounds other players cause (guests hear only their own ball), a TURN relay,
+and rejoining a match in progress. Debris a guest holds with a gravity field still moves
+as the host has it, so it trails a little behind their ball on a slow connection.
 
 Smoke tests (bots join, play a whole match and check the results come back):
 
@@ -60,6 +78,11 @@ godot --headless --path . res://tests/net_bot.tscn -- --name=bot1
 godot --headless --path . res://tests/net_bot.tscn -- --room=create --code-file=room.txt --signaling=ws://127.0.0.1:8787
 godot --headless --path . res://tests/net_bot.tscn -- --room=room.txt --signaling=ws://127.0.0.1:8787
 ```
+
+To try a bad connection on one machine, give every process `--lag=80 --jitter=30 --loss=5`
+(ms, ms, % of unreliable packets dropped). Bots print how often their ball had to be
+corrected; add `--calm` (no abilities) to measure prediction alone - it should be close
+to zero.
 
 ## Project layout
 

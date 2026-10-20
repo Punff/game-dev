@@ -14,6 +14,8 @@ var _streams: Dictionary = {}
 var _players: Array[AudioStreamPlayer] = []
 var _next := 0
 var _last_played: Dictionary = {}
+## Silences everything for a moment (a guest replaying its own ball's frames).
+var muted := false
 
 
 func _ready() -> void:
@@ -36,6 +38,8 @@ func has_sounds() -> bool:
 
 
 func play(name: String, volume_db := 0.0, pitch := 1.0, pitch_jitter := 0.04) -> void:
+	if muted:
+		return
 	var stream: AudioStream = _streams.get(name)
 	if stream == null:
 		return

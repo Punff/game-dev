@@ -23,11 +23,16 @@ var _parts: Array = []
 
 ## Where effects get spawned. Set by the game scene.
 static var layer: Node2D
+## Host: the guest (peer id) an effect belongs to, if that guest already drew
+## it themselves (see Player._own_fx); 0 for everyone's.
+static var owner_peer := 0
+## No effects at all for a moment (a guest replaying its own ball's frames).
+static var muted := false
 static var reduced := false
 
 
 static func _spawn(fx: Fx, pos: Vector2) -> Fx:
-	if layer == null or not is_instance_valid(layer):
+	if muted or layer == null or not is_instance_valid(layer):
 		fx.free()
 		return null
 	layer.add_child(fx)

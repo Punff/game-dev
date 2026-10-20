@@ -20,6 +20,15 @@ func on_player_stand(player: Player, _delta: float) -> void:
 
 func on_shockwave(_dir: Vector2, _origin: Vector2) -> void:
 	direction = -direction
+	net_changed()
+
+
+func net_state() -> int:
+	return 1 if direction < 0.0 else 0
+
+
+func apply_net_state(state: int) -> void:
+	direction = -1.0 if state == 1 else 1.0
 
 
 func _draw_icon() -> void:

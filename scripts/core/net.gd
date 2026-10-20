@@ -26,9 +26,10 @@ const DEFAULT_ADDRESS := "ws://127.0.0.1:7777"
 const SIGNALING_URL := "wss://cakum-pakum-signaling.cakum-pakum-signaling.workers.dev"
 const PROTOCOL := 1
 const ONLINE_LOBBY := "res://scenes/online_lobby.tscn"
-const SNAPSHOT_EVERY := 2          ## physics ticks between snapshots (30 Hz at 60)
+const FRAGMENTS_EVERY := 2         ## physics ticks between debris updates (30 Hz at 60); players go every tick
+const FRAMES_PER_PACKET := 6       ## each input packet repeats the last few frames, in case some go missing
+const INTERP_TICKS := 3.0          ## guests draw other players this many ticks behind the newest snapshot
 const RETURN_TO_LOBBY := 6.0       ## seconds the results stay up before the lobby reopens
-const INPUT_KEEPALIVE := 0.5
 const ROOM_CONNECT_TIMEOUT := 15.0  ## seconds a guest waits for the direct link to the host
 const NO_DIRECT := "Couldn't connect to the host directly. Try another network, or let someone else host."
 
@@ -45,10 +46,31 @@ var _peer: MultiplayerPeer
 var _room: RoomLink
 var _tick := 0
 var _next_id := 0
-var _sent_input := {}              # player_id -> [buttons, move, time sent]
+var _frames := {}                  # player_id -> recent packed input frames (guest)
+## Guest: the host tick other players are drawn at (see Player._follow_snapshots).
+var render_tick := 0.0
+## Guest: how far (s) our predicted ball runs ahead of the newest snapshot -
+## the frames we've played that the host hasn't used yet. Our copy of the
+## world (moving platforms, vanishing blocks) runs this far ahead too, so the
+## ball meets things where the host will have them when it plays those frames.
+var lead_time := 0.0
+var _newest_tick := -1
 var _gone_peers: Array[int] = []   # disconnected mid-match, pruned on return to the lobby
 var _blocks_broken := 0            # per match, for the server log
 var _room_wait := 0.0              # guest: time spent connecting to the host
+
+## Testing a bad connection on one machine: `-- --lag=80 --jitter=30 --loss=5`
+## holds back this game's in-match traffic by lag + up to jitter ms each way
+## and drops loss % of the unreliable packets.
+var _lag := 0.0
+var _jitter := 0.0
+var _loss := 0.0
+var _held_back: Array = []         # [send time, call]
+var _last_reliable_at := 0.0
+## Prediction health, for the bots: how often and how far our ball had to be
+## corrected, how often another ball ran past its newest snapshot, and (host)
+## how often a guest's frame was late.
+var stats := {"corrections": 0, "snaps": 0, "error_sum": 0.0, "error_max": 0.0, "extrapolated": 0, "stalls": 0, "skips": 0}
 
 
 func _ready() -> void:
@@ -66,6 +88,12 @@ func _ready() -> void:
 	for a in args:
 		if a.begins_with("--signaling="):
 			signaling_url = a.trim_prefix("--signaling=")
+		elif a.begins_with("--lag="):
+			_lag = float(a.trim_prefix("--lag=")) / 1000.0
+		elif a.begins_with("--jitter="):
+			_jitter = float(a.trim_prefix("--jitter=")) / 1000.0
+		elif a.begins_with("--loss="):
+			_loss = float(a.trim_prefix("--loss=")) / 100.0
 	if Settings.is_web():
 		var from_page: Variant = JavaScriptBridge.eval("new URLSearchParams(location.search).get('signaling') || ''")
 		if from_page is String and from_page != "":
@@ -199,7 +227,9 @@ func leave() -> void:
 	multiplayer.multiplayer_peer = null
 	mode = Mode.OFFLINE
 	dedicated = false
-	_sent_input.clear()
+	_frames.clear()
+	_newest_tick = -1
+	_held_back.clear()
 	_gone_peers.clear()
 	PlayerManager.clear()   # the online roster means nothing offline
 	roster_changed.emit()
@@ -380,6 +410,9 @@ func _start_match(seed_value: int) -> void:
 	_blocks_broken = 0
 	_tick = 0
 	_next_id = 0
+	_frames.clear()
+	_newest_tick = -1
+	lead_time = 0.0
 	MatchManager.start_match()
 
 
@@ -441,31 +474,85 @@ func next_id() -> int:
 	return _next_id
 
 
-## Client: forward one local player's controls when they change.
-func send_input(player_id: int, buttons: int, move: Vector2) -> void:
-	move = (move * 64.0).round() / 64.0
-	var now := Time.get_ticks_msec() / 1000.0
-	var last: Array = _sent_input.get(player_id, [-1, Vector2.INF, 0.0])
-	if last[0] == buttons and last[1] == move and now - last[2] < INPUT_KEEPALIVE:
-		return
-	_sent_input[player_id] = [buttons, move, now]
-	_recv_input.rpc_id(1, player_id, buttons, move)
+## Guest: send the frame of controls our predicted ball just used, with the
+## few before it. Every tick, unreliable: a lost packet is covered by the next.
+func send_frame(p: Player, frame: int) -> void:
+	var list: PackedInt32Array = _frames.get(p.player_id, PackedInt32Array())
+	list.append(frame)
+	if list.size() > FRAMES_PER_PACKET:
+		list = list.slice(list.size() - FRAMES_PER_PACKET)
+	_frames[p.player_id] = list
+	var id := p.player_id
+	var last := p.input.seq
+	var out := list.duplicate()   # (a held-back send must not see later frames)
+	_send(false, func(): _recv_frames.rpc_id(1, id, last, out))
 
 
-# Reliable: controls are only sent when they change, so none may go missing.
-@rpc("any_peer", "reliable")
-func _recv_input(player_id: int, buttons: int, move: Vector2) -> void:
+@rpc("any_peer", "unreliable_ordered")
+func _recv_frames(player_id: int, last: int, frames: PackedInt32Array) -> void:
 	if not is_server() or game == null:
 		return
 	var info: PlayerInfo = PlayerManager.players.get(player_id)
 	if info == null or info.peer_id != multiplayer.get_remote_sender_id():
 		return   # not theirs to drive
 	var p: Player = game.player_by_id(player_id)
-	if p:
-		p.input.push_remote(buttons, move)
+	if p and frames.size() <= FRAMES_PER_PACKET:
+		p.input.push_frames(last, frames)
+
+
+## Guest: a snapshot from host tick `tick` arrived; keep the render clock a
+## few ticks behind the newest one, drifting gently rather than jumping.
+func note_snapshot_tick(tick: int) -> void:
+	if tick <= _newest_tick:
+		return
+	_newest_tick = tick
+	var want := tick - INTERP_TICKS
+	if absf(render_tick - want) > 30.0:
+		render_tick = want
+	else:
+		render_tick = lerpf(render_tick, want, 0.1)
+
+
+## Guest: our ball is `frames` frames ahead of what the host has used.
+func note_lead(frames: int) -> void:
+	var t := float(frames) / Engine.physics_ticks_per_second
+	lead_time = t if absf(t - lead_time) > 0.25 else lerpf(lead_time, t, 0.05)
+
+
+## Guest: advance the render clock one tick (called every physics tick).
+func advance_render_tick() -> void:
+	render_tick += 1.0
+
+
+## Send now, or later when faking a bad connection (see _lag).
+func _send(reliable: bool, call: Callable) -> void:
+	if _lag <= 0.0 and _jitter <= 0.0 and _loss <= 0.0:
+		call.call()
+		return
+	if not reliable and randf() < _loss:
+		return
+	var at := Time.get_ticks_msec() / 1000.0 + _lag + randf() * _jitter
+	if reliable:
+		at = maxf(at, _last_reliable_at)   # reliable traffic stays in order
+		_last_reliable_at = at
+	_held_back.append([at, call])
+
+
+func _release_held_back() -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	var keep: Array = []
+	for item in _held_back:
+		if item[0] <= now:
+			if _peer:
+				item[1].call()
+		else:
+			keep.append(item)
+	_held_back = keep
 
 
 func _process(delta: float) -> void:
+	if not _held_back.is_empty():
+		_release_held_back()
 	if _room:
 		_room.poll()
 	# Without a TURN relay some networks can't link up directly; say so
@@ -482,14 +569,13 @@ func _physics_process(_delta: float) -> void:
 	if MatchManager.state == MatchManager.State.LOBBY:
 		return
 	_tick += 1
-	if _tick % SNAPSHOT_EVERY == 0:
-		var snap: Array = game.build_snapshot()
-		# Things that happen once (chunks appearing / vanishing, blocks
-		# breaking) must arrive; positions are fine to drop, the next
-		# snapshot replaces them.
-		if not (snap[3].is_empty() and snap[4].is_empty() and snap[5].is_empty()):
-			_events.rpc(snap[3], snap[4], snap[5])
-		_snapshot.rpc(snap[0], snap[1], snap[2])
+	var snap: Array = game.build_snapshot(_tick, _tick % FRAGMENTS_EVERY == 0)
+	# Things that happen once (chunks appearing / vanishing, blocks
+	# breaking) must arrive; positions are fine to drop, the next
+	# snapshot replaces them.
+	if not (snap[3].is_empty() and snap[4].is_empty() and snap[5].is_empty()):
+		_send(true, func(): _events.rpc(snap[3], snap[4], snap[5]))
+	_send(false, func(): _snapshot.rpc(snap[0], snap[1], snap[2]))
 
 
 @rpc("authority", "reliable")
@@ -505,17 +591,21 @@ func _snapshot(header: PackedFloat32Array, players: PackedFloat32Array, frags: P
 
 
 static func snapshot_interval() -> float:
-	return float(SNAPSHOT_EVERY) / Engine.physics_ticks_per_second
+	return float(FRAGMENTS_EVERY) / Engine.physics_ticks_per_second
 
 
 ## Server: replay a visual effect on every client (see Fx).
+## Effects a guest already drew for itself (Fx.owner_peer) are skipped there.
 func relay_fx(kind: StringName, args: Array) -> void:
 	if game:
-		_fx.rpc(kind, args)
+		var mine := Fx.owner_peer
+		_send(false, func(): _fx.rpc(kind, args, mine))
 
 
 @rpc("authority", "unreliable_ordered")
-func _fx(kind: StringName, a: Array) -> void:
+func _fx(kind: StringName, a: Array, owner_peer: int) -> void:
+	if owner_peer != 0 and owner_peer == my_peer():
+		return
 	match kind:
 		&"ring": Fx.ring(a[0], a[1], a[2], a[3], a[4])
 		&"burst": Fx.burst(a[0], a[1], a[2], a[3], a[4])
@@ -528,9 +618,11 @@ func _fx(kind: StringName, a: Array) -> void:
 
 func _on_shake(strength: float) -> void:
 	if is_server() and game:
-		_shake.rpc(strength)
+		var mine := Fx.owner_peer
+		_send(false, func(): _shake.rpc(strength, mine))
 
 
 @rpc("authority", "unreliable_ordered")
-func _shake(strength: float) -> void:
-	SignalBus.screen_shake_requested.emit(strength)
+func _shake(strength: float, owner_peer: int) -> void:
+	if owner_peer == 0 or owner_peer != my_peer():
+		SignalBus.screen_shake_requested.emit(strength)

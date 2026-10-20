@@ -93,7 +93,9 @@ func _spawn_players() -> void:
 		p.setup(infos[i])
 		p.position = Vector2((i - (n - 1) * 0.5) * spacing, FLOOR_Y - Player.RADIUS - 1.0)
 		p.facing = -1.0 if p.position.x > 0 else 1.0
-		if Net.is_client():
+		if Net.is_client() and infos[i].is_local():
+			p.predicted = true   # ours: simulated here, corrected by the host
+		elif Net.is_client():
 			p.puppet = true
 			p.collision_layer = 0
 			p.collision_mask = 0
@@ -268,13 +270,19 @@ func fragment_gone(id: int) -> void:
 
 ## Server: everything a client needs to draw this tick.
 ## [header, players, fragments, new fragments, gone fragments, block states]
-func build_snapshot() -> Array:
-	var header := PackedFloat32Array([MatchManager.state, _countdown, Block.clock, lava.surface_y])
+func build_snapshot(tick: int, with_fragments: bool) -> Array:
+	var header := PackedFloat32Array([MatchManager.state, _countdown, Block.clock, lava.surface_y, tick])
 	var pdata := PackedFloat32Array()
 	for p in players:
 		p.write_net(pdata)
 	var fdata := PackedFloat32Array()
 	var spawns := []
+	# Chunks a gravity field is pulling through its player (they turn solid
+	# once in place); that player's guest needs to know to let them through.
+	var phasing := {}
+	for p in players:
+		for f in p._phasing:
+			phasing[f] = p.player_id
 	# Resting chunks are skipped, but now and then everything is resent in
 	# case the update that put a chunk to rest got lost on the way.
 	_snapshots_built += 1
@@ -285,11 +293,13 @@ func build_snapshot() -> Array:
 		if not f.net_announced:
 			f.net_announced = true
 			spawns.append([f.net_id, f._poly, f._body, f._hi])
+		if not with_fragments:
+			continue
 		var now := Vector3(f.global_position.x, f.global_position.y, f.rotation)
 		if now.distance_squared_to(f.net_sent) < 0.09 and not resend_all:
 			continue   # resting chunks cost nothing
 		f.net_sent = now
-		fdata.append_array([f.net_id, now.x, now.y, now.z, f.linear_velocity.x, f.linear_velocity.y])
+		fdata.append_array([f.net_id, now.x, now.y, now.z, f.linear_velocity.x, f.linear_velocity.y, phasing.get(f, 0)])
 	var blocks := PackedInt32Array()
 	for id in _block_states:
 		blocks.append_array([id, _block_states[id]])
@@ -306,19 +316,28 @@ func apply_state(header: PackedFloat32Array, pdata: PackedFloat32Array, fdata: P
 	if state != MatchManager.State.ENDED and MatchManager.state != MatchManager.State.ENDED:
 		MatchManager.state = state
 	_countdown = header[1]
-	Block.clock = header[2]
 	lava.surface_y = header[3]
+	var tick := int(header[4])
+	Net.note_snapshot_tick(tick)
 
 	for i in range(0, pdata.size(), Player.NET_STRIDE):
 		var p := player_by_id(int(pdata[i]))
 		if p:
-			p.read_net(pdata, i)
+			p.read_net(pdata, i, tick)
 
-	for i in range(0, fdata.size(), 6):
+	for i in range(0, fdata.size(), 7):
 		var f := _puppet_fragment(int(fdata[i]))
 		if f:
 			f.set_net_target(Vector2(fdata[i + 1], fdata[i + 2]), fdata[i + 3], Vector2(fdata[i + 4], fdata[i + 5]))
 			f.visible = true
+			for p in players:
+				if p.predicted:
+					f.phase_through(p, int(fdata[i + 6]) == p.player_id)
+
+	# Moving blocks: our world runs Net.lead_time ahead (see there). Ease
+	# toward it rather than jump, so platforms don't twitch with jitter.
+	var clock := header[2] + Net.lead_time
+	Block.clock = clock if absf(Block.clock - clock) > 0.25 else lerpf(Block.clock, clock, 0.2)
 
 
 ## Client: one-off changes from the server - chunks appearing and going,
@@ -359,10 +378,16 @@ func _puppet_fragment(id: int) -> Fragment:
 ## Client tick: send our controls, keep the map and camera following the
 ## puppets. No deaths, lava or results here - those come from the server.
 func _client_tick(_delta: float) -> void:
+	Net.advance_render_tick()
+	# Our controls switch on when the host's countdown, run ahead by our lead
+	# (see Net.lead_time), reaches the start - and every frame says whether
+	# they were on, so the host applies them from exactly the same frame.
+	var started := MatchManager.state == MatchManager.State.PLAYING \
+		or MatchManager.state == MatchManager.State.COUNTDOWN and _countdown - Net.lead_time <= 0.6
 	for p in players:
-		if p.info.is_local() and not p.is_dead:
-			p.input.update()
-			Net.send_input(p.player_id, p.input.buttons, p.input.move)
+		if p.predicted:
+			p.controls_enabled = true
+			p.input.allow_local = started
 	var highest := INF
 	var lowest := -INF
 	for p in players:
