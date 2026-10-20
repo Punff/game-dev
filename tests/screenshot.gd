@@ -102,6 +102,29 @@ func _do_action(scene: Node, action: String) -> void:
 			Input.action_release(PlayerManager.action(1, "shockwave"))
 			if scene.players.size() > 2:
 				Input.action_press(PlayerManager.action(3, "jump"))
+		"field":
+			# P1 jumps off a concrete block and holds the gravity field: the
+			# shards should pack into a floor under them.
+			await get_tree().create_timer(4.0).timeout
+			var cands := []
+			for b in get_tree().get_nodes_in_group("blocks"):
+				if b is BreakableBlock and b.size.x > 220 and b.global_position.y < -150:
+					cands.append(b)
+			cands.sort_custom(func(a, b): return a.global_position.y > b.global_position.y)
+			if cands.is_empty():
+				return
+			var blk: Block = cands[0]
+			var p: Player = scene.players[0]
+			p.global_position = blk.global_position - Vector2(0, blk.size.y * 0.5 + Player.RADIUS + 1)
+			scene.lava.surface_y = blk.global_position.y + 700
+			scene.camera.snap()
+			await get_tree().physics_frame
+			await get_tree().physics_frame
+			Input.action_press(PlayerManager.action(1, "jump"))
+			for i in 4:
+				await get_tree().physics_frame
+			Input.action_release(PlayerManager.action(1, "jump"))
+			Input.action_press(PlayerManager.action(1, "gravity"))
 		"climb":
 			# Teleport players upward to preview later biomes.
 			await get_tree().create_timer(4.0).timeout

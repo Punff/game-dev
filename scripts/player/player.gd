@@ -37,6 +37,9 @@ const GRAVITY_COOLDOWN := 3.5
 const GRAVITY_DURATION := 1.6
 const GRAVITY_RADIUS := 170.0
 const THROW_SPEED := 1000.0
+const FLOOR_WIDTH := 300.0          ## gravity-field floor row width before chunks start a row below
+const FLOOR_GAP := 2.0
+const FLOOR_ARRIVE := 10.0          ## a chunk this close to its floor slot turns solid
 const SHOCK_COOLDOWN := 2.5
 const SHOCK_RANGE := 450.0
 const SHOCK_FORCE := 1800.0
@@ -77,6 +80,7 @@ var shock_cd := 0.0
 var _field_time := 0.0
 var _field_active := false
 var _held: Array[Fragment] = []
+var _phasing: Array[Fragment] = []
 var _floor_blocks: Array = []
 var _squash := Vector2.ONE
 var _trail: PackedVector2Array = []
@@ -93,8 +97,8 @@ var _net_t := 1.0
 func _init() -> void:
 	collision_layer = 1
 	collision_mask = 1
-	floor_snap_length = 6.0
-	floor_max_angle = deg_to_rad(50)
+	floor_snap_length = 10.0
+	floor_max_angle = deg_to_rad(65)   # stand on tilted, jagged debris without sliding off
 	var cs := CollisionShape2D.new()
 	var circle := CircleShape2D.new()
 	circle.radius = RADIUS
@@ -278,6 +282,7 @@ func _handle_abilities(delta: float) -> void:
 
 func _end_field(allow_throw: bool) -> void:
 	_field_active = false
+	_set_phasing([])
 	gravity_cd = GRAVITY_COOLDOWN
 	var aim := aim_vector()
 	var thrown := 0
@@ -312,20 +317,71 @@ func _update_field(delta: float) -> void:
 		f.claim_dist = d
 		f.held_by = self
 		held.append(f)
-		# Chunks gather where you aim; with no aim they pack under your feet
-		# into a platform you can stand on.
-		var idx := held.size() - 1
-		var base := Vector2(0, RADIUS + 34)
-		if aim.length_squared() > 0.2:
-			base = aim.normalized() * 95.0
-		var spread := Vector2((idx % 4 - 1.5) * 44.0, -(idx / 4) * 30.0) if aim.length_squared() <= 0.2 \
-			else Vector2(cos(idx * 2.4), sin(idx * 2.4)) * (20.0 + idx * 4.0)
-		var target := global_position + base + spread
-		var to_target := target - f.global_position
-		var desired := to_target.normalized() * minf(to_target.length() * 7.0, 900.0) + velocity
-		f.linear_velocity = f.linear_velocity.lerp(desired, minf(8.0 * delta, 1.0))
-		f.angular_velocity = lerpf(f.angular_velocity, 0.0, minf(10.0 * delta, 1.0))
+	if aim.length_squared() > 0.2:
+		# Chunks gather in a loose cluster where you aim.
+		_set_phasing([])
+		for idx in held.size():
+			var f := held[idx]
+			var target := global_position + aim.normalized() * 95.0 + Vector2(cos(idx * 2.4), sin(idx * 2.4)) * (20.0 + idx * 4.0)
+			_pull(f, target, delta)
+			f.angular_velocity = lerpf(f.angular_velocity, 0.0, minf(10.0 * delta, 1.0))
+	else:
+		_pack_floor(held, delta)
 	_held = held
+
+
+func _pull(f: Fragment, target: Vector2, delta: float) -> void:
+	var to_target := target - f.global_position
+	var desired := to_target.normalized() * minf(to_target.length() * 7.0, 900.0) + velocity
+	f.linear_velocity = f.linear_velocity.lerp(desired, minf(6.5 * delta, 1.0))
+
+
+## With no aim, held chunks line up edge to edge under your feet, each with
+## its top face at your feet, turning back the way they were cut. The highest
+## chunks make the top row, overflow goes in rows underneath (never above
+## you), and each row keeps its chunks' left-to-right order so their paths
+## don't cross. On the way to its slot a chunk passes through you, so nothing
+## jams against the ball; it turns solid once it arrives.
+func _pack_floor(held: Array[Fragment], delta: float) -> void:
+	held.sort_custom(func(a, b): return a.global_position.y < b.global_position.y)
+	var rows: Array = [[]]
+	var width := 0.0
+	for f in held:
+		if width + f.extent.size.x > FLOOR_WIDTH and not rows[-1].is_empty():
+			rows.append([])
+			width = 0.0
+		rows[-1].append(f)
+		width += f.extent.size.x + FLOOR_GAP
+	var phasing: Array[Fragment] = []
+	var top := global_position.y + RADIUS + 1.0
+	for row: Array in rows:
+		var row_w := -FLOOR_GAP
+		var row_h := 0.0
+		for f: Fragment in row:
+			row_w += f.extent.size.x + FLOOR_GAP
+			row_h = maxf(row_h, f.extent.size.y)
+		row.sort_custom(func(a, b): return a.global_position.x < b.global_position.x)
+		var x := global_position.x - row_w * 0.5
+		for f: Fragment in row:
+			var target := Vector2(x - f.extent.position.x, top - f.extent.position.y)
+			_pull(f, target, delta)
+			if f.global_position.distance_to(target) > FLOOR_ARRIVE:
+				phasing.append(f)
+			f.angular_velocity = lerpf(f.angular_velocity, -wrapf(f.rotation, -PI, PI) * 8.0, minf(10.0 * delta, 1.0))
+			x += f.extent.size.x + FLOOR_GAP
+		top += row_h + FLOOR_GAP
+	_set_phasing(phasing)
+
+
+## Chunks in `list` pass through this player; every other one is solid again.
+func _set_phasing(list: Array[Fragment]) -> void:
+	for f in _phasing:
+		if is_instance_valid(f) and not f in list:
+			f.remove_collision_exception_with(self)
+	for f in list:
+		if not f in _phasing:
+			f.add_collision_exception_with(self)
+	_phasing = list
 
 
 func _fire_shockwave() -> void:
