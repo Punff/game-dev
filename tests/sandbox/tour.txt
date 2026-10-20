@@ -1,0 +1,68 @@
+# Walks every sandbox station and logs what happens:
+#   godot --headless --path . res://scenes/sandbox.tscn -- --sandbox-script=res://tests/sandbox/tour.txt
+mark --- spawn should be clean
+wait 0.3
+state
+mark --- jump off concrete A
+place 2560 -140
+tap jump
+wait 1.2
+mark --- ground pound from perch onto concrete B
+place 2880 -360
+press right
+press down
+wait 0.9
+release right
+release down
+wait 0.5
+mark --- field: jump off floor concrete, hold field
+place 3830 -60
+tap jump
+wait 0.15
+hold gravity 1.6
+wait 0.5
+state
+mark --- field throw
+place 4180 -60
+tap jump
+wait 0.15
+press gravity
+wait 0.8
+aim 1 -1
+wait 0.1
+release gravity
+wait 0.05
+aim 0 0
+wait 1
+mark --- shockwave the dummy
+place 4980 -170
+aim 1 0
+tap shockwave
+aim 0 0
+wait 3
+mark --- rocket jump
+aim 0 1
+tap shockwave
+aim 0 0
+wait 1.2
+mark --- bounce pad
+place 6350 -120
+wait 1.5
+mark --- speed strip
+place 6600 -120
+wait 1
+state
+mark --- double jump + charge from station 2
+goto 2
+tap jump
+wait 0.3
+tap jump
+wait 1
+hold charge 1.3
+wait 0.4
+tap jump
+wait 1.2
+mark --- bounce pad, held still
+place 6350 -120
+wait 2
+quit

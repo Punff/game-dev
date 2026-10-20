@@ -97,6 +97,26 @@ func _ready() -> void:
 	ThemeDB.fallback_font = theme.default_font
 	get_tree().root.theme = theme
 	apply_all()
+	_mirror_menu_keys()
+	SignalBus.bindings_changed.connect(_mirror_menu_keys)
+
+
+# Menus move with the left keyboard half's direction keys (WASD by default)
+# as well as the arrows, so nobody has to switch hands to get around.
+var _menu_key_events: Dictionary = {}   # ui action -> events we added
+
+func _mirror_menu_keys() -> void:
+	for ui in _menu_key_events:
+		for ev in _menu_key_events[ui]:
+			InputMap.action_erase_event(ui, ev)
+	_menu_key_events.clear()
+	for pair in [["ui_up", "up"], ["ui_down", "down"], ["ui_left", "left"], ["ui_right", "right"]]:
+		var added: Array[InputEvent] = []
+		for ev in events_for("kb_a", pair[1], -1):
+			if not InputMap.action_has_event(pair[0], ev):
+				InputMap.action_add_event(pair[0], ev)
+				added.append(ev)
+		_menu_key_events[pair[0]] = added
 
 
 func get_value(key: String) -> Variant:

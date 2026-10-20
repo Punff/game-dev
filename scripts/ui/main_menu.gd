@@ -22,8 +22,10 @@ func _ready() -> void:
 	var title := UiTheme.title("ultimate cakum pakum", 72, Palette.PAPER)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	col.add_child(title)
+	var tagline := UiTheme.label("Climb. Wreck the route behind you. Outlast the slag.", 22, Palette.MUSTARD)
+	col.add_child(tagline)
 	var spacer := Control.new()
-	spacer.custom_minimum_size.y = 20
+	spacer.custom_minimum_size.y = 24
 	col.add_child(spacer)
 
 	var list: Array = []
@@ -38,9 +40,11 @@ func _ready() -> void:
 		list[-1].visible = false
 	MenuBase.link_vertical(list)
 
-	var foot := UiTheme.label("v%s" % ProjectSettings.get_setting("application/config/version"), 16, Palette.SMOKE)
+	var a := func(act): return UiTheme.key("kb_a", act)
+	var foot := UiTheme.hint("%s %s or [Up] [Down] choose     [Enter] / %s select     v%s" % [
+		a.call("up"), a.call("down"), "[Space]", ProjectSettings.get_setting("application/config/version")], 16, Palette.PAPER_DIM, false)
 	foot.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	foot.position = Vector2(90, -40)
+	foot.position = Vector2(90, -64)
 	add_child(foot)
 	focus_first()
 
@@ -56,11 +60,4 @@ func _on_online() -> void:
 
 
 func _on_help() -> void:
-	remember_focus()
-	var h := HelpScreen.new()
-	add_child(h)
-	sub_open = true
-	h.closed.connect(func():
-		h.queue_free()
-		sub_open = false
-		restore_focus())
+	MatchManager.goto(Sandbox.SCENE)

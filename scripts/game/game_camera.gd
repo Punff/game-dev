@@ -13,6 +13,8 @@ const MAX_ZOOM := 1.0
 
 var targets: Array = []
 var lava_y := INF
+## How far the view may go either side of the centre (INF: no limit).
+var wall_half_width := MapPlanner.HALF_WIDTH + 400.0
 var _shake := 0.0
 var _rng := RandomNumberGenerator.new()
 
@@ -62,8 +64,10 @@ func _update(delta: float, instant: bool) -> void:
 				lead = t
 		cx = clampf(lead.global_position.x, left + visible.x * 0.5, right - visible.x * 0.5)
 	# Don't show much beyond the arena walls.
-	var wall := MapPlanner.HALF_WIDTH + 400.0
-	if visible.x < wall * 2.0:
+	var wall := wall_half_width
+	if wall == INF:
+		pass
+	elif visible.x < wall * 2.0:
 		cx = clampf(cx, -wall + visible.x * 0.5, wall - visible.x * 0.5)
 	else:
 		cx = 0.0

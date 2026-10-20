@@ -31,6 +31,8 @@ func _ready() -> void:
 	col.add_child(row)
 	for i in PlayerManager.MAX_PLAYERS:
 		var slot := LobbySlot.new()
+		slot.color_step.connect(func(info: PlayerInfo, dir: int):
+			_command(info.device_id, "prev" if dir < 0 else "next"))
 		row.add_child(slot)
 		_slots.append(slot)
 
@@ -38,8 +40,13 @@ func _ready() -> void:
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(_status)
 
-	var help := UiTheme.label("Jump: join / ready    Left / Right: colour    Down or B: back out    Enter / Start: go!    Esc: menu", 17, Palette.TEXT_DIM)
-	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var ka := func(act): return UiTheme.key("kb_a", act)
+	var kb := func(act): return UiTheme.key("kb_b", act)
+	var help := VBoxContainer.new()
+	help.add_theme_constant_override("separation", 6)
+	help.add_child(UiTheme.hint("Jump to join, again to ready:  %s [Space]   %s   pad [A]" % [ka.call("jump"), kb.call("jump")], 17))
+	help.add_child(UiTheme.hint("%s %s / %s %s colour     %s / %s back out     [Enter] start     [Esc] menu" % [
+		ka.call("left"), ka.call("right"), kb.call("left"), kb.call("right"), ka.call("down"), kb.call("down")], 17))
 	col.add_child(help)
 
 	var buttons := HBoxContainer.new()
@@ -72,7 +79,7 @@ func _refresh() -> void:
 func _update_status() -> void:
 	var infos := PlayerManager.sorted_players()
 	if infos.is_empty():
-		_status.text = "Press W / Space, Up, or (A) on a gamepad to join"
+		_status.text = "Press Jump to join"
 		_status.add_theme_color_override("font_color", Palette.TEXT)
 	elif _countdown >= 0.0:
 		_status.text = "Starting in %d..." % ceili(_countdown)

@@ -56,6 +56,7 @@ var player_id := 1
 var color := Color.WHITE
 var is_dead := false
 var controls_enabled := false
+var name_tag := ""               ## shown over the ball instead of "P<id>"
 
 var jumps_left := MAX_JUMPS
 var facing := 1.0
@@ -685,7 +686,7 @@ func _draw() -> void:
 
 	# Name tag + ability pips
 	var font := UiTheme.heavy()
-	var tag := "P%d" % player_id
+	var tag := name_tag if name_tag != "" else "P%d" % player_id
 	draw_string_outline(font, Vector2(-30, -RADIUS - 16), tag, HORIZONTAL_ALIGNMENT_CENTER, 60, 16, 5, Palette.INK)
 	draw_string(font, Vector2(-30, -RADIUS - 16), tag, HORIZONTAL_ALIGNMENT_CENTER, 60, 16, color)
 	_draw_pip(Vector2(-8, -RADIUS - 9), shock_ready())

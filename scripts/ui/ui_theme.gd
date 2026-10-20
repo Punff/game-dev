@@ -131,6 +131,55 @@ static func label(text: String, size := 20, color := Palette.TEXT_DIM) -> Label:
 	return l
 
 
+## A key drawn as a little paper cap, e.g. keycap("W").
+static func keycap(key: String, size := 16) -> PanelContainer:
+	var p := PanelContainer.new()
+	p.add_theme_stylebox_override("panel", box(Palette.PAPER, Palette.INK, 2, 3, Vector2(7, 1)))
+	var l := label(key, size, Palette.INK)
+	l.add_theme_font_override("font", heavy())
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.custom_minimum_size.x = size * 0.7
+	p.add_child(l)
+	p.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return p
+
+
+## A row of text with [Key] tokens drawn as key caps:
+## hint("[W] jump   [A] [D] move").
+static func hint(text: String, size := 18, color := Palette.TEXT_DIM, center := true) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	if center:
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var re := RegEx.create_from_string("\\[([^\\]]+)\\]")
+	var at := 0
+	for m in re.search_all(text):
+		_hint_text(row, text.substr(at, m.get_start() - at), size, color)
+		row.add_child(keycap(m.get_string(1), size - 2))
+		at = m.get_end()
+	_hint_text(row, text.substr(at), size, color)
+	return row
+
+
+# Plain text between key caps; a run of 2+ spaces becomes a wider gap.
+static func _hint_text(row: HBoxContainer, s: String, size: int, color: Color) -> void:
+	var gap := func():
+		var g := Control.new()
+		g.custom_minimum_size.x = size * 0.9
+		row.add_child(g)
+	if s.begins_with("  ") and row.get_child_count() > 0:
+		gap.call()
+	if s.strip_edges() != "":
+		row.add_child(label(s.strip_edges(), size, color))
+	if s.ends_with("  ") and s.strip_edges() != "":
+		gap.call()
+
+
+## "[W]" for a profile's first binding of an action, ready for hint().
+static func key(profile: String, action: String) -> String:
+	return "[%s]" % Settings.action_hint(profile, action).replace("L-Stick ", "").replace("D-Pad ", "")
+
+
 static func button(text: String, min_width := 320.0) -> Button:
 	var b := Button.new()
 	b.text = text

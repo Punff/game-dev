@@ -93,6 +93,19 @@ binding round-trips and remaps reaching the InputMap, a bot that performs
 the jumps the generator relies on with the real physics, a full game-scene
 smoke test and a 4-player random-input "chaos" run.
 
+### Sandbox ("How to play")
+
+The main menu's How to play is a practice level: one station per move, a
+target dummy and every block type, no lava. `[F3]` shows live stats, and an
+event log (jumps, landings with impact speed / air time / peak, charge
+launches, fields, shockwaves, breaks) is shown on screen and saved to
+`user://logs/sandbox.log`. It can be driven by a script for testing moves
+precisely - see the header of `scripts/game/sandbox.gd` for the commands:
+
+```bash
+godot --headless --path . res://scenes/sandbox.tscn -- --sandbox-script=res://tests/sandbox/tour.txt
+```
+
 Screenshots of any scene (dev helper):
 
 ```bash

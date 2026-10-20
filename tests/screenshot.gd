@@ -50,7 +50,11 @@ func _ready() -> void:
 func _do_action(scene: Node, action: String) -> void:
 	match action:
 		"settings": scene.open_settings()
-		"help": scene._on_help()
+		"room":
+			# Online lobby as a room host, with a made-up code.
+			Net.host()
+			Net.room_code = "FKLT8"
+			scene._refresh()
 		"controls":
 			scene.open_settings()
 			await get_tree().process_frame

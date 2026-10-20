@@ -17,6 +17,7 @@ func _ready() -> void:
 	await _test_field_holds_player()
 	await _test_jump_physics_matches_envelope()
 	await _test_game_smoke()
+	await _test_sandbox_smoke()
 	await _test_chaos()
 	await _test_knockout()
 	print("\n%d checks, %d failures" % [_checks, _failures])
@@ -282,6 +283,22 @@ func _test_field_holds_player() -> void:
 		f.free()
 	p.free()
 	PlayerManager.clear()
+
+
+# ── Smoke test: the sandbox ("How to play") runs ─
+
+func _test_sandbox_smoke() -> void:
+	var sb: Sandbox = load(Sandbox.SCENE).instantiate()
+	get_tree().root.add_child(sb)
+	await get_tree().create_timer(0.6).timeout
+	check(sb.player.is_on_floor(), "sandbox: you spawn standing on the floor")
+	sb._teleport(2)   # concrete
+	await get_tree().create_timer(0.3).timeout
+	check(sb.player.global_position.distance_to(sb._spawn_point(2)) < 20.0, "sandbox: stations teleport you")
+	check(is_instance_valid(sb.dummy) and not sb.dummy.is_dead, "sandbox: the dummy is there")
+	sb.free()
+	PlayerManager.clear()
+	await get_tree().process_frame
 
 
 # ── Smoke test: the real game scene runs ─────
