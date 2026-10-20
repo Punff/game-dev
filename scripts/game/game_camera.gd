@@ -21,6 +21,7 @@ var _rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
 	SignalBus.screen_shake_requested.connect(shake)
+	tree_exiting.connect(func(): Block.view_rect = Rect2(-1e9, -1e9, 2e9, 2e9))
 	position_smoothing_enabled = false
 	ignore_rotation = true
 
@@ -75,6 +76,7 @@ func _update(delta: float, instant: bool) -> void:
 	var k := 1.0 if instant else minf(3.5 * delta, 1.0)
 	zoom = zoom.lerp(Vector2(z, z), 1.0 if instant else minf(2.0 * delta, 1.0))
 	global_position = global_position.lerp(target, k)
+	Block.view_rect = Rect2(global_position - visible * 0.5, visible).grow(120.0)
 
 	_shake = move_toward(_shake, 0.0, 40.0 * delta)
 	offset = Vector2(_rng.randf_range(-1, 1), _rng.randf_range(-1, 1)) * _shake if _shake > 0.1 else Vector2.ZERO

@@ -106,6 +106,20 @@ precisely - see the header of `scripts/game/sandbox.gd` for the commands:
 godot --headless --path . res://scenes/sandbox.tscn -- --sandbox-script=res://tests/sandbox/tour.txt
 ```
 
+### Benchmark
+
+A 4-player match with random inputs that climbs and smashes concrete every
+1.5 s; prints frame time (avg / p95 / p99 / max) and a breakdown by how many
+chunks are alive. `--fixed-fps 60` runs it flat out so the numbers are the
+work done. Without `--headless` it includes drawing; `BENCH_WINDOW=2560x1440`
+mimics a browser on a high-DPI screen, `BENCH_HIDE=grit,background,lava`
+shows what a layer costs.
+
+```bash
+godot --headless --fixed-fps 60 --path . res://tests/bench.tscn
+BENCH_WINDOW=2560x1440 godot --fixed-fps 60 --path . res://tests/bench.tscn
+```
+
 Screenshots of any scene (dev helper):
 
 ```bash

@@ -10,6 +10,7 @@ enum S { SOLID, WARNING, GONE }
 
 var _state := S.SOLID
 var _timer := 0.0
+var _shake := Vector2.ZERO
 
 
 func _init() -> void:
@@ -54,6 +55,9 @@ func _process(delta: float) -> void:
 				collision_layer = 1
 				set_process(false)
 	modulate.a = 0.45 + 0.55 * (_timer / WARN_TIME) if _state == S.WARNING else 1.0
+	_shake = Vector2(randf_range(-2, 2), randf_range(-1, 1)) * (1.0 - _timer / WARN_TIME) * 2.0 if _state == S.WARNING else Vector2.ZERO
+	_body_art.position = _shake
+	_body_art.visible = _state != S.GONE
 	queue_redraw()
 
 
@@ -70,13 +74,10 @@ func _draw() -> void:
 				draw_line(Vector2(x, r.end.y), Vector2(minf(x + 14, r.end.x), r.end.y), Color(colors()[1], a), 3.0)
 				x += 26.0
 		S.WARNING:
-			var shake := Vector2(randf_range(-2, 2), randf_range(-1, 1)) * (1.0 - _timer / WARN_TIME) * 2.0
-			draw_set_transform(shake)
-			_draw_body()
+			draw_set_transform(_shake)
 			_draw_icon()
 			draw_set_transform(Vector2.ZERO)
 		_:
-			_draw_body()
 			_draw_icon()
 
 

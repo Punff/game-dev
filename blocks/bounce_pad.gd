@@ -21,8 +21,11 @@ func on_player_land(player: Player) -> void:
 
 
 func _process(delta: float) -> void:
-	_squash = move_toward(_squash, 0.0, delta * 4.0)
-	queue_redraw()
+	if _squash > 0.0:
+		_squash = move_toward(_squash, 0.0, delta * 4.0)
+		queue_redraw()   # the boing itself stays smooth
+	else:
+		redraw_icon()
 
 
 func _draw_icon() -> void:

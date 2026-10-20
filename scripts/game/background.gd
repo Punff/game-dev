@@ -17,18 +17,18 @@ const BLEND_PX := 2500.0
 
 var camera: Camera2D
 var auto_scroll := 0.0         ## px/s, used by menus with no camera
-var _rect := ColorRect.new()
 var _mat := ShaderMaterial.new()
 var _scroll := 0.0
+var _height := -INF
 
 
 func _ready() -> void:
 	layer = -10
 	_mat.shader = SHADER
-	_rect.material = _mat
-	_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_rect)
+	# Soft and painterly: rendered at ~720p and stretched, whatever the screen.
+	var art := LowResLayer.new()
+	art.setup(_mat, 1280 * 720)
+	add_child(art)
 	set_height(0.0)
 	_apply_detail()
 	SignalBus.settings_changed.connect(_apply_detail)
@@ -40,6 +40,9 @@ func _apply_detail() -> void:
 
 ## Blend palettes by climbed height (px above the start floor).
 func set_height(h: float) -> void:
+	if absf(h - _height) < 4.0:
+		return   # nothing visible would change
+	_height = h
 	var idx := 0
 	for i in MapPlanner.BIOMES.size():
 		if h >= MapPlanner.BIOMES[i].from:

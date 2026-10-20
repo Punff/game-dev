@@ -117,7 +117,7 @@ func _physics_process(delta: float) -> void:
 	if not on_floor:
 		_air_t += delta
 		_peak_y = minf(_peak_y, p.global_position.y)
-		var ff := p._pressed("down") and not p._field_active
+		var ff := p._pressed("down") and not p._field_active and p._rocket_time <= 0.0
 		if ff and not _fast_fall:
 			write("FASTFALL", "at %s  vy %.0f" % [_v(p.global_position), vel.y])
 		_fast_fall = ff

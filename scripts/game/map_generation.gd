@@ -5,6 +5,7 @@ extends Node2D
 
 const STREAM_AHEAD := 2600.0
 const CLEANUP_BELOW_LAVA := 500.0
+const STREAM_STEP := 300.0          ## most map built per physics tick
 
 var BLOCK_TYPES := {
 	"static": StaticPlatform,
@@ -65,7 +66,12 @@ func update_stream(highest_y: float, lava_y: float) -> void:
 	if planner == null:
 		return
 	if planner.cursor_y > highest_y - STREAM_AHEAD:
-		_stream_to(highest_y - STREAM_AHEAD)
+		# A few rows per tick at most, so a big launch doesn't build half a
+		# screen of blocks in one frame (the buffer ahead is plenty).
+		_stream_to(maxf(highest_y - STREAM_AHEAD, planner.cursor_y - STREAM_STEP))
+	# The lava creeps up slowly: tidying up below it now and then is plenty.
+	if Engine.get_physics_frames() % 10 != 0:
+		return
 	var limit := lava_y + CLEANUP_BELOW_LAVA
 	for i in range(_blocks.size() - 1, -1, -1):
 		var b := _blocks[i]

@@ -2,7 +2,6 @@ extends CanvasLayer
 
 ## Global film-grain / grime overlay sitting above every scene.
 
-var _rect := ColorRect.new()
 var _mat := ShaderMaterial.new()
 
 
@@ -10,10 +9,11 @@ func _ready() -> void:
 	layer = 100
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_mat.shader = preload("res://shaders/grit.gdshader")
-	_rect.material = _mat
-	_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(_rect)
+	# Up to 1080p it's drawn per pixel as before; past that (high-DPI screens,
+	# where the browser renders several times the pixels) it's stretched.
+	var grain := LowResLayer.new()
+	grain.setup(_mat, 1920 * 1080, true)
+	add_child(grain)
 	_apply()
 	SignalBus.settings_changed.connect(_apply)
 

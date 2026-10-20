@@ -44,6 +44,8 @@ const SHOCK_COOLDOWN := 2.5
 const SHOCK_RANGE := 450.0
 const SHOCK_FORCE := 1800.0
 const SHOCK_RECOIL := 420.0
+const ROCKET_NO_FASTFALL := 0.25   ## s after a downward shockwave when "down" won't fast-fall
+const AIM_GRACE := 0.12            ## s an aim is remembered for a gravity-field throw
 const JUMP_PUSH_RADIUS := 200.0
 const JUMP_PUSH_FORCE := 260.0
 
@@ -86,6 +88,11 @@ var _floor_blocks: Array = []
 var _squash := Vector2.ONE
 var _trail: PackedVector2Array = []
 var _hit_flash := 0.0
+var _rocket_time := 0.0             # after a downward blast, holding down doesn't fast-fall
+var _last_aim := Vector2.ZERO       # recent aim, so a throw survives letting go of it a moment early
+var _last_aim_time := 0.0
+var _ring := PackedVector2Array()   # the boiling outline, rebuilt ~10 times a second
+var _ring_boil := -1
 var input := PlayerInput.new()   ## where controls come from: this machine or the network
 
 ## Online clients don't simulate: the ball just shows where the server says it is.
@@ -119,6 +126,19 @@ func setup(p: PlayerInfo) -> void:
 func _ready() -> void:
 	spawn_y = global_position.y
 	z_index = 10
+	# Name tag as a Label: shaped once, instead of outlined text redrawn every frame.
+	var tag := Label.new()
+	tag.text = name_tag if name_tag != "" else "P%d" % player_id
+	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tag.add_theme_font_override("font", UiTheme.heavy())
+	tag.add_theme_font_size_override("font_size", 16)
+	tag.add_theme_color_override("font_color", color)
+	tag.add_theme_color_override("font_outline_color", Palette.INK)
+	tag.add_theme_constant_override("outline_size", 5)
+	tag.size = Vector2(60, 0)
+	tag.position = Vector2(-30, -RADIUS - 16 - UiTheme.heavy().get_ascent(16))
+	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(tag)
 
 
 # ── Input helpers ────────────────────────────
@@ -155,6 +175,13 @@ func _physics_process(delta: float) -> void:
 	shock_cd = maxf(shock_cd - delta, 0.0)
 	_reverse_timer = maxf(_reverse_timer - delta, 0.0)
 	_hit_flash = maxf(_hit_flash - delta, 0.0)
+	_rocket_time = maxf(_rocket_time - delta, 0.0)
+	var aim := aim_vector()
+	if aim.length_squared() > 0.2:
+		_last_aim = aim
+		_last_aim_time = AIM_GRACE
+	else:
+		_last_aim_time = maxf(_last_aim_time - delta, 0.0)
 
 	# Surface effects collected last frame.
 	_push_applied = surface_push
@@ -174,7 +201,8 @@ func _physics_process(delta: float) -> void:
 		g *= 0.3
 	velocity.y = minf(velocity.y + g * delta, MAX_FALL if not _field_active else 260.0)
 
-	if not on_floor and _pressed("down") and not _field_active:
+	# (Not right after a rocket-jump: aiming down is the same key.)
+	if not on_floor and _pressed("down") and not _field_active and _rocket_time <= 0.0:
 		velocity.y = minf(velocity.y + FAST_FALL_ACCEL * delta, FAST_FALL_MAX)
 
 	_handle_horizontal(delta, on_floor)
@@ -286,6 +314,8 @@ func _end_field(allow_throw: bool) -> void:
 	_set_phasing([])
 	gravity_cd = GRAVITY_COOLDOWN
 	var aim := aim_vector()
+	if aim.length_squared() <= 0.2 and _last_aim_time > 0.0:
+		aim = _last_aim   # let go of the aim a hair before the field: still a throw
 	var thrown := 0
 	if allow_throw and aim.length_squared() > 0.2:
 		for f in _held:
@@ -399,6 +429,7 @@ func _fire_shockwave() -> void:
 	velocity -= dir * SHOCK_RECOIL
 	if dir.y > 0.5:
 		velocity.y = minf(velocity.y, -SHOCK_RECOIL * 1.4)
+		_rocket_time = ROCKET_NO_FASTFALL
 
 	var targets: Array = get_tree().get_nodes_in_group("player")
 	targets.append_array(get_tree().get_nodes_in_group("blocks"))
@@ -664,7 +695,10 @@ func _draw() -> void:
 	var base := Vector2(0, RADIUS)
 	draw_set_transform(base - base * _squash, 0.0, _squash)
 	var boil := int(Time.get_ticks_msec() / 100) + player_id * 31
-	var ring := _wobbly_circle(RADIUS + 1.5, boil)
+	if boil != _ring_boil:
+		_ring_boil = boil
+		_ring = _wobbly_circle(RADIUS + 1.5, boil)
+	var ring := _ring
 	draw_colored_polygon(Block._shifted(ring, Vector2(4, 5)), Color(Palette.INK, 0.4))
 	draw_colored_polygon(Block._shifted(ring, Vector2(-1.5, 1.5)), Palette.PAPER if _hit_flash > 0.0 else color)
 	draw_arc(Vector2(2, 2), RADIUS - 3.5, 0.3, 1.8, 8, color.darkened(0.3), 3.0)
@@ -684,11 +718,7 @@ func _draw() -> void:
 			draw_circle(p, 5.0, Palette.INK)
 			draw_circle(p, 3.0, rc)
 
-	# Name tag + ability pips
-	var font := UiTheme.heavy()
-	var tag := name_tag if name_tag != "" else "P%d" % player_id
-	draw_string_outline(font, Vector2(-30, -RADIUS - 16), tag, HORIZONTAL_ALIGNMENT_CENTER, 60, 16, 5, Palette.INK)
-	draw_string(font, Vector2(-30, -RADIUS - 16), tag, HORIZONTAL_ALIGNMENT_CENTER, 60, 16, color)
+	# Ability pips (the name tag is a Label child)
 	_draw_pip(Vector2(-8, -RADIUS - 9), shock_ready())
 	_draw_pip(Vector2(8, -RADIUS - 9), gravity_ready())
 

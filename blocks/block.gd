@@ -19,10 +19,20 @@ var net_id := 0
 ## Shared clock for anything that moves on a timer, advanced by the map and
 ## kept in step with the server online, so moving blocks match on every screen.
 static var clock := 0.0
+## What the camera shows (world space, padded); animated blocks outside it
+## don't bother redrawing. Kept up to date by GameCamera.
+static var view_rect := Rect2(-1e9, -1e9, 2e9, 2e9)
+## Animated icons step at this rate - in keeping with the hand-drawn look
+## (the ball's outline boils at 10 fps), and far cheaper than every frame.
+const ICON_FPS := 20.0
+var _icon_frame := -1
 
 var _shape := RectangleShape2D.new()
 var _seed := 0
 var _outline := PackedVector2Array()
+## The hand-drawn slab, painted once on its own canvas item behind the block.
+## Animated blocks redraw every frame, but only their icon changes.
+var _body_art := Node2D.new()
 
 
 func _init() -> void:
@@ -32,6 +42,9 @@ func _init() -> void:
 	cs.shape = _shape
 	add_child(cs)
 	_shape.size = size
+	_body_art.show_behind_parent = true
+	_body_art.draw.connect(_draw_body)
+	add_child(_body_art)
 
 
 func _ready() -> void:
@@ -42,13 +55,22 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
-	queue_redraw()
+	redraw_icon()
+
+
+## Redraws the animated icon at ICON_FPS while the block is on screen.
+func redraw_icon() -> void:
+	var f := int(Time.get_ticks_msec() * ICON_FPS / 1000.0)
+	if f != _icon_frame and view_rect.intersects(get_rect_global()):
+		_icon_frame = f
+		queue_redraw()
 
 
 func set_block_size(new_size: Vector2) -> void:
 	size = new_size
 	_shape.size = new_size
 	_outline = PackedVector2Array()
+	_body_art.queue_redraw()
 	queue_redraw()
 
 
@@ -88,22 +110,23 @@ func colors() -> Array:
 
 
 func _draw() -> void:
-	_draw_body()
 	_draw_icon()
 
 
+## Paints the slab onto _body_art (drawn once, not every frame).
 func _draw_body() -> void:
+	var ci := _body_art
 	var c: Array = colors()
 	var r := Rect2(-size * 0.5, size)
 	if _outline.is_empty():
 		_outline = rough_rect(r, _seed, 2.2)
 	# Smudged shadow, fill knocked slightly out of register, wobbly ink line.
-	draw_colored_polygon(_shifted(_outline, SHADOW), Color(Palette.INK, 0.45))
-	draw_colored_polygon(_shifted(_outline, MISREG), c[0])
-	draw_colored_polygon(_shifted(rough_rect(Rect2(r.position + Vector2(6, r.size.y - 12), Vector2(r.size.x - 12, 8)), _seed + 3, 1.5), MISREG), c[0].darkened(0.28))
-	draw_polyline(rough_line(r.position + Vector2(8, 7), Vector2(r.end.x - 8, r.position.y + 7), _seed + 5, 1.5), c[0].lightened(0.25), 2.5)
-	draw_polyline(_outline, Palette.INK, 3.0)
-	_draw_grit(r.grow(-OUTLINE), c[0])
+	ci.draw_colored_polygon(_shifted(_outline, SHADOW), Color(Palette.INK, 0.45))
+	ci.draw_colored_polygon(_shifted(_outline, MISREG), c[0])
+	ci.draw_colored_polygon(_shifted(rough_rect(Rect2(r.position + Vector2(6, r.size.y - 12), Vector2(r.size.x - 12, 8)), _seed + 3, 1.5), MISREG), c[0].darkened(0.28))
+	ci.draw_polyline(rough_line(r.position + Vector2(8, 7), Vector2(r.end.x - 8, r.position.y + 7), _seed + 5, 1.5), c[0].lightened(0.25), 2.5)
+	ci.draw_polyline(_outline, Palette.INK, 3.0)
+	_draw_grit(ci, r.grow(-OUTLINE), c[0])
 
 
 const MISREG := Vector2(-2.5, 2.0)
@@ -147,7 +170,7 @@ static func rough_line(a: Vector2, b: Vector2, seed_value: int, amp := 1.5) -> P
 
 
 ## Cross-hatching and chips so surfaces look used, not plastic.
-func _draw_grit(face: Rect2, base: Color) -> void:
+func _draw_grit(ci: CanvasItem, face: Rect2, base: Color) -> void:
 	var ink := Color(base.darkened(0.55), 0.55)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = _seed
@@ -157,12 +180,12 @@ func _draw_grit(face: Rect2, base: Color) -> void:
 	var dir := -1.0 if corner_right else 1.0
 	for i in 4:
 		var o := 7.0 + i * 7.0
-		draw_line(Vector2(hx + dir * o, face.end.y - 6), Vector2(hx + dir * (o - 10.0), face.position.y + face.size.y * 0.45), ink, 1.5)
+		ci.draw_line(Vector2(hx + dir * o, face.end.y - 6), Vector2(hx + dir * (o - 10.0), face.position.y + face.size.y * 0.45), ink, 1.5)
 	# Chips / pits
 	var chips := int(face.size.x / 70.0) + 1
 	for i in chips:
 		var p := Vector2(rng.randf_range(face.position.x + 10, face.end.x - 10), rng.randf_range(face.position.y + 10, face.end.y - 12))
-		draw_rect(Rect2(p, Vector2(rng.randf_range(2, 5), 2)), ink)
+		ci.draw_rect(Rect2(p, Vector2(rng.randf_range(2, 5), 2)), ink)
 
 
 ## Repeats an icon along the block so long platforms stay readable.

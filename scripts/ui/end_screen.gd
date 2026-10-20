@@ -63,6 +63,13 @@ func _show(results: Dictionary) -> void:
 	_menu.modulate.a = 0.0
 	var tw := create_tween()
 	tw.tween_property(_menu, "modulate:a", 1.0, 0.25)
+	# Players are usually still mashing jump (= Space / A = accept) when the
+	# match ends: hold the buttons a moment so nobody skips the results.
+	for b: Button in buttons:
+		b.disabled = true
+	await get_tree().create_timer(0.6).timeout
+	for b: Button in buttons:
+		b.disabled = false
 	_menu.focus_first()
 
 
@@ -72,8 +79,8 @@ func _row(place: int, info: PlayerInfo) -> Control:
 	var medal := UiTheme.label("#%d" % place, 26, Palette.ACCENT if place == 1 else Palette.TEXT_DIM)
 	medal.custom_minimum_size.x = 56
 	h.add_child(medal)
-	var dot := ColorRect.new()
-	dot.color = info.color
+	var dot := Panel.new()   # a little ball, like the one they played
+	dot.add_theme_stylebox_override("panel", UiTheme.box(info.color, Palette.INK, 3, 13))
 	dot.custom_minimum_size = Vector2(26, 26)
 	dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	h.add_child(dot)
