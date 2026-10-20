@@ -47,6 +47,10 @@ func _ready() -> void:
 	foot.position = Vector2(90, -64)
 	add_child(foot)
 	focus_first()
+	# Arriving here: the title is stamped on, then the menu unfolds.
+	UiFx.stamp(title, 1.25, -4.0)
+	for i in list.size():
+		UiFx.reveal(list[i], 0.12 + i * 0.05)
 
 
 func _on_play() -> void:

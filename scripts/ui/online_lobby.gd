@@ -54,12 +54,14 @@ func _ready() -> void:
 
 	# In a room: its code to share, and a reminder for browser hosts.
 	_code_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_code_panel.add_theme_stylebox_override("panel", UiTheme.box(Color(Palette.INK, 0.94), Palette.PAPER_DIM, 2, 0, Vector2(40, 8)))
+	var code_box := UiTheme.box(Color(Palette.INK, 0.96), Palette.PAPER, 2, 0, Vector2(40, 8), 7)
+	code_box.shadow_color = Palette.MUSTARD
+	_code_panel.add_theme_stylebox_override("panel", code_box)
 	col.add_child(_code_panel)
 	var code_col := VBoxContainer.new()
 	code_col.add_theme_constant_override("separation", -6)
 	_code_panel.add_child(code_col)
-	var code_caption := UiTheme.label("ROOM CODE  ·  friends join with it", 15, Palette.TEXT_DIM)
+	var code_caption := UiTheme.label("Friends join with this code", 16, Palette.TEXT_DIM)
 	code_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	code_col.add_child(code_caption)
 	_code_label = UiTheme.title("", 52, Palette.MUSTARD)
@@ -218,6 +220,7 @@ func _focus_view() -> void:
 		View.WAITING:
 			_cancel.grab_focus.call_deferred()
 		View.ROOM:
+			UiFx.stamp(_code_panel, 1.5, -6.0)
 			var f := get_viewport().gui_get_focus_owner()
 			if f:
 				f.release_focus()

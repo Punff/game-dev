@@ -33,11 +33,18 @@ static func box(bg: Color, border: Color = Color.TRANSPARENT, border_w := 0, rad
 	s.content_margin_bottom = pad.y
 	s.anti_aliasing = radius > 0
 	if shadow > 0:
-		# Hard, offset ink shadow - flat graphic look, no blur.
+		# Hard, offset ink shadow - a comic panel sitting on the page.
+		# (StyleBoxFlat only draws a shadow with size >= 1; 1 px is as hard as it gets.)
 		s.shadow_color = Palette.INK
-		s.shadow_size = 0
+		s.shadow_size = 1
 		s.shadow_offset = Vector2(shadow, shadow)
-		s.expand_margin_bottom = 0
+	return s
+
+
+## Same box, but its shadow in another colour.
+static func shadowed(bg: Color, border: Color, shadow_color: Color, offset := 5) -> StyleBoxFlat:
+	var s := box(bg, border, 2, 0, Vector2(18, 10), offset)
+	s.shadow_color = shadow_color
 	return s
 
 
@@ -47,11 +54,17 @@ static func build() -> Theme:
 	t.default_font_size = 22
 	t.set_color("font_outline_color", "Label", Palette.INK)
 
-	# Buttons: ink slabs; focus = mustard slab with black type.
-	var normal := box(Palette.INK_SOFT, Palette.SMOKE, 2, 0, Vector2(18, 10))
-	var hover := box(Palette.SMOKE, Palette.PAPER_DIM, 2, 0, Vector2(18, 10))
-	var focus := box(Palette.PAPER, Palette.PAPER, 2, 0, Vector2(18, 10))
-	var pressed := box(Palette.MUSTARD, Palette.MUSTARD, 2, 0, Vector2(18, 10))
+	# Buttons are comic panels on a hard ink shadow. Focus peels one up into
+	# a paper sticker on a mustard shadow; pressing stamps it flat into the
+	# page (no shadow, nudged into where the shadow was).
+	var normal := box(Palette.INK_SOFT, Palette.SMOKE, 2, 0, Vector2(18, 10), 4)
+	var hover := box(Palette.SMOKE, Palette.PAPER_DIM, 2, 0, Vector2(18, 10), 4)
+	var focus := shadowed(Palette.PAPER, Palette.INK, Palette.MUSTARD, 6)
+	var pressed := box(Palette.MUSTARD, Palette.INK, 2, 0, Vector2(18, 10))
+	pressed.expand_margin_left = -3.0
+	pressed.expand_margin_right = 3.0
+	pressed.expand_margin_top = -3.0
+	pressed.expand_margin_bottom = 3.0
 	var disabled := box(Palette.INK, Palette.SMOKE, 2)
 	for type in ["Button", "CheckButton", "OptionButton"]:
 		t.set_stylebox("normal", type, normal)
@@ -110,11 +123,12 @@ static func _square(size: int, color: Color) -> ImageTexture:
 	return ImageTexture.create_from_image(img)
 
 
-## Convenience: a label with the heavy display font.
+## Convenience: a label with the heavy display font. Big ones (headlines)
+## use the italic cut, leaning forward like a comic sound effect.
 static func title(text: String, size := 64, color := Palette.TEXT) -> Label:
 	var l := Label.new()
 	l.text = text.to_upper()
-	l.add_theme_font_override("font", heavy())
+	l.add_theme_font_override("font", title_font() if size >= 48 else heavy())
 	l.add_theme_constant_override("outline_size", maxi(4, size / 12))
 	l.add_theme_color_override("font_outline_color", Palette.INK)
 	l.add_theme_font_size_override("font_size", size)
@@ -187,4 +201,5 @@ static func button(text: String, min_width := 320.0) -> Button:
 	b.focus_mode = Control.FOCUS_ALL
 	b.pressed.connect(func(): Sfx.play("ui_select"))
 	b.focus_entered.connect(func(): Sfx.play("ui_move"))
+	UiFx.wire_button(b)
 	return b

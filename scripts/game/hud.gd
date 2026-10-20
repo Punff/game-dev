@@ -24,6 +24,8 @@ func _ready() -> void:
 	add_child(_canvas)
 	_lava_label = _label("LAVA", 14, Palette.LAVA, HORIZONTAL_ALIGNMENT_CENTER)
 	_countdown = _label("", 110, Palette.PAPER, HORIZONTAL_ALIGNMENT_CENTER)
+	_countdown.add_theme_font_override("font", UiTheme.title_font())
+	_countdown.visible = false
 	_fps = _label("", 16, Palette.TEXT_DIM, HORIZONTAL_ALIGNMENT_RIGHT, false)
 
 
@@ -57,11 +59,26 @@ func _process(_delta: float) -> void:
 	_update_track_labels(vp)
 	_update_arrow_labels(vp)
 	var n: int = game.countdown_value()
-	_countdown.visible = n > 0
-	if n > 0 and n != _last_count:
-		_countdown.text = str(n)
-	_last_count = n
 	_place(_countdown, Vector2(0, vp.y * 0.45), vp.x)
+	if n != _last_count:
+		if n > 0:
+			_countdown.text = str(n)
+			_countdown.add_theme_color_override("font_color", Palette.PAPER)
+			_countdown.visible = true
+			_countdown.modulate.a = 1.0
+			UiFx.stamp(_countdown, 1.8, -6.0)
+		elif _last_count > 0:
+			# Countdown over: GO! slams on, then lifts away.
+			_countdown.text = "GO!"
+			_countdown.add_theme_color_override("font_color", Palette.MUSTARD)
+			UiFx.stamp(_countdown, 2.2, 8.0)
+			var tw := _countdown.create_tween()
+			tw.tween_interval(0.45)
+			tw.tween_property(_countdown, "modulate:a", 0.0, 0.25)
+			tw.tween_callback(func(): _countdown.visible = false)
+		else:
+			_countdown.visible = false
+	_last_count = n
 	_fps.visible = Settings.get_value("show_fps")
 	if _fps.visible:
 		_fps.text = "%d FPS" % Engine.get_frames_per_second()

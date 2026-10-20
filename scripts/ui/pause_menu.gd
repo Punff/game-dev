@@ -48,6 +48,7 @@ func open(note := "") -> void:
 	if not Net.is_online():
 		get_tree().paused = true
 	Sfx.play("ui_select")
+	UiFx.stamp(_menu.panel, 1.08, -2.0)
 	_menu.focus_first()
 	SignalBus.game_paused.emit(true)
 

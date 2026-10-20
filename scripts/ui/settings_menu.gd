@@ -65,6 +65,7 @@ func _ready() -> void:
 
 	SignalBus.bindings_changed.connect(_refresh_bindings)
 	_set_tab(0)
+	UiFx.stamp(panel, 1.06, -1.5)
 
 
 func _close() -> void:

@@ -20,22 +20,25 @@ func _show(results: Dictionary) -> void:
 	var standings: Array = results.standings
 	var winner: PlayerInfo = PlayerManager.players.get(results.winner)
 
+	var headline: Label
+	var rows: Array[Control] = []
 	if results.solo:
 		var info: PlayerInfo = standings[0]
-		c.add_child(UiTheme.title("%d m" % info.max_height, 72, Palette.PAPER))
+		headline = UiTheme.title("%d m" % info.max_height, 72, Palette.PAPER)
+		c.add_child(headline)
 		var sub := "New best" if results.new_record else "Best: %d m" % int(Settings.get_value("best_height"))
 		c.add_child(_centered(UiTheme.label(sub, 24, Palette.GOOD if results.new_record else Palette.TEXT_DIM)))
 	else:
-		if winner:
-			c.add_child(UiTheme.title("P%d wins" % winner.player_id, 60, winner.color))
-		else:
-			c.add_child(UiTheme.title("draw", 60, Palette.PAPER))
+		headline = UiTheme.title("P%d wins" % winner.player_id if winner else "draw", 60, winner.color if winner else Palette.PAPER)
+		c.add_child(headline)
 		c.add_child(_centered(UiTheme.label("Survived %s" % _fmt_time(results.time), 20)))
 		var list := VBoxContainer.new()
 		list.add_theme_constant_override("separation", 6)
 		var place := 1
 		for info: PlayerInfo in standings:
-			list.add_child(_row(place, info))
+			var row := _row(place, info)
+			list.add_child(row)
+			rows.append(row)
 			place += 1
 		c.add_child(list)
 		if results.new_record:
@@ -63,6 +66,10 @@ func _show(results: Dictionary) -> void:
 	_menu.modulate.a = 0.0
 	var tw := create_tween()
 	tw.tween_property(_menu, "modulate:a", 1.0, 0.25)
+	# The winner is stamped on, then the standings unfold top to bottom.
+	UiFx.stamp.call_deferred(headline, 1.7, -7.0, 0.1)
+	for i in rows.size():
+		UiFx.reveal.call_deferred(rows[i], 0.3 + i * 0.09)
 	# Players are usually still mashing jump (= Space / A = accept) when the
 	# match ends: hold the buttons a moment so nobody skips the results.
 	for b: Button in buttons:

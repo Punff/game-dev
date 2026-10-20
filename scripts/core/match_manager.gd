@@ -11,11 +11,33 @@ const GAME := "res://scenes/game.tscn"
 var state: State = State.MENU
 var last_results: Dictionary = {}
 
+# Each new screen comes up out of ink. It never delays the change itself.
+var _curtain_layer := CanvasLayer.new()
+var _curtain := ColorRect.new()
+
+
+func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	_curtain_layer.layer = 90
+	_curtain.color = Palette.INK
+	_curtain.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_curtain.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_curtain.visible = false
+	_curtain_layer.add_child(_curtain)
+	add_child(_curtain_layer)
+
 
 func goto(path: String) -> void:
 	get_tree().paused = false
 	Engine.time_scale = 1.0
 	get_tree().change_scene_to_file(path)
+	if not UiFx.enabled():
+		return
+	_curtain.visible = true
+	_curtain.modulate.a = 1.0
+	var tw := _curtain.create_tween()
+	tw.tween_property(_curtain, "modulate:a", 0.0, 0.25).set_ease(Tween.EASE_IN).set_delay(0.05)
+	tw.tween_callback(func(): _curtain.visible = false)
 
 
 func to_menu() -> void:

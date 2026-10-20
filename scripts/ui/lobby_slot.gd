@@ -20,6 +20,9 @@ var _next := _arrow(">", 1)
 var _state := UiTheme.label("", 22)
 var _controls := VBoxContainer.new()
 var _t := 0.0
+var _shown_ready := false
+var _shown_color := -1
+var _pop := 0.0   # ball bounce after a colour change
 
 
 func _ready() -> void:
@@ -58,7 +61,20 @@ func _arrow(text: String, dir: int) -> Button:
 
 
 func show_player(info: PlayerInfo) -> void:
+	# What changed since last time decides which little animation plays.
+	var joined := info != null and (_info == null or _info.player_id != info.player_id)
+	var readied := info != null and info.is_ready and not joined and not _shown_ready
+	var recoloured := info != null and not joined and info.color_index != _shown_color
 	_info = info
+	_shown_ready = info != null and info.is_ready
+	_shown_color = info.color_index if info else -1
+	if joined:
+		UiFx.stamp(self, 1.1, -3.0)
+	if readied:
+		UiFx.stamp(_state, 1.9, -12.0)
+	if recoloured:
+		UiFx.bump(_colour, 0.2)
+		_pop = 1.0 if UiFx.enabled() else 0.0
 	if info == null:
 		add_theme_stylebox_override("panel", UiTheme.box(Color(Palette.INK, 0.6), Palette.SMOKE, 2, 0, Vector2(16, 16)))
 		_name.text = "OPEN"
@@ -76,8 +92,12 @@ func show_player(info: PlayerInfo) -> void:
 			lines.append("[A] on a gamepad")
 		_set_controls(lines)
 	else:
+		# A joined card sits on the page with a hard shadow in the player's
+		# colour (open slots lie flat); ready turns it all green.
 		var border := Palette.GOOD if info.is_ready else info.color
-		add_theme_stylebox_override("panel", UiTheme.box(Color(Palette.INK, 0.94), border, 4 if info.is_ready else 2, 0, Vector2(16, 16)))
+		var panel := UiTheme.box(Color(Palette.INK, 0.94), border, 4 if info.is_ready else 2, 0, Vector2(16, 16), 7)
+		panel.shadow_color = Color(border, 0.55)
+		add_theme_stylebox_override("panel", panel)
 		_name.text = info.display_name
 		_name.add_theme_color_override("font_color", info.color)
 		_device.text = info.device_label()
@@ -116,6 +136,7 @@ func _control_summary(info: PlayerInfo) -> Array[String]:
 
 func _process(delta: float) -> void:
 	_t += delta
+	_pop = move_toward(_pop, 0.0, delta * 4.0)
 	_preview.queue_redraw()
 
 
@@ -128,10 +149,11 @@ func _draw_preview() -> void:
 		_preview.draw_line(c + Vector2(0, -14), c + Vector2(0, 14), Color(Palette.PAPER_DIM, a), 5.0)
 		return
 	var bob := sin(_t * (6.0 if _info.is_ready else 2.0)) * (5.0 if _info.is_ready else 2.0)
-	var p := c + Vector2(0, bob)
-	_preview.draw_circle(p + Vector2(8, 8), 36, Color(Palette.INK, 0.5))
-	_preview.draw_circle(p, 38, Palette.INK)
-	_preview.draw_circle(p, 33, _info.color)
+	var p := c + Vector2(0, bob - sin(_pop * PI) * 14.0)
+	var k := 1.0 + sin(_pop * PI) * 0.15
+	_preview.draw_circle(c + Vector2(8, 8 + bob), 36, Color(Palette.INK, 0.5))
+	_preview.draw_circle(p, 38 * k, Palette.INK)
+	_preview.draw_circle(p, 33 * k, _info.color)
 	_preview.draw_arc(p + Vector2(4, 4), 26, 0.2, 1.9, 12, _info.color.darkened(0.35), 6.0)
 	_preview.draw_line(p + Vector2(-16, -8), p + Vector2(18, -8), Palette.INK, 12.0)
 	_preview.draw_line(p + Vector2(-12, -8), p + Vector2(14, -8), Palette.PAPER, 5.0)
