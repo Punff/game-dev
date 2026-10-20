@@ -16,6 +16,7 @@ extends Node
 
 signal roster_changed
 signal status_changed
+signal rematch_changed
 
 enum Mode { OFFLINE, SERVER, CLIENT }
 
@@ -24,12 +25,11 @@ const DEFAULT_ADDRESS := "ws://127.0.0.1:7777"
 ## Where the room service lives once deployed (see signaling/README.md).
 ## Override with `-- --signaling=<url>`, or `?signaling=<url>` on the web page.
 const SIGNALING_URL := "wss://cakum-pakum-signaling.cakum-pakum-signaling.workers.dev"
-const PROTOCOL := 2
+const PROTOCOL := 3
 const ONLINE_LOBBY := "res://scenes/online_lobby.tscn"
 const FRAGMENTS_EVERY := 2         ## physics ticks between debris updates (30 Hz at 60); players go every tick
 const FRAMES_PER_PACKET := 6       ## each input packet repeats the last few frames, in case some go missing
 const INTERP_TICKS := 3.0          ## guests draw other players this many ticks behind the newest snapshot
-const RETURN_TO_LOBBY := 6.0       ## seconds the results stay up before the lobby reopens
 const ROOM_CONNECT_TIMEOUT := 15.0  ## seconds a guest waits for the direct link to the host
 const NO_DIRECT := "Couldn't connect to the host directly. Try another network, or let someone else host."
 
@@ -56,6 +56,8 @@ var render_tick := 0.0
 var lead_time := 0.0
 var _newest_tick := -1
 var _gone_peers: Array[int] = []   # disconnected mid-match, pruned on return to the lobby
+## On the results screen: players who want a rematch (it starts once all do).
+var rematch_votes: Array[int] = []
 var _blocks_broken := 0            # per match, for the server log
 var _room_wait := 0.0              # guest: time spent connecting to the host
 
@@ -270,8 +272,18 @@ func _on_peer_disconnected(id: int) -> void:
 		PlayerManager.leave(info.player_id)
 		_broadcast_roster()
 		_maybe_start()
+	elif MatchManager.state == MatchManager.State.ENDED:
+		# On the results screen: they're out of the room now, and the rest
+		# may all have voted for a rematch already.
+		PlayerManager.leave(info.player_id)
+		rematch_votes.erase(info.player_id)
+		_broadcast_roster()
+		if PlayerManager.players.is_empty():
+			return_to_lobby()
+		else:
+			_send_votes()
 	else:
-		# Mid-match: knock their ball out, tidy up once everyone is back in the lobby.
+		# Mid-match: knock their ball out, tidy up once the match is over.
 		_gone_peers.append(id)
 		if game:
 			var p: Player = game.player_by_id(info.player_id)
@@ -413,6 +425,7 @@ func _start_match(seed_value: int) -> void:
 	_frames.clear()
 	_newest_tick = -1
 	lead_time = 0.0
+	rematch_votes.clear()
 	MatchManager.start_match()
 
 
@@ -429,7 +442,78 @@ func _on_match_ended(results: Dictionary) -> void:
 		"winner": results.winner, "solo": results.solo, "time": results.time,
 		"best_height": results.best_height, "standings": standings,
 	})
-	get_tree().create_timer(RETURN_TO_LOBBY).timeout.connect(return_to_lobby)
+	# Whoever dropped out mid-match is gone for good now.
+	_prune_gone()
+	rematch_votes.clear()
+	_send_votes()
+	if PlayerManager.players.is_empty():
+		return_to_lobby.call_deferred()
+
+
+func _prune_gone() -> void:
+	for id in _gone_peers:
+		var info := _info_for_peer(id)
+		if info:
+			PlayerManager.leave(info.player_id)
+	_gone_peers.clear()
+	_broadcast_roster()
+
+
+# ── After a match: rematch or back to the lobby ──
+
+## Results screen: vote for (or take back) a rematch.
+func ask_rematch(want: bool) -> void:
+	if is_server():
+		_apply_rematch(my_peer(), want)
+	else:
+		_vote_rematch.rpc_id(1, want)
+
+
+## Results screen: take everyone back to the room's lobby.
+func ask_lobby() -> void:
+	if is_server():
+		return_to_lobby()
+	else:
+		_want_lobby.rpc_id(1)
+
+
+@rpc("any_peer", "reliable")
+func _vote_rematch(want: bool) -> void:
+	if is_server():
+		_apply_rematch(multiplayer.get_remote_sender_id(), want)
+
+
+@rpc("any_peer", "reliable")
+func _want_lobby() -> void:
+	if is_server():
+		return_to_lobby()
+
+
+func _apply_rematch(peer: int, want: bool) -> void:
+	var info := _info_for_peer(peer)
+	if info == null or MatchManager.state != MatchManager.State.ENDED:
+		return
+	if want and not info.player_id in rematch_votes:
+		rematch_votes.append(info.player_id)
+	elif not want:
+		rematch_votes.erase(info.player_id)
+	_send_votes()
+	if rematch_votes.size() >= PlayerManager.players.size():
+		rematch_votes.clear()
+		var seed_value := (randi() % 2000000000) + 1
+		_start_match.rpc(seed_value)
+		_start_match(seed_value)
+
+
+func _send_votes() -> void:
+	_rematch_votes.rpc(rematch_votes)
+	rematch_changed.emit()
+
+
+@rpc("authority", "reliable")
+func _rematch_votes(votes: Array) -> void:
+	rematch_votes.assign(votes)
+	rematch_changed.emit()
 
 
 @rpc("authority", "reliable")
@@ -449,11 +533,8 @@ func _match_ended(data: Dictionary) -> void:
 func return_to_lobby() -> void:
 	if not is_server() or MatchManager.state != MatchManager.State.ENDED:
 		return
-	for id in _gone_peers:
-		var info := _info_for_peer(id)
-		if info:
-			PlayerManager.leave(info.player_id)
-	_gone_peers.clear()
+	_prune_gone()
+	rematch_votes.clear()
 	_to_lobby.rpc()
 	_to_lobby()
 	_broadcast_roster()

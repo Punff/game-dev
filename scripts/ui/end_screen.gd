@@ -4,6 +4,8 @@ extends CanvasLayer
 ## Results: winner banner, standings with heights, rematch.
 
 var _menu := MenuBase.new()
+var _votes: Label        # online: rematch tally
+var _rematch: Button
 
 
 func _ready() -> void:
@@ -54,11 +56,20 @@ func _show(results: Dictionary) -> void:
 	c.add_child(spacer)
 	var buttons: Array
 	if Net.is_online():
-		# The server reopens the lobby for everyone after a few seconds.
-		c.add_child(_centered(UiTheme.label("Back to the lobby in a moment...", 20, Palette.TEXT_DIM)))
-		buttons = [_menu.add_button("Leave", func():
-			Net.leave()
-			MatchManager.to_menu())]
+		# A rematch starts once everyone still here has voted for one.
+		_votes = _centered(UiTheme.label("", 20, Palette.TEXT_DIM))
+		c.add_child(_votes)
+		_rematch = _menu.add_button("Rematch", func(): Net.ask_rematch(not _voted()))
+		buttons = [
+			_rematch,
+			_menu.add_button("Lobby (everyone)", func(): Net.ask_lobby()),
+			_menu.add_button("Leave", func():
+				Net.leave()
+				MatchManager.to_menu()),
+		]
+		Net.rematch_changed.connect(_show_votes)
+		Net.roster_changed.connect(_show_votes)
+		_show_votes()
 	else:
 		buttons = [
 			_menu.add_button("Rematch", func(): MatchManager.start_match()),
@@ -85,6 +96,23 @@ func _show(results: Dictionary) -> void:
 	for b: Button in buttons:
 		b.disabled = false
 	_menu.focus_first()
+
+
+func _voted() -> bool:
+	var me := Net.local_info()
+	return me != null and me.player_id in Net.rematch_votes
+
+
+func _show_votes() -> void:
+	if _votes == null or not is_instance_valid(_votes):
+		return
+	var total := PlayerManager.players.size()
+	var n := Net.rematch_votes.size()
+	_votes.text = "Rematch: %d of %d" % [n, total] if n > 0 else "Rematch starts when everyone picks it"
+	_votes.add_theme_color_override("font_color", Palette.GOOD if n > 0 else Palette.TEXT_DIM)
+	_rematch.text = "Cancel rematch" if _voted() else "Rematch"
+	if n > 0:
+		UiFx.bump(_votes, 0.15)
 
 
 func _row(place: int, info: PlayerInfo, won := false) -> Control:

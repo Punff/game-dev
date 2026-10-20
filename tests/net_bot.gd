@@ -12,6 +12,8 @@ extends Node
 ## --calm: only run, jump and charge (no abilities), to measure how well the
 ## guest's prediction matches the host without hits muddying it.
 ## Faking a bad connection: add --lag=<ms> --jitter=<ms> --loss=<%> (see Net).
+## --rematch: vote for a rematch after the first match and play a second
+## one before going back to the lobby.
 ## --smash (on the hosting bot) breaks a few blocks one second into the match,
 ## so the guests can check that debris reaches them.
 ## Run a bot without --headless and add --shot=<file.png> to save what it
@@ -38,6 +40,8 @@ func _ready() -> void:
 			bot.smash = true
 		elif a == "--calm":
 			bot.calm = true
+		elif a == "--rematch":
+			bot.rematches = 1
 		elif a.begins_with("--code-file="):
 			bot.code_file = a.trim_prefix("--code-file=")
 		elif a.begins_with("--shot="):
@@ -56,6 +60,9 @@ class Bot extends Node:
 	var code_file := ""
 	var smash := false
 	var calm := false
+	var rematches := 0
+	var _matches := 0
+	var _voted_at := -1
 	var wait_players := 0
 	var _game_time := 0.0
 	var _t := 0.0
@@ -73,7 +80,9 @@ class Bot extends Node:
 	func _ready() -> void:
 		process_mode = Node.PROCESS_MODE_ALWAYS
 		_rng.seed = hash(tag)
-		SignalBus.match_ended.connect(func(r): _results = r)
+		SignalBus.match_ended.connect(func(r):
+			_results = r
+			_matches += 1)
 
 	func _physics_process(delta: float) -> void:
 		_t += delta
@@ -111,8 +120,15 @@ class Bot extends Node:
 			_max_peers_seen = maxi(_max_peers_seen, PlayerManager.players.size())
 		if Net.game and is_instance_valid(Net.game) and me:
 			_play(me, delta)
+		# Results: vote for a rematch, or take everyone back to the lobby.
+		if MatchManager.state == MatchManager.State.ENDED and _voted_at != _matches and _matches > 0:
+			_voted_at = _matches
+			if _matches <= rematches:
+				Net.ask_rematch(true)
+			else:
+				get_tree().create_timer(1.0).timeout.connect(Net.ask_lobby)
 		if not _results.is_empty() and MatchManager.state == MatchManager.State.LOBBY:
-			_finish(_moved > 50.0, "")
+			_finish(_moved > 50.0 and _matches > rematches, "" if _matches > rematches else "only %d match(es)" % _matches)
 
 	func _play(me: PlayerInfo, _delta: float) -> void:
 		var p: Player = Net.game.player_by_id(me.player_id)
@@ -148,8 +164,8 @@ class Bot extends Node:
 
 	func _finish(ok: bool, why: String) -> void:
 		set_physics_process(false)
-		print("[%s] %s  players seen: %d  ball moved: %d px  most chunks: %d  winner: %s  %s" % [
-			tag, "PASS" if ok else "FAIL", _max_peers_seen, int(_moved), _max_frags,
+		print("[%s] %s  matches: %d  players seen: %d  ball moved: %d px  most chunks: %d  winner: %s  %s" % [
+			tag, "PASS" if ok else "FAIL", _matches, _max_peers_seen, int(_moved), _max_frags,
 			str(_results.get("winner", "?")), why])
 		var s := Net.stats
 		print("[%s] prediction: %d corrections (avg %.1f px, max %.0f px), %d snaps; others past newest snapshot: %d ball-ticks; late frames: %d stalls, %d skips" % [
