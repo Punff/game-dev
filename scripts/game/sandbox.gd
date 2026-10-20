@@ -42,6 +42,9 @@ var _station := -1
 var _concrete: Array = []        # [{pos, size, node, gone_at}]
 var _dummy_spot := Vector2.ZERO
 var _dummy_off_since := -1.0
+var _dummy_vel := Vector2.ZERO
+var _dummy_hit_at := Vector2.ZERO
+var _dummy_hit_time := -1.0
 var _profile := "kb_a"
 var _time := 0.0
 
@@ -241,6 +244,8 @@ func _spawn_dummy() -> void:
 	dummy.facing = -1.0
 	world.add_child(dummy)
 	_dummy_off_since = -1.0
+	_dummy_vel = Vector2.ZERO
+	_dummy_hit_time = -1.0
 
 
 # ── Running ──────────────────────────────────
@@ -261,6 +266,16 @@ func _physics_process(delta: float) -> void:
 		_station = s
 		_station_label.text = "%d / %d   %s" % [s + 1, _stations.size(), _stations[s].name]
 		event_log.write("STATION", "%d %s" % [s + 1, _stations[s].name])
+
+	# How hard was the dummy hit, and how far has it flown 1 s later?
+	if dummy.velocity.length() - _dummy_vel.length() > 300.0:
+		_dummy_hit_at = dummy.global_position
+		_dummy_hit_time = _time
+		event_log.write("DUMMY", "hit, now %s" % SandboxLog._v(dummy.velocity))
+	_dummy_vel = dummy.velocity
+	if _dummy_hit_time >= 0.0 and _time - _dummy_hit_time >= 1.0:
+		_dummy_hit_time = -1.0
+		event_log.write("DUMMY", "flew %s in 1 s" % SandboxLog._v(dummy.global_position - _dummy_hit_at))
 
 	# The dummy counts as knocked off once it leaves its island.
 	var off := dummy.is_dead or dummy.global_position.y > _dummy_spot.y + 40.0 \
