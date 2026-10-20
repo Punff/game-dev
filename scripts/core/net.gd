@@ -93,7 +93,8 @@ func is_server() -> bool: return mode == Mode.SERVER
 func is_client() -> bool: return mode == Mode.CLIENT
 
 func my_peer() -> int:
-	return multiplayer.get_unique_id() if is_online() else 0
+	# While a room is still opening we're online but have no peer yet.
+	return multiplayer.get_unique_id() if is_online() and multiplayer.has_multiplayer_peer() else 0
 
 
 static func can_host() -> bool:
