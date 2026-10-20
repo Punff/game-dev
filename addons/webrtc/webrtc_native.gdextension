@@ -1,5 +1,5 @@
 ; Godot's official WebRTC extension (github.com/godotengine/webrtc-native 1.2.2),
-; trimmed to Windows x86_64 and macOS. Browsers have WebRTC built in, so the
+; trimmed to Windows x86_64, Linux x86_64 and macOS. Browsers have WebRTC built in, so the
 ; web export skips this (exclude_tags).
 [configuration]
 
@@ -11,7 +11,9 @@ exclude_tags = ["web", "no-webrtc"]
 [libraries]
 
 macos.debug = "lib/libwebrtc_native.macos.template_debug.universal.framework"
+linux.debug.x86_64 = "lib/libwebrtc_native.linux.template_debug.x86_64.so"
 windows.debug.x86_64 = "lib/libwebrtc_native.windows.template_debug.x86_64.dll"
 
 macos.release = "lib/libwebrtc_native.macos.template_release.universal.framework"
+linux.release.x86_64 = "lib/libwebrtc_native.linux.template_release.x86_64.so"
 windows.release.x86_64 = "lib/libwebrtc_native.windows.template_release.x86_64.dll"
