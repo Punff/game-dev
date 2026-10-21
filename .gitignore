@@ -3,3 +3,5 @@
 /build/
 # Godot copies a loaded GDExtension library to ~name while the editor runs
 addons/webrtc/lib/~*
+tools/analytics/out/
+__pycache__/

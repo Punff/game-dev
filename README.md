@@ -71,6 +71,14 @@ Not there yet: sounds other players cause (guests hear only their own ball), a T
 and rejoining a match in progress. Debris a guest holds with a gravity field still moves
 as the host has it, so it trails a little behind their ball on a slow connection.
 
+## Stats, leaderboards and gameplay analytics
+
+Every match is recorded (abilities, hits and knock-outs, blocks, stalls, positions)
+to `user://logs/matches.jsonl` and, with Settings → Share Stats Online on, to the
+stats server, which also keeps the leaderboards (main menu → Leaderboard).
+`python3 tools/analytics/report.py` turns the records into a design report.
+See [docs/analytics.md](docs/analytics.md).
+
 Smoke tests (bots join, play a whole match and check the results come back):
 
 ```bash
