@@ -8,6 +8,7 @@ const TRACK := preload("res://assets/music/home_again.mp3")
 const MENU_SCENES: Array[String] = ["res://scenes/main_menu.tscn", "res://scenes/lobby.tscn", "res://scenes/online_lobby.tscn"]
 const FADE_IN := 1.5
 const FADE_OUT := 0.8
+const VOLUME_DB := -3.0          ## the track sits a little under full level
 
 var _player := AudioStreamPlayer.new()
 var _tween: Tween
@@ -26,7 +27,7 @@ func _on_scene_changed() -> void:
 	var scene := get_tree().current_scene
 	var wanted := scene != null and scene.scene_file_path in MENU_SCENES
 	if wanted and not _player.playing:
-		_fade(0.0, FADE_IN, true)
+		_fade(VOLUME_DB, FADE_IN, true)
 	elif not wanted and _player.playing:
 		_fade(-60.0, FADE_OUT, false)
 
