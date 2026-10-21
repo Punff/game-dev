@@ -305,11 +305,14 @@ func _back() -> void:
 # ── Input ────────────────────────────────────
 
 func _unhandled_input(event: InputEvent) -> void:
+	# Taken up front: readying up can start the match, which frees this screen
+	# before we get to mark the key as used.
+	var viewport := get_viewport()
 	if _view == View.ROOM and Net.local_info() and _room_input(event):
-		get_viewport().set_input_as_handled()
+		viewport.set_input_as_handled()
 		return
 	if event.is_action_pressed("ui_cancel"):
-		get_viewport().set_input_as_handled()
+		viewport.set_input_as_handled()
 		_back()
 
 
