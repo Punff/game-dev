@@ -30,6 +30,7 @@ MatchManager="*res://scripts/core/match_manager.gd"
 Music="*res://scripts/core/music.gd"
 Net="*res://scripts/core/net.gd"
 WebPacing="*res://scripts/core/web_pacing.gd"
+MatchLog="*res://scripts/core/match_log.gd"
 
 [display]
 
