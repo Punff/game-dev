@@ -60,12 +60,31 @@ no new game build is needed for the address. Until the database exists,
 Locally: `npx wrangler d1 migrations apply cakum-pakum-stats --local`, then
 `npm run dev`; the game started with `--signaling=ws://127.0.0.1:8787` uses it.
 
-API (JSON):
+API (JSON). Requests from a logged-in game carry `Authorization: Bearer <token>`.
 
+- `POST /v1/auth/register` and `POST /v1/auth/login`, with
+  `{username, password, client}`. Returns `{token, username}`.
+- `POST /v1/auth/logout` and `GET /v1/auth/me`.
 - `POST /v1/matches`: a Telemetry record. Returns `{ok, id}`, plus `rank`,
-  `best` and `new_best` for solo runs.
-- `GET /v1/leaderboard?board=height|wins&limit=15&me=<client id>`
+  `best` and `new_best` for solo runs by an account.
+- `GET /v1/leaderboard?board=height|wins&limit=15&me=<client id>`: accounts only.
 - `GET /v1/players/<client id>`
+
+### Resetting a forgotten password
+
+There's no email, so the admin does it:
+
+```bash
+cd signaling
+node tools/hash.mjs <username> <new password>     # prints the SQL
+npx wrangler d1 execute cakum-pakum-stats --remote --command "<that SQL>"
+```
+
+This sets the new password and logs the account out everywhere.
+
+`PBKDF2_ITERATIONS` in `wrangler.toml` sets the password hashing cost: 15,000
+fits the free plan's CPU limit. Raise it on the paid plan; accounts are
+re-hashed at their next login.
 
 ## Protocol
 

@@ -51,6 +51,11 @@ func _do_action(scene: Node, action: String) -> void:
 	match action:
 		"settings": scene.open_settings()
 		"leaderboard": scene.open_sub(LeaderboardMenu.new())
+		"account":
+			scene.open_sub(LeaderboardMenu.new())
+			await get_tree().process_frame
+			var lb: MenuBase = scene.get_child(-1)
+			lb.open_sub(AccountMenu.new())
 		"room":
 			# Online lobby as a room host, with a made-up code.
 			Net.host()

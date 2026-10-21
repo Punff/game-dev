@@ -1,12 +1,16 @@
 extends Node
 
 ## Talks to the stats side of the room server (signaling/, the /v1 routes):
-## uploads each finished match record (Telemetry) and fetches the
-## leaderboards and this player's stats. Uploads that fail wait in
-## user://logs/pending.jsonl and go out on the next start.
+## uploads each finished match record (Telemetry), fetches the leaderboards
+## and this player's stats, and logs in to an account. Uploads that fail wait
+## in user://logs/pending.jsonl and go out on the next start.
 ## Nothing is sent with Settings "share_stats" off.
+##
+## Logged in, requests carry the session token (Settings "auth_token"); the
+## password itself is only ever sent to log in and never stored.
 
 signal match_submitted(reply: Dictionary)   ## the server's answer, e.g. {"rank": 12}
+signal account_changed()
 
 const PENDING := "user://logs/pending.jsonl"
 const MAX_PENDING := 20
@@ -15,6 +19,7 @@ const TIMEOUT := 15.0
 
 func _ready() -> void:
 	_flush_pending.call_deferred()
+	_check_session.call_deferred()
 
 
 ## https:// address of the server, from the signaling one (same Worker).
@@ -48,6 +53,51 @@ func my_stats(done: Callable) -> void:
 	_request("/v1/players/" + Settings.client_id(), HTTPClient.METHOD_GET, "", done)
 
 
+# ── Account ──────────────────────────────────
+
+## done(ok, error message). On success Settings holds the new session.
+func register(username: String, password: String, done: Callable) -> void:
+	_auth("/v1/auth/register", username, password, done)
+
+
+func login(username: String, password: String, done: Callable) -> void:
+	_auth("/v1/auth/login", username, password, done)
+
+
+func logout() -> void:
+	if Settings.logged_in():
+		_request("/v1/auth/logout", HTTPClient.METHOD_POST, JSON.stringify({"client": Settings.client_id()}), func(_ok, _r): pass)
+	_set_session("", "")
+
+
+func _auth(path: String, username: String, password: String, done: Callable) -> void:
+	var body := JSON.stringify({"username": username.strip_edges(), "password": password, "client": Settings.client_id()})
+	_request(path, HTTPClient.METHOD_POST, body, func(ok: bool, reply: Dictionary):
+		if ok and reply.has("token"):
+			_set_session(reply.token, reply.username)
+			done.call(true, "")
+		else:
+			done.call(false, str(reply.get("error", "Couldn't reach the server. Try again later."))))
+
+
+## A session can expire or be logged out elsewhere; only a clear "no" from the
+## server logs us out here (being offline doesn't).
+func _check_session() -> void:
+	if not Settings.logged_in() or not enabled():
+		return
+	_request("/v1/auth/me", HTTPClient.METHOD_GET, "", func(ok: bool, reply: Dictionary):
+		if ok and reply.has("username") and reply.username != Settings.get_value("account_name"):
+			_set_session(Settings.get_value("auth_token"), reply.username)
+		elif not ok and reply.get("unauthorized", false):
+			_set_session("", ""))
+
+
+func _set_session(token: String, username: String) -> void:
+	Settings.set_value("auth_token", token, false)
+	Settings.set_value("account_name", username)
+	account_changed.emit()
+
+
 func _request(path: String, method: int, body: String, done: Callable) -> void:
 	var http := HTTPRequest.new()
 	http.timeout = TIMEOUT
@@ -61,8 +111,12 @@ func _request(path: String, method: int, body: String, done: Callable) -> void:
 		# (except "slow down").
 		if code >= 400 and code < 500 and code != 429:
 			reply["retry"] = false
+		if code == 401:
+			reply["unauthorized"] = true
 		done.call(result == HTTPRequest.RESULT_SUCCESS and code >= 200 and code < 300, reply))
 	var headers := PackedStringArray(["Content-Type: application/json"])
+	if Settings.logged_in():
+		headers.append("Authorization: Bearer " + str(Settings.get_value("auth_token")))
 	if http.request(base_url() + path, headers, method, body) != OK:
 		http.queue_free()
 		done.call(false, {})

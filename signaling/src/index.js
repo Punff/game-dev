@@ -185,7 +185,7 @@ function corsHeaders(request) {
   return {
     "Access-Control-Allow-Origin": request.headers.get("Origin") || "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
   };

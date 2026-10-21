@@ -81,7 +81,9 @@ const DEFAULTS := {
 	"rumble": true,
 	"best_height": 0,
 	"client_id": "",          ## random, made on first run: who this computer is to the stats server
-	"player_name": "",        ## shown on the leaderboard
+	"player_name": "",        ## leaderboard name before accounts; unused now
+	"auth_token": "",         ## logged-in session with the stats server (never the password)
+	"account_name": "",       ## username of that session
 	"share_stats": true,      ## send match results and gameplay stats to the server
 }
 
@@ -218,9 +220,15 @@ func client_id() -> String:
 	return values.client_id
 
 
+## The account's username when logged in, else "Ball-XXXX" from the id.
 func player_name() -> String:
-	var n := clean_name(str(values.player_name))
-	return n if n != "" else "Ball-" + client_id().substr(0, 4).to_upper()
+	if logged_in():
+		return str(values.account_name)
+	return "Ball-" + client_id().substr(0, 4).to_upper()
+
+
+func logged_in() -> bool:
+	return str(values.auth_token) != ""
 
 
 ## What the server accepts as a name: printable, trimmed, at most 16 chars.

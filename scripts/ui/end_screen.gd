@@ -109,9 +109,16 @@ func _show_rank(c: Control) -> void:
 
 
 func _on_rank(reply: Dictionary) -> void:
-	if is_instance_valid(_rank) and reply.has("rank"):
+	if not is_instance_valid(_rank):
+		return
+	if reply.has("rank"):
 		_rank.text = "#%d on the leaderboard (best %d m)" % [reply.rank, reply.best]
-		UiFx.bump(_rank, 0.15)
+	elif not Settings.logged_in():
+		_rank.text = "Log in from the Leaderboard screen to get ranked"
+		_rank.add_theme_color_override("font_color", Palette.TEXT_DIM)
+	else:
+		return
+	UiFx.bump(_rank, 0.15)
 
 
 func _voted() -> bool:

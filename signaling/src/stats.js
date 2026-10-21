@@ -2,14 +2,22 @@
 // (JSON), stored in D1 (binding DB, schema in migrations/).
 //
 //   POST /v1/matches              a finished (or abandoned) match's Telemetry record
-//                                 -> {ok, id, rank?, best?}   (rank: solo runs)
+//                                 -> {ok, id, rank?, best?, new_best?}   (rank: solo runs by an account)
 //   GET  /v1/leaderboard?board=height|wins&limit=15&me=<client>
 //                                 -> {board, rows: [{name, value, you}], me: {rank, value} | null}
-//   GET  /v1/players/<client>     -> {player: {...totals, rank_height, rank_wins} | null}
+//   GET  /v1/players/<client>     -> {player: {...totals, account, rank_height, rank_wins} | null}
+//   /v1/auth/...                  accounts, see auth.js
 //
-// Nobody signs in, and the host's game runs the match, so a determined player
-// can send made-up results. The checks below only keep out the obviously
-// impossible and the accidental floods.
+// Everyone's matches are stored (that's the design data), but only accounts
+// are ranked. A request with "Authorization: Bearer <token>" speaks for that
+// account; otherwise a computer counts for the account logged in on it (the
+// devices table), or for its own anonymous row.
+//
+// The host's game runs the match, so a determined player can still send
+// made-up results. The checks below only keep out the obviously impossible
+// and the accidental floods.
+
+import { accountForClient, accountFromRequest, accountKey, handleAuth, linkDevice } from "./auth.js";
 
 const MAX_BODY = 1_500_000;
 const CLIENT_RE = /^[0-9a-f]{16}$/;
@@ -26,10 +34,14 @@ export async function handleApi(request, env, cors) {
   if (!env.DB) return reply(503, { error: "stats storage isn't set up" });
 
   try {
+    if (url.pathname.startsWith("/v1/auth/")) {
+      const res = await handleAuth(request, env, reply, url.pathname);
+      if (res) return res;
+    }
     if (url.pathname === "/v1/matches" && request.method === "POST") return await postMatch(request, env, reply);
-    if (url.pathname === "/v1/leaderboard" && request.method === "GET") return await getLeaderboard(url, env, reply);
+    if (url.pathname === "/v1/leaderboard" && request.method === "GET") return await getLeaderboard(request, url, env, reply);
     const m = url.pathname.match(/^\/v1\/players\/([0-9a-f]{16})$/);
-    if (m && request.method === "GET") return await getPlayer(m[1], env, reply);
+    if (m && request.method === "GET") return await getPlayer(request, m[1], env, reply);
   } catch (err) {
     console.error(err);
     return reply(500, { error: "server error" });
@@ -61,24 +73,34 @@ async function postMatch(request, env, reply) {
     rec.winner | 0, rec.best_height | 0, str(rec.tuning_hash, 16), text).run();
 
   const result = { ok: true, id: ins.meta.last_row_id };
+
+  // An uploader who is logged in vouches for its own computer.
+  const uploader = await accountFromRequest(request, env);
+  if (uploader && (await accountForClient(env, rec.client))?.id !== uploader.id) {
+    await env.DB.batch(linkDevice(env, rec.client, uploader));
+  }
   if (rec.mode === "local" || rec.abandoned) return reply(200, result);
 
-  // Totals for everyone in the match who has an id of their own.
+  // Totals for everyone in the match who has an id of their own: their
+  // account's row if one is logged in on their computer, else their own.
+  const solo = rec.mode === "solo";
   const updates = [];
-  let before = null;
+  let mine = null;   // the uploader's row key and best before this run (solo)
   for (const r of rec.roster) {
     if (!CLIENT_RE.test(r.client || "")) continue;
     const pp = rec.per_player[String(r.id)];
-    const solo = rec.mode === "solo";
+    const acc = await accountForClient(env, r.client);
+    const key = acc ? accountKey(acc.id) : r.client;
     const height = Math.max(0, pp.max_m | 0);
     const cause = pp.death?.cause;
     if (solo && r.client === rec.client) {
-      before = await env.DB.prepare("SELECT best_solo FROM players WHERE client = ?").bind(r.client).first();
+      const before = await env.DB.prepare("SELECT best_solo FROM players WHERE client = ?").bind(key).first();
+      mine = { key, ranked: !!acc, before: before?.best_solo ?? null };
     }
     updates.push(env.DB.prepare(
-      `INSERT INTO players (client, name, solo_runs, best_solo, best_solo_at, online_matches, online_wins, kos,
+      `INSERT INTO players (client, account_id, name, solo_runs, best_solo, best_solo_at, online_matches, online_wins, kos,
                             deaths_lava, deaths_side, total_climb, play_seconds)
-       VALUES (?1, ?2, ?3, ?4, CASE WHEN ?4 > 0 THEN datetime('now') END, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+       VALUES (?1, ?12, ?2, ?3, ?4, CASE WHEN ?4 > 0 THEN datetime('now') END, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
        ON CONFLICT (client) DO UPDATE SET
          name = ?2, last_seen = datetime('now'),
          solo_runs = solo_runs + ?3,
@@ -87,22 +109,31 @@ async function postMatch(request, env, reply) {
          online_matches = online_matches + ?5, online_wins = online_wins + ?6, kos = kos + ?7,
          deaths_lava = deaths_lava + ?8, deaths_side = deaths_side + ?9,
          total_climb = total_climb + ?10, play_seconds = play_seconds + ?11`,
-    ).bind(r.client, cleanName(r.name), solo ? 1 : 0, solo ? height : 0, solo ? 0 : 1,
+    ).bind(key, acc ? acc.username : cleanName(r.name), solo ? 1 : 0, solo ? height : 0, solo ? 0 : 1,
       !solo && rec.winner === r.id ? 1 : 0, pp.kos | 0, cause === "lava" ? 1 : 0, cause === "side" ? 1 : 0,
-      height, Math.min(rec.duration, 7200)));
+      height, Math.min(rec.duration, 7200), acc ? acc.id : null));
   }
   if (updates.length) await env.DB.batch(updates);
 
-  if (rec.mode === "solo") {
-    const me = await env.DB.prepare("SELECT best_solo FROM players WHERE client = ?").bind(rec.client).first();
-    if (me) {
-      const above = await env.DB.prepare("SELECT COUNT(*) AS n FROM players WHERE best_solo > ?").bind(me.best_solo).first();
-      result.rank = above.n + 1;
-      result.best = me.best_solo;
-      result.new_best = !before || me.best_solo > before.best_solo;
-    }
+  if (mine?.ranked) {
+    const me = await env.DB.prepare("SELECT best_solo FROM players WHERE client = ?").bind(mine.key).first();
+    result.rank = await rankOf(env, "best_solo", me.best_solo);
+    result.best = me.best_solo;
+    result.new_best = mine.before === null || me.best_solo > mine.before;
   }
   return reply(200, result);
+}
+
+// Place among accounts for a value of `col` (ties share the better place).
+async function rankOf(env, col, value) {
+  const above = await env.DB.prepare(`SELECT COUNT(*) AS n FROM players WHERE account_id IS NOT NULL AND ${col} > ?`).bind(value).first();
+  return above.n + 1;
+}
+
+// Who a read request is about: the Bearer token's account, else the account
+// logged in on `client`.
+async function viewer(request, env, client) {
+  return (await accountFromRequest(request, env)) || (CLIENT_RE.test(client || "") ? await accountForClient(env, client) : null);
 }
 
 function validate(rec) {
@@ -123,34 +154,35 @@ function validate(rec) {
   return null;
 }
 
-async function getLeaderboard(url, env, reply) {
+async function getLeaderboard(request, url, env, reply) {
   const board = url.searchParams.get("board") === "wins" ? "wins" : "height";
   const col = board === "wins" ? "online_wins" : "best_solo";
   const tiebreak = board === "wins" ? "online_matches ASC" : "best_solo_at ASC";
   const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "15", 10) || 15, 1), 50);
-  const me = url.searchParams.get("me") || "";
+  const acc = await viewer(request, env, url.searchParams.get("me"));
+  const myKey = acc ? accountKey(acc.id) : null;
   const { results } = await env.DB.prepare(
-    `SELECT client, name, ${col} AS value FROM players WHERE ${col} > 0 ORDER BY ${col} DESC, ${tiebreak} LIMIT ?`,
+    `SELECT client, name, ${col} AS value FROM players WHERE account_id IS NOT NULL AND ${col} > 0
+     ORDER BY ${col} DESC, ${tiebreak} LIMIT ?`,
   ).bind(limit).all();
-  const out = { board, rows: results.map((r) => ({ name: r.name, value: r.value, you: r.client === me })), me: null };
-  if (CLIENT_RE.test(me)) {
-    const row = await env.DB.prepare(`SELECT ${col} AS value FROM players WHERE client = ?`).bind(me).first();
-    if (row && row.value > 0) {
-      const above = await env.DB.prepare(`SELECT COUNT(*) AS n FROM players WHERE ${col} > ?`).bind(row.value).first();
-      out.me = { rank: above.n + 1, value: row.value };
-    }
+  const out = { board, rows: results.map((r) => ({ name: r.name, value: r.value, you: r.client === myKey })), me: null };
+  if (acc) {
+    const row = await env.DB.prepare(`SELECT ${col} AS value FROM players WHERE client = ?`).bind(myKey).first();
+    if (row && row.value > 0) out.me = { rank: await rankOf(env, col, row.value), value: row.value };
   }
   return reply(200, out);
 }
 
-async function getPlayer(client, env, reply) {
-  const p = await env.DB.prepare("SELECT * FROM players WHERE client = ?").bind(client).first();
+async function getPlayer(request, client, env, reply) {
+  const acc = await viewer(request, env, client);
+  const p = await env.DB.prepare("SELECT * FROM players WHERE client = ?").bind(acc ? accountKey(acc.id) : client).first();
   if (!p) return reply(200, { player: null });
-  const rank = async (col) =>
-    p[col] > 0 ? (await env.DB.prepare(`SELECT COUNT(*) AS n FROM players WHERE ${col} > ?`).bind(p[col]).first()).n + 1 : null;
-  delete p.client;
+  const rank = async (col) => (acc && p[col] > 0 ? await rankOf(env, col, p[col]) : null);
   p.rank_height = await rank("best_solo");
   p.rank_wins = await rank("online_wins");
+  p.account = acc ? acc.username : null;
+  delete p.client;
+  delete p.account_id;
   return reply(200, { player: p });
 }
 

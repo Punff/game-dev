@@ -27,5 +27,8 @@ migrations_dir = "migrations"
 # Handed to every player on connect, so a TURN relay can be added here later
 # without re-exporting the game.
 ICE_SERVERS = '[{"urls":["stun:stun.l.google.com:19302","stun:stun1.l.google.com:19302"]}]'
+# Password hashing rounds for new logins (src/password.js). 15000 (~9 ms) fits the
+# free plan's 10 ms CPU per request; up to 100000 on the paid plan.
+PBKDF2_ITERATIONS = "15000"
 # Optional comma-separated list of allowed page origins; empty = allow all.
 ALLOWED_ORIGINS = ""

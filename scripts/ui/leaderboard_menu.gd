@@ -3,6 +3,7 @@ extends MenuBase
 
 ## Leaderboard overlay from the main menu: best solo climbs or online wins,
 ## your own rank, and your totals. Everything comes from Stats (the server).
+## Only accounts are ranked; the Account button logs in or out.
 
 const BOARDS := [["height", "Highest Climb"], ["wins", "Online Wins"]]
 
@@ -12,6 +13,7 @@ var _list: VBoxContainer
 var _me: Label
 var _totals: Label
 var _back: Button
+var _account: Button
 var _asked := 0   # ignore answers to requests made before the last tab switch
 
 
@@ -45,20 +47,39 @@ func _ready() -> void:
 	_totals = UiTheme.label("", 16, Palette.TEXT_DIM)
 	_totals.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(_totals)
+	var footer := HBoxContainer.new()
+	footer.add_theme_constant_override("separation", 12)
+	_account = UiTheme.button("", 300)
+	_account.pressed.connect(func(): open_sub(AccountMenu.new()))
+	footer.add_child(_account)
+	var gap := Control.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	footer.add_child(gap)
 	_back = UiTheme.button("Back", 160)
-	_back.size_flags_horizontal = Control.SIZE_SHRINK_END
 	_back.pressed.connect(func(): closed.emit())
-	content.add_child(_back)
-	MenuBase.link_vertical([_tab_buttons[0], _back])
+	footer.add_child(_back)
+	content.add_child(footer)
+	MenuBase.link_vertical([_tab_buttons[0], _account])
 	_tab_buttons[0].focus_neighbor_right = _tab_buttons[0].get_path_to(_tab_buttons[1])
 	_tab_buttons[1].focus_neighbor_left = _tab_buttons[1].get_path_to(_tab_buttons[0])
 	_tab_buttons[1].focus_neighbor_top = _tab_buttons[1].get_path_to(_back)
 	_tab_buttons[1].focus_neighbor_bottom = _tab_buttons[1].get_path_to(_back)
+	_account.focus_neighbor_right = _account.get_path_to(_back)
+	_back.focus_neighbor_left = _back.get_path_to(_account)
+	_back.focus_neighbor_top = _back.get_path_to(_tab_buttons[1])
+	_back.focus_neighbor_bottom = _back.get_path_to(_tab_buttons[1])
 
-	_set_board(0)
+	Stats.account_changed.connect(_refresh)
+	_refresh()
 	_tab_buttons[0].grab_focus.call_deferred()
-	_load_totals()
 	UiFx.stamp(panel, 1.06, -1.5)
+
+
+func _refresh() -> void:
+	_account.text = "Account: " + Settings.player_name() if Settings.logged_in() else "Log in / Create account"
+	_totals.text = ""
+	_set_board(_board)
+	_load_totals()
 
 
 func _set_board(i: int) -> void:
@@ -89,8 +110,12 @@ func _fill(ok: bool, reply: Dictionary) -> void:
 			_list.add_child(_row(i + 1, rows[i]))
 	var me: Variant = reply.get("me")
 	var unit := " m" if BOARDS[_board][0] == "height" else " wins"
-	_me.text = "You (%s): #%d with %d%s" % [Settings.player_name(), me.rank, me.value, unit] if me is Dictionary \
-		else "You (%s): not on this board yet" % Settings.player_name()
+	if not Settings.logged_in():
+		_me.text = "Log in or create an account to get ranked."
+	elif me is Dictionary:
+		_me.text = "You (%s): #%d with %d%s" % [Settings.player_name(), me.rank, me.value, unit]
+	else:
+		_me.text = "You (%s): not on this board yet" % Settings.player_name()
 
 
 func _row(place: int, r: Dictionary) -> Control:
@@ -114,7 +139,7 @@ func _load_totals() -> void:
 		var p: Variant = reply.get("player")
 		if not ok or not is_inside_tree() or not p is Dictionary:
 			return
-		_totals.text = "Solo runs %d  ·  best %d m  ·  online %d played, %d won  ·  %d knock-outs  ·  %d m climbed in all" % [
+		_totals.text = ("" if Settings.logged_in() else "On this computer: ") + "Solo runs %d  ·  best %d m  ·  online %d played, %d won  ·  %d knock-outs  ·  %d m climbed in all" % [
 			p.solo_runs, p.best_solo, p.online_matches, p.online_wins, p.kos, p.total_climb])
 
 
@@ -131,6 +156,8 @@ func _clear() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if sub_open:
+		return
 	if event.is_action_pressed("ui_cancel") or event.is_action_pressed("pause"):
 		get_viewport().set_input_as_handled()
 		Sfx.play("ui_back")

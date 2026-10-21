@@ -117,25 +117,40 @@ works and for a rough first look at a tuning change; they don't stand in
 for people. Their records are tagged `"bot"` and only upload to a local server
 (`BOT_UPLOAD=1` and `--signaling=ws://127.0.0.1:8787`).
 
-## Leaderboards and player stats
+## Leaderboards, accounts and player stats
 
-Each computer gets a random id (`Settings.client_id()`) and a name, which is
-editable in Settings → Leaderboard Name and defaults to `Ball-XXXX`. Settings →
-Share Stats Online turns all uploads off.
+Only **accounts** (username and password) are ranked. Anyone can play and
+their matches still go into the analytics, but they don't appear on the
+boards until they log in. Settings → Share Stats Online turns all uploads off.
 
-- **Highest Climb**: best solo run per id.
-- **Online Wins**: online matches won. Guests send their id and name to the host
-  when joining, so the host's record credits everyone.
+- **Log in / create an account:** main menu → Leaderboard → Log in / Create
+  account. Usernames are 3–16 letters, digits, `_` or `-`, matched regardless
+  of capitals; passwords are 8+ characters. There's no email: a forgotten
+  password is reset by hand (see `signaling/README.md`).
+- The game keeps only a session token (Settings `auth_token`, valid 180 days),
+  never the password. Logging in on a computer also links its id
+  (`Settings.client_id()`) to the account and folds in whatever that computer
+  earned anonymously.
+- **Highest Climb**: best solo run per account.
+- **Online Wins**: online matches won. Guests send their computer's id to the
+  host when joining; the server credits whichever account is logged in on
+  that computer, so the host never sees anyone's token.
 - Couch (local) matches go into the analytics but not into anyone's stats:
   players share one computer, so there's no telling who is who.
 
-The main menu's Leaderboard screen shows both boards, your rank and your totals.
-After a solo run the results screen shows your place.
+After a solo run, the results screen shows your place, or a reminder to log in.
 
-**Trust:** nobody signs in, and the host's game decides results, so someone
-determined can submit made-up numbers. The server rejects impossible heights
-for the match length and more than one upload every 5 s per id. Making it
-trustworthy would need the server to check replays or run matches itself.
+**Passwords** are hashed with PBKDF2-SHA256 and a per-account salt. The round
+count (`PBKDF2_ITERATIONS` in `signaling/wrangler.toml`) is 15,000 to fit the
+free plan's 10 ms of CPU per request. That's well below today's
+recommendations, so raise it to 100,000 if the Worker ever moves to the paid
+plan; each account is re-hashed at its next login. Failed logins are limited
+to 10 per username and 50 per IP every 15 minutes.
+
+**Trust:** the host's game decides results, so someone determined can still
+submit made-up numbers. The server rejects impossible heights for the match
+length and more than one upload every 5 s per computer. Making it trustworthy
+would need the server to check replays or run matches itself.
 
 ## Server setup (once)
 
@@ -144,7 +159,7 @@ See `signaling/README.md` → Stats. In short:
 ```bash
 cd signaling
 npx wrangler d1 create cakum-pakum-stats      # paste the database_id into wrangler.toml
-npx wrangler d1 migrations apply cakum-pakum-stats --remote
+npx wrangler d1 migrations apply cakum-pakum-stats --remote   # applies 0001 and 0002
 npx wrangler deploy
 ```
 
