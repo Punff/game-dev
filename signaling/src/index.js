@@ -15,8 +15,11 @@
 //   {type: "error", reason}                    then the socket closes
 // Client -> server:
 //   {type: "offer" | "answer" | "candidate", to, ...}
+//
+// Plain HTTP under /v1/ is the stats and leaderboard API (src/stats.js).
 
 import { DurableObject } from "cloudflare:workers";
+import { handleApi } from "./stats.js";
 
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O or 1/I
 const CODE_LEN = 5;
@@ -26,6 +29,10 @@ const RELAYED = new Set(["offer", "answer", "candidate"]);
 
 export default {
   async fetch(request, env) {
+    if (new URL(request.url).pathname.startsWith("/v1/")) {
+      if (!originAllowed(request, env)) return new Response("Forbidden", { status: 403 });
+      return handleApi(request, env, corsHeaders(request));
+    }
     if (request.headers.get("Upgrade") !== "websocket") {
       return new Response("Ultimate Cakum Pakum signaling - connect with a WebSocket.", { status: 426 });
     }
@@ -171,6 +178,17 @@ function originAllowed(request, env) {
   const origin = request.headers.get("Origin");
   if (!origin) return true; // desktop builds send none
   return allowed.some((a) => origin === a || (a.startsWith("*.") && origin.endsWith(a.slice(1))));
+}
+
+// The web build calls the API from the itch.io page's origin.
+function corsHeaders(request) {
+  return {
+    "Access-Control-Allow-Origin": request.headers.get("Origin") || "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Max-Age": "86400",
+    Vary: "Origin",
+  };
 }
 
 // A refusal still needs a WebSocket so the game can show the reason. The

@@ -13,6 +13,16 @@ class_name = "Room"
 tag = "v1"
 new_sqlite_classes = ["Room"]
 
+# Stats and leaderboards (src/stats.js). Create once with
+#   npx wrangler d1 create cakum-pakum-stats
+# put the printed database_id here, then
+#   npx wrangler d1 migrations apply cakum-pakum-stats --remote
+[[d1_databases]]
+binding = "DB"
+database_name = "cakum-pakum-stats"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
 [vars]
 # Handed to every player on connect, so a TURN relay can be added here later
 # without re-exporting the game.
