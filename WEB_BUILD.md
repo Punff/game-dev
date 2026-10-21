@@ -44,6 +44,10 @@ host the match stalls.
 ## Web specifics handled in-game
 
 - Settings are saved to browser storage (IndexedDB via `user://`).
+- Frame pacing: browsers don't report the refresh rate, so Godot can't smooth
+  frame times there. `WebPacing` measures it at startup and on a ~60 Hz display
+  turns physics interpolation off so physics runs exactly one step per frame
+  (smoother, about a frame less input lag). Faster displays keep interpolation.
 - "Quit" is hidden; VSync option hidden (browser controls it).
 - Fullscreen toggle works from the Settings menu (needs a click/keypress).
 - Game auto-pauses when the tab loses focus or a controller disconnects.
