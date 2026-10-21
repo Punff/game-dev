@@ -27,6 +27,7 @@ Sfx="*res://scripts/core/sfx.gd"
 Grit="*res://scripts/core/grit.gd"
 PlayerManager="*res://scripts/core/player_manager.gd"
 MatchManager="*res://scripts/core/match_manager.gd"
+Music="*res://scripts/core/music.gd"
 Net="*res://scripts/core/net.gd"
 
 [display]
