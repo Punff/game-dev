@@ -29,7 +29,7 @@ func _ready() -> void:
 	col.add_child(spacer)
 
 	var list: Array = []
-	for entry in [["Play", _on_play], ["Online", _on_online], ["How to play", _on_help], ["Settings", open_settings], ["Quit", func(): get_tree().quit()]]:
+	for entry in [["Play", _on_play], ["Online", _on_online], ["Leaderboard", func(): open_sub(LeaderboardMenu.new())], ["How to play", _on_help], ["Settings", open_settings], ["Quit", func(): get_tree().quit()]]:
 		var b := UiTheme.button(entry[0], 300)
 		b.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT

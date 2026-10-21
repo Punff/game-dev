@@ -35,23 +35,25 @@ func on_player_jump(player: Player, _strength: float) -> void:
 	if Net.is_client():
 		return   # the host breaks it
 	# Small delay so the jump itself still pushes off solid ground.
-	get_tree().create_timer(BREAK_DELAY).timeout.connect(break_apart.bind(player.global_position, 220.0))
+	get_tree().create_timer(BREAK_DELAY).timeout.connect(break_apart.bind(player.global_position, 220.0, "jump", player))
 
 
 func on_player_land(player: Player) -> void:
 	if player.last_impact >= POUND_SPEED and not Net.is_client():
-		break_apart(player.global_position, 380.0)
+		break_apart(player.global_position, 380.0, "pound", player)
 		SignalBus.screen_shake_requested.emit(10.0)
 
 
-func on_shockwave(_dir: Vector2, origin: Vector2) -> void:
-	break_apart(origin, 520.0)
+func on_shockwave(_dir: Vector2, origin: Vector2, by: Player = null) -> void:
+	break_apart(origin, 520.0, "shock", by)
 
 
-func break_apart(origin: Vector2, force := 260.0) -> void:
+## `cause` and `by` are only for Telemetry (and credit for the chunks' hits).
+func break_apart(origin: Vector2, force := 260.0, cause := "", by: Player = null) -> void:
 	if _broken or not is_inside_tree():
 		return
 	_broken = true
+	Telemetry.broke(self, cause, by)
 	collision_layer = 0
 	visible = false
 	SignalBus.block_broken.emit(global_position)
@@ -76,6 +78,7 @@ func break_apart(origin: Vector2, force := 260.0) -> void:
 			local[i] -= center
 		var f := Fragment.new()
 		f.setup(local, colors()[0], colors()[1])
+		f.credit = by if is_instance_valid(by) else null
 		parent.add_child(f)
 		f.global_position = global_position + center
 		var away := (f.global_position - origin).normalized()

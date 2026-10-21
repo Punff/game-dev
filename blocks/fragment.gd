@@ -22,6 +22,9 @@ var claim_frame := -1
 var claim_dist := INF
 var held_by: Player = null
 var thrown_by: Player = null
+## Who to credit for what this chunk hits (Telemetry): its last thrower, or
+## whoever broke the block it came from.
+var credit: Player = null
 var _thrown_time := 0.0
 var stun := 0.0
 var _was_fast := false
@@ -111,6 +114,7 @@ func _velocity() -> Vector2:
 
 func throw(by: Player, velocity: Vector2) -> void:
 	thrown_by = by
+	credit = by
 	_thrown_time = 0.35
 	linear_velocity = velocity
 	angular_velocity = randf_range(-8, 8)
@@ -139,7 +143,7 @@ func _on_body_entered(body: Node) -> void:
 	if speed < IMPACT_SPEED:
 		return
 	if body is BreakableBlock:
-		body.break_apart(global_position, speed * 0.6)
+		body.break_apart(global_position, speed * 0.6, "chunk", credit)
 	elif body is Player:
 		if body == thrown_by and _thrown_time > 0.0:
 			return

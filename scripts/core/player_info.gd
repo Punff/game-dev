@@ -8,6 +8,8 @@ var device_id := -1          ## Settings.DEVICE_KB_A / DEVICE_KB_B, or a joypad 
 var color_index := 0
 var is_ready := false
 var peer_id := 0             ## online: the peer that controls this player (0 offline)
+var client_id := ""          ## online, host only: the guest's stats id (Settings.client_id)
+var nick := ""               ## online, host only: the guest's leaderboard name
 
 # Per-match results
 var max_height := 0

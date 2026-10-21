@@ -290,6 +290,7 @@ func _handle_jump(delta: float) -> void:
 		velocity.y = -JUMP_VELOCITY
 		_squash = Vector2(0.65, 1.4)
 		_on_jumped(1.0, grounded_jump)
+		Telemetry.ev("jump" if grounded_jump else "air_jump", self)
 		Sfx.play("jump" if grounded_jump else "double_jump", -3.0)
 		if not grounded_jump:
 			_own_fx(true)
@@ -315,6 +316,7 @@ func _handle_charge(delta: float, on_floor: bool) -> void:
 		jumps_left = MAX_JUMPS - 1
 		_squash = Vector2(0.6, 1.5)
 		_on_jumped(1.0 + ratio, on_floor)
+		Telemetry.ev("charge", self, {"ratio": snappedf(ratio, 0.01), "ground": on_floor})
 		Sfx.play("charge_jump", -2.0, 0.85 + ratio * 0.3)
 		_own_fx(true)
 		Fx.ring(global_position + Vector2(0, RADIUS), color, 60.0 + ratio * 70.0, 6.0, 0.35)
@@ -335,6 +337,7 @@ func _handle_abilities(delta: float) -> void:
 	elif _pressed("gravity") and gravity_cd <= 0.0 and _just_pressed("gravity"):
 		_field_active = true
 		_field_time = 0.0
+		Telemetry.field_on(self)
 		Sfx.play("gravity", -3.0)
 
 	if _just_pressed("shockwave") and shock_cd <= 0.0:
@@ -354,6 +357,7 @@ func _end_field(allow_throw: bool) -> void:
 			if is_instance_valid(f):
 				f.throw(self, aim.normalized().rotated(randf_range(-0.12, 0.12)) * THROW_SPEED * randf_range(0.85, 1.1) + velocity * 0.3)
 				thrown += 1
+	Telemetry.ev("field_end", self, {"held": _held.size(), "thrown": thrown, "dur": snappedf(_field_time, 0.01), "cut": not allow_throw})
 	for f in _held:
 		if is_instance_valid(f):
 			f.held_by = null
@@ -470,6 +474,7 @@ func _fire_shockwave() -> void:
 	var targets: Array = get_tree().get_nodes_in_group("player")
 	targets.append_array(get_tree().get_nodes_in_group("blocks"))
 	targets.append_array(get_tree().get_nodes_in_group("fragments"))
+	var hits := {"players": 0, "chunks": 0, "blocks": 0}
 	for node in targets:
 		if node == self or not is_instance_valid(node):
 			continue
@@ -484,19 +489,27 @@ func _fire_shockwave() -> void:
 		var falloff := 1.0 - dist / SHOCK_RANGE
 		if node is Player:
 			node.hit_by_shockwave(to.normalized() * SHOCK_FORCE * (0.35 + 0.65 * falloff), self)
+			hits.players += 1
 		elif node is Fragment:
 			node.stun = 0.4
 			node.throw(self, (to.normalized() * 0.6 + dir * 0.4).normalized() * 1000.0 * (0.5 + falloff))
+			hits.chunks += 1
 		elif node is Block:
-			node.on_shockwave(to.normalized(), origin)
+			node.on_shockwave(to.normalized(), origin, self)
+			hits.blocks += 1
+	hits["aim"] = [snappedf(dir.x, 0.01), snappedf(dir.y, 0.01)]
+	hits["ground"] = is_on_floor()
+	Telemetry.ev("shock", self, hits)
 
 
-func hit_by_shockwave(impulse: Vector2, _from: Player) -> void:
+func hit_by_shockwave(impulse: Vector2, from: Player) -> void:
+	Telemetry.hit(self, from, "shock", impulse)
 	_take_hit(impulse)
 	Fx.burst(global_position, color, 8, 260.0, 0.35)
 
 
-func hit_by_chunk(impulse: Vector2, _chunk: Fragment) -> void:
+func hit_by_chunk(impulse: Vector2, chunk: Fragment) -> void:
+	Telemetry.hit(self, chunk.credit, "chunk", impulse)
 	_take_hit(impulse)
 	Sfx.play("hit", -2.0)
 	Fx.burst(global_position, Palette.PAPER_DIM, 6, 200.0, 0.3)
@@ -533,6 +546,7 @@ func _on_jumped(strength: float, from_ground: bool) -> void:
 		var r := JUMP_PUSH_RADIUS * strength
 		if to.length() < r:
 			other.velocity += to.normalized() * JUMP_PUSH_FORCE * strength
+			Telemetry.hit(other, self, "push", to.normalized() * JUMP_PUSH_FORCE * strength)
 	# Debris gets kicked too.
 	for f: Fragment in get_tree().get_nodes_in_group("fragments"):
 		if f.held_by == self:
@@ -544,6 +558,8 @@ func _on_jumped(strength: float, from_ground: bool) -> void:
 
 
 func _on_landed() -> void:
+	if last_impact >= BreakableBlock.POUND_SPEED:
+		Telemetry.ev("pound", self, {"impact": roundi(last_impact)})
 	var impact := clampf(last_impact / 1100.0, 0.0, 1.0)
 	_squash = Vector2(1.0 + 0.4 * (0.5 + impact), 1.0 - 0.4 * (0.5 + impact) * 0.9)
 	_own_fx(true)
@@ -659,6 +675,7 @@ func shock_ready() -> float:
 func die() -> void:
 	if is_dead:
 		return
+	Telemetry.died(self)
 	is_dead = true
 	if _field_active:
 		_end_field(false)

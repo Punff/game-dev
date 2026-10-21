@@ -255,7 +255,7 @@ func _on_connected() -> void:
 	_set_status("Connected. Joining...")
 	# Room guests keep their signaling link: it holds their place in the room
 	# and tells them at once if the host closes it.
-	_hello.rpc_id(1, PROTOCOL)
+	_hello.rpc_id(1, PROTOCOL, Settings.client_id(), Settings.player_name())
 
 
 func _on_peer_connected(_id: int) -> void:
@@ -293,8 +293,10 @@ func _on_peer_disconnected(id: int) -> void:
 
 # ── Lobby (client -> server) ─────────────────
 
+## `client_id` and `nick` only go into the host's match record, so the
+## guest's result lands on their own leaderboard entry.
 @rpc("any_peer", "reliable")
-func _hello(protocol: int) -> void:
+func _hello(protocol: int, client_id := "", nick := "") -> void:
 	if not is_server():
 		return
 	var id := multiplayer.get_remote_sender_id()
@@ -313,6 +315,8 @@ func _hello(protocol: int) -> void:
 	# irrelevant here since their controls arrive over the network.
 	var pid := PlayerManager.join(-1000 - id)
 	PlayerManager.players[pid].peer_id = id
+	PlayerManager.players[pid].client_id = client_id.substr(0, 32)
+	PlayerManager.players[pid].nick = Settings.clean_name(nick)
 	_broadcast_roster()
 
 

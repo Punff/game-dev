@@ -105,7 +105,24 @@ func _build_general() -> void:
 	focusables.append(_check_row("Show FPS", "show_fps"))
 	focusables.append(_slider_row("Stick Deadzone", "deadzone", 0.1, 0.6))
 	focusables.append(_check_row("Controller Rumble", "rumble"))
+	focusables.append(_name_row())
+	focusables.append(_check_row("Share Stats Online", "share_stats"))
 	_finish_focus(focusables)
+
+
+## Leaderboard name. Empty means the generated "Ball-XXXX".
+func _name_row() -> Control:
+	var h := _row("Leaderboard Name")
+	var e := LineEdit.new()
+	e.text = Settings.clean_name(str(Settings.get_value("player_name")))
+	e.placeholder_text = Settings.player_name() if e.text == "" else "Ball-" + Settings.client_id().substr(0, 4).to_upper()
+	e.max_length = 16
+	e.custom_minimum_size = Vector2(300, 44)
+	e.text_changed.connect(func(t: String): Settings.set_value("player_name", Settings.clean_name(t), false))
+	e.text_submitted.connect(func(_t): Settings.save_settings())
+	e.focus_exited.connect(Settings.save_settings)
+	h.add_child(e)
+	return e
 
 
 func _row(label_text: String) -> HBoxContainer:

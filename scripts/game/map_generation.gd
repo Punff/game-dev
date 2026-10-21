@@ -27,6 +27,8 @@ var floor_y := 0.0
 var _blocks: Array[Block] = []
 var _by_net_id := {}
 var _next_net_id := 0
+## How many of each block type the map has built (Telemetry: what was on offer).
+var type_counts := {}
 
 
 func _physics_process(delta: float) -> void:
@@ -103,6 +105,7 @@ func _spawn_row(row: Dictionary) -> void:
 			block.speed = 0.7 + posmod(hash(Vector2i(block.position)), 1000) / 2000.0
 		elif block is SpeedBlock or block is ConveyorBlock:
 			block.direction = p.get("dir", 1.0)
+		type_counts[block.block_id] = type_counts.get(block.block_id, 0) + 1
 		_next_net_id += 1
 		block.net_id = _next_net_id
 		_by_net_id[_next_net_id] = block

@@ -18,8 +18,9 @@ func on_player_stand(player: Player, _delta: float) -> void:
 	player.surface_push += direction * PUSH
 
 
-func on_shockwave(_dir: Vector2, _origin: Vector2) -> void:
+func on_shockwave(_dir: Vector2, _origin: Vector2, by: Player = null) -> void:
 	direction = -direction
+	Telemetry.ev("conveyor_flip", by)
 	net_changed()
 
 

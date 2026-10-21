@@ -87,7 +87,8 @@ func on_player_stand(_player: Player, _delta: float) -> void: pass
 func on_player_leave(_player: Player) -> void: pass
 ## Player jumped while standing on this block.
 func on_player_jump(_player: Player, _strength: float) -> void: pass
-func on_shockwave(_dir: Vector2, _origin: Vector2) -> void: pass
+## `_by` fired it (null when unknown).
+func on_shockwave(_dir: Vector2, _origin: Vector2, _by: Player = null) -> void: pass
 
 
 # ── Online ───────────────────────────────────

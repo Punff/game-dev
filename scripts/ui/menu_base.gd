@@ -68,8 +68,12 @@ func restore_focus() -> void:
 
 ## Pops a centred SettingsMenu on top of this menu and refocuses afterwards.
 func open_settings() -> void:
+	open_sub(SettingsMenu.new())
+
+
+## Pops any overlay menu on top of this one and refocuses once it closes.
+func open_sub(s: MenuBase) -> void:
 	remember_focus()
-	var s := SettingsMenu.new()
 	s.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(s)
 	sub_open = true

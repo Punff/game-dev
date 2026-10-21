@@ -16,6 +16,7 @@ func _init() -> void:
 
 func on_player_land(player: Player) -> void:
 	player.launch(BOUNCE_VELOCITY)
+	Telemetry.ev("bounce", player)
 	_squash = 1.0
 	Sfx.play("bounce")
 

@@ -80,6 +80,9 @@ const DEFAULTS := {
 	"deadzone": 0.3,
 	"rumble": true,
 	"best_height": 0,
+	"client_id": "",          ## random, made on first run: who this computer is to the stats server
+	"player_name": "",        ## shown on the leaderboard
+	"share_stats": true,      ## send match results and gameplay stats to the server
 }
 
 var values: Dictionary = DEFAULTS.duplicate()
@@ -204,6 +207,29 @@ func _set_bus_volume(bus: String, linear: float) -> void:
 
 static func is_web() -> bool:
 	return OS.has_feature("web")
+
+
+## Random id made on first run. It names this computer to the stats server
+## and nothing else.
+func client_id() -> String:
+	if str(values.client_id).length() != 16:
+		var b := Crypto.new().generate_random_bytes(8)
+		set_value("client_id", b.hex_encode())
+	return values.client_id
+
+
+func player_name() -> String:
+	var n := clean_name(str(values.player_name))
+	return n if n != "" else "Ball-" + client_id().substr(0, 4).to_upper()
+
+
+## What the server accepts as a name: printable, trimmed, at most 16 chars.
+static func clean_name(n: String) -> String:
+	var out := ""
+	for c in n.strip_edges():
+		if c.unicode_at(0) >= 32 and c.unicode_at(0) != 127:
+			out += c
+	return out.substr(0, 16).strip_edges()
 
 
 func record_height(meters: int) -> bool:

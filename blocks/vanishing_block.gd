@@ -18,8 +18,9 @@ func _init() -> void:
 	block_id = "vanishing_block"
 
 
-func on_player_land(_player: Player) -> void:
+func on_player_land(player: Player) -> void:
 	if _state == S.SOLID and not Net.is_client():
+		Telemetry.ev("vanish", player)
 		_state = S.WARNING
 		_timer = WARN_TIME
 		set_process(true)

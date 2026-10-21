@@ -6,6 +6,7 @@ extends CanvasLayer
 var _menu := MenuBase.new()
 var _votes: Label        # online: rematch tally
 var _rematch: Button
+var _rank: Label         # solo: leaderboard place, once the server answers
 
 
 func _ready() -> void:
@@ -31,6 +32,8 @@ func _show(results: Dictionary) -> void:
 		c.add_child(headline)
 		var sub := "New best" if results.new_record else "Best: %d m" % int(Settings.get_value("best_height"))
 		c.add_child(_centered(UiTheme.label(sub, 24, Palette.GOOD if results.new_record else Palette.TEXT_DIM)))
+		if Stats.enabled():
+			_show_rank(c)
 	else:
 		if winner:
 			crown = Crown.new(64.0)
@@ -96,6 +99,19 @@ func _show(results: Dictionary) -> void:
 	for b: Button in buttons:
 		b.disabled = false
 	_menu.focus_first()
+
+
+## Fills in once the server has the run (Telemetry uploads it at match end).
+func _show_rank(c: Control) -> void:
+	_rank = _centered(UiTheme.label("", 20, Palette.ACCENT))
+	c.add_child(_rank)
+	Stats.match_submitted.connect(_on_rank, CONNECT_ONE_SHOT)
+
+
+func _on_rank(reply: Dictionary) -> void:
+	if is_instance_valid(_rank) and reply.has("rank"):
+		_rank.text = "#%d on the leaderboard (best %d m)" % [reply.rank, reply.best]
+		UiFx.bump(_rank, 0.15)
 
 
 func _voted() -> bool:

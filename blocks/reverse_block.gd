@@ -13,6 +13,8 @@ func _init() -> void:
 
 
 func on_player_land(player: Player) -> void:
+	if not player.is_reversed():
+		Telemetry.ev("reversed", player)
 	player.reverse_controls(LINGER)
 
 
