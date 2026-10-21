@@ -6,8 +6,15 @@ extends Node2D
 
 const SHADER := preload("res://shaders/lava.gdshader")
 const BASE_SPEED := 36.0
-const MAX_SPEED := 140.0
+const MAX_SPEED := 180.0
 const RAMP := 0.9              ## base speed gained per 10 s of match time
+## px between the lowest player and the surface. Closer than NEAR it eases
+## off; from CHASE_FROM it speeds up, reaching MAX_SPEED at CHASE_FULL. Tuned
+## on a recorded solo climb (~2.7 m/s): it settles ~15 m below a steady
+## climber, a few rows down, instead of ~35 m (off screen).
+const NEAR := 260.0
+const CHASE_FROM := 300.0
+const CHASE_FULL := 900.0
 const GLOW := 60.0
 
 var surface_y := 0.0
@@ -37,10 +44,10 @@ func update_lava(delta: float, lowest_player_y: float, cam: Camera2D) -> void:
 		var base := BASE_SPEED + RAMP * _time / 10.0
 		var gap := surface_y - lowest_player_y
 		var target := base
-		if gap < 260.0:
+		if gap < NEAR:
 			target = base * 0.45
-		elif gap > 900.0:
-			target = lerpf(base, MAX_SPEED, clampf((gap - 900.0) / 900.0, 0.0, 1.0))
+		elif gap > CHASE_FROM:
+			target = lerpf(base, MAX_SPEED, clampf((gap - CHASE_FROM) / (CHASE_FULL - CHASE_FROM), 0.0, 1.0))
 		speed = move_toward(speed, minf(target, MAX_SPEED), 60.0 * delta)
 		surface_y -= speed * delta
 	# Fit the rect to the visible area.
