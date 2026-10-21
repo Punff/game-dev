@@ -20,7 +20,7 @@ new_sqlite_classes = ["Room"]
 [[d1_databases]]
 binding = "DB"
 database_name = "cakum-pakum-stats"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "e5539e42-2b8f-4404-8808-4c2c8981b7f0"
 migrations_dir = "migrations"
 
 [vars]
