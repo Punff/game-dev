@@ -26,7 +26,7 @@ const DEFAULT_ADDRESS := "ws://127.0.0.1:7777"
 ## Where the room service lives once deployed (see signaling/README.md).
 ## Override with `-- --signaling=<url>`, or `?signaling=<url>` on the web page.
 const SIGNALING_URL := "wss://cakum-pakum-signaling.cakum-pakum-signaling.workers.dev"
-const PROTOCOL := 3
+const PROTOCOL := 4   ## bump when messages change: 4 = map events tell guests their kind and wind
 const ONLINE_LOBBY := "res://scenes/online_lobby.tscn"
 const FRAGMENTS_EVERY := 2         ## physics ticks between debris updates (30 Hz at 60); players go every tick
 const FRAMES_PER_PACKET := 6       ## each input packet repeats the last few frames, in case some go missing
