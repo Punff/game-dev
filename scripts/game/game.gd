@@ -195,6 +195,7 @@ func _finish(winner: Player) -> void:
 	if _ending:
 		return
 	_ending = true
+	pause_menu.close()   # results take over; a pause menu under them would fight for input
 	if winner:
 		winner.controls_enabled = false
 	var standings := PlayerManager.sorted_players()
@@ -216,6 +217,8 @@ func _finish(winner: Player) -> void:
 		"new_record": new_record,
 	}
 	await get_tree().create_timer(END_DELAY).timeout
+	if not is_inside_tree():
+		return   # left the match in the meantime
 	lava.active = false
 	if winner:
 		Sfx.play("win")
@@ -241,20 +244,25 @@ func _hit_stop(duration: float) -> void:
 
 ## A controller dropping out mid-match pauses the game so nobody dies to it.
 func _on_joy_connection_changed(device: int, connected: bool) -> void:
-	if not connected and PlayerManager.find_by_device(device) and MatchManager.state != MatchManager.State.ENDED and not Net.is_online():
+	if not connected and PlayerManager.find_by_device(device) and _can_pause() and not Net.is_online():
 		pause_menu.open("Controller %d disconnected" % (device + 1))
 
 
 ## Browsers throttle hidden tabs; pause instead of letting the lava run.
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and Settings.is_web() and MatchManager.state == MatchManager.State.PLAYING and not Net.is_online():
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and Settings.is_web() and MatchManager.state == MatchManager.State.PLAYING and _can_pause() and not Net.is_online():
 		pause_menu.open()
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("pause") and MatchManager.state != MatchManager.State.ENDED:
+	if event.is_action_pressed("pause") and _can_pause():
 		get_viewport().set_input_as_handled()
 		pause_menu.open()
+
+
+## Not once the match is decided: results are about to come up.
+func _can_pause() -> bool:
+	return MatchManager.state != MatchManager.State.ENDED and not _ending
 
 
 # ── Online ───────────────────────────────────

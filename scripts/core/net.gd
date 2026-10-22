@@ -159,6 +159,7 @@ func _become_server(peer: MultiplayerPeer, local_player: bool) -> void:
 	if local_player:
 		var id := PlayerManager.join(Settings.DEVICE_ANY)
 		PlayerManager.players[id].peer_id = 1
+		PlayerManager.players[id].nick = Settings.clean_name(Settings.player_name())
 	_broadcast_roster()
 
 
@@ -386,7 +387,7 @@ func _broadcast_roster() -> void:
 		return
 	var list := []
 	for info in PlayerManager.sorted_players():
-		list.append([info.player_id, info.peer_id, info.color_index, info.is_ready])
+		list.append([info.player_id, info.peer_id, info.color_index, info.is_ready, info.nick])
 	_roster.rpc(list)
 
 
@@ -399,6 +400,7 @@ func _roster(list: Array) -> void:
 		info.peer_id = row[1]
 		info.color_index = row[2]
 		info.is_ready = row[3]
+		info.nick = str(row[4]) if row.size() > 4 else ""
 		info.device_id = Settings.DEVICE_ANY if info.peer_id == my_peer() else -1000 - info.peer_id
 		infos.append(info)
 	PlayerManager.replace_all(infos)

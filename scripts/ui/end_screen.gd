@@ -27,6 +27,9 @@ func _ready() -> void:
 
 
 func _show(results: Dictionary) -> void:
+	var game := get_parent()
+	if game and game.get("pause_menu"):
+		game.pause_menu.close()   # online guests get results while a pause menu may be up
 	_root = Control.new()
 	_sleeve = UiSleeve.new()
 	_hints = UiHintBar.new()

@@ -17,6 +17,7 @@ func _ready() -> void:
 	await _test_field_holds_player()
 	await _test_jump_physics_matches_envelope()
 	await _test_game_smoke()
+	await _test_vanishing_waits()
 	await _test_sandbox_smoke()
 	await _test_menu_smoke()
 	await _test_chaos()
@@ -392,9 +393,37 @@ func _test_game_smoke() -> void:
 	check(players.size() == 2, "two players spawned")
 	check(get_tree().get_nodes_in_group("blocks").size() > 20, "map streamed in")
 	check(MatchManager.state == MatchManager.State.PLAYING, "countdown finished and match started")
+	# Once the match is decided, pause stays shut until the results are up.
+	players[1].die()
+	await get_tree().process_frame
+	check(not scene._can_pause(), "no pausing between the last knock-out and the results")
+	await get_tree().create_timer(scene.END_DELAY + 0.5).timeout
+	check(MatchManager.state == MatchManager.State.ENDED and scene.end_screen.visible, "results come up after the end delay")
+	check(not scene.pause_menu.visible, "the pause menu isn't open under the results")
+	get_tree().paused = false
 	scene.queue_free()
 	await get_tree().process_frame
 	PlayerManager.clear()
+
+
+## A vanishing block coming back doesn't close around a ball inside it.
+func _test_vanishing_waits() -> void:
+	var b := VanishingBlock.new()
+	b.set_block_size(Vector2(200, 40))
+	get_tree().root.add_child(b)
+	var p := Player.new()
+	p.setup(PlayerInfo.new())
+	get_tree().root.add_child(p)
+	p.set_physics_process(false)
+	p.global_position = b.global_position
+	b.on_player_land(p)
+	await get_tree().create_timer(VanishingBlock.WARN_TIME + VanishingBlock.GONE_TIME + 0.3).timeout
+	check(b.collision_layer == 0, "vanishing block stays gone while a ball is inside it")
+	p.global_position += Vector2(0, -300)
+	await get_tree().create_timer(0.1).timeout
+	check(b.collision_layer == 1, "vanishing block comes back once the ball has left")
+	b.free()
+	p.free()
 
 
 # ── Chaos: random inputs for every player, exercising all abilities ──

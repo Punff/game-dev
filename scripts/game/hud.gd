@@ -1,8 +1,8 @@
 class_name Hud
 extends CanvasLayer
 
-## In-match overlay: altitude track, countdown, off-screen arrows and the
-## optional FPS counter. Shapes are drawn in one Control; text lives in
+## In-match overlay: the height to beat, altitude track, countdown, off-screen
+## arrows and the optional FPS counter. Shapes are drawn in one Control; text lives in
 ## Labels that are only moved each frame (redrawing outlined text every
 ## frame from script was the HUD's main cost, especially in the browser).
 
@@ -16,6 +16,12 @@ var _fps: Label
 var _last_count := -1
 var _callout: Label
 var _alive := -1
+var _height: Label       # leader's height, big, top left
+var _best: Label         # solo: your best, under it
+var _best_tag: Label     # solo: "BEST" beside the mark on the track
+var _shown_height := -1
+var _best_m := 0         # solo: best before this run
+var _beat_best := false
 
 
 func _ready() -> void:
@@ -32,6 +38,15 @@ func _ready() -> void:
 	_callout.add_theme_font_override("font", UiTheme.title_font())
 	_callout.visible = false
 	_fps = _label("", 16, Palette.TEXT_DIM, HORIZONTAL_ALIGNMENT_RIGHT, false)
+	_height = _label("0 m", 44, Palette.PAPER, HORIZONTAL_ALIGNMENT_LEFT)
+	_height.add_theme_font_override("font", UiTheme.title_font())
+	for l: Label in [_height]:
+		l.add_theme_color_override("font_outline_color", Palette.INK)
+		l.add_theme_constant_override("outline_size", 12)
+	_best_m = int(Settings.get_value("best_height"))
+	_best = _label("BEST %d m" % _best_m, 15, Palette.PAPER_DIM, HORIZONTAL_ALIGNMENT_LEFT)
+	_best.add_theme_color_override("font_outline_color", Palette.INK)
+	_best_tag = _label("BEST", 12, Palette.MUSTARD, HORIZONTAL_ALIGNMENT_RIGHT)
 
 
 func _label(text: String, size: int, col: Color, align: HorizontalAlignment, heavy := true) -> Label:
@@ -61,6 +76,7 @@ func _process(_delta: float) -> void:
 	if game == null:
 		return
 	var vp := _canvas.size
+	_update_height(vp)
 	_update_track_labels(vp)
 	_update_arrow_labels(vp)
 	var n: int = game.countdown_value()
@@ -94,6 +110,46 @@ func _process(_delta: float) -> void:
 		_place(_fps, Vector2(vp.x - 210, vp.y - 16), 200)
 
 
+func _solo() -> bool:
+	return game.players.size() == 1
+
+
+## The leader's height, top left, in their colour. Solo: your best under it,
+## and a callout the moment you pass it.
+func _update_height(vp: Vector2) -> void:
+	var lead: Player = game.leader()
+	if lead == null:
+		return
+	var m := lead.height_meters()
+	if m != _shown_height:
+		_shown_height = m
+		_height.text = "%d m" % m
+		_height.add_theme_color_override("font_color", Palette.PAPER if _solo() else lead.color)
+		if m > 0 and m % 50 == 0:
+			UiFx.bump(_height, 0.25)
+	_place(_height, Vector2(28, 64), 300)
+	_best.visible = _solo() and _best_m > 0
+	if _best.visible:
+		_place(_best, Vector2(32, 88), 300)
+	if _solo() and _best_m > 0 and m > _best_m and not _beat_best:
+		_beat_best = true
+		_best.text = "NEW BEST"
+		_best.add_theme_color_override("font_color", Palette.GOOD)
+		_show_callout("New best!", Palette.GOOD)
+
+
+func _show_callout(text: String, color := Palette.MUSTARD) -> void:
+	_callout.text = text
+	_callout.add_theme_color_override("font_color", color)
+	_callout.visible = true
+	_callout.modulate.a = 1.0
+	UiFx.stamp(_callout, 1.9, -6.0)
+	var tw := _callout.create_tween()
+	tw.tween_interval(1.1)
+	tw.tween_property(_callout, "modulate:a", 0.0, 0.3)
+	tw.tween_callback(func(): _callout.visible = false)
+
+
 ## Down to the last two of a bigger match: a stamped callout.
 func _check_last_two() -> void:
 	var alive := 0
@@ -101,14 +157,7 @@ func _check_last_two() -> void:
 		if not p.is_dead:
 			alive += 1
 	if alive == 2 and _alive > 2 and MatchManager.state == MatchManager.State.PLAYING:
-		_callout.text = "Last two!"
-		_callout.visible = true
-		_callout.modulate.a = 1.0
-		UiFx.stamp(_callout, 1.9, -6.0)
-		var tw := _callout.create_tween()
-		tw.tween_interval(1.1)
-		tw.tween_property(_callout, "modulate:a", 0.0, 0.3)
-		tw.tween_callback(func(): _callout.visible = false)
+		_show_callout("Last two!")
 	_alive = alive
 
 
@@ -145,6 +194,10 @@ func _draw_track(vp: Vector2) -> void:
 	# Lava block at the bottom
 	_canvas.draw_rect(Rect2(x - 10, t.bot - 6, 20, 14), Palette.INK)
 	_canvas.draw_rect(Rect2(x - 7, t.bot - 3, 14, 8), Palette.LAVA)
+	var by := _best_track_y(t)
+	if by >= t.top and by <= t.bot:
+		_canvas.draw_line(Vector2(x - 12, by), Vector2(x + 12, by), Palette.INK, 6.0)
+		_canvas.draw_line(Vector2(x - 10, by), Vector2(x + 10, by), Palette.MUSTARD, 3.0)
 	for p: Player in game.players:
 		if p.is_dead:
 			continue
@@ -153,17 +206,34 @@ func _draw_track(vp: Vector2) -> void:
 		_canvas.draw_rect(Rect2(x - 6, y - 6, 12, 12), p.color)
 
 
+## Solo: where your best height sits on the track (off it: -INF).
+func _best_track_y(t: Dictionary) -> float:
+	if not _solo() or _best_m <= 0 or game.players.is_empty():
+		return -INF
+	return _track_y(t, game.players[0].spawn_y - _best_m * 50.0)
+
+
 func _update_track_labels(vp: Vector2) -> void:
 	var t := _track(vp)
+	var by := _best_track_y(t)
+	_best_tag.visible = by >= t.top and by <= t.bot
+	if _best_tag.visible:
+		_place(_best_tag, Vector2(t.x - 58, by + 4), 40)
 	_place(_lava_label, Vector2(t.x - 40, t.bot + 26), 80)
 	for p: Player in game.players:
 		var l: Label = _tags.get(p.player_id)
 		if l == null:
-			l = _label("P%d" % p.player_id, 15, p.color, HORIZONTAL_ALIGNMENT_RIGHT)
+			l = _label(_short(p), 15, p.color, HORIZONTAL_ALIGNMENT_RIGHT)
 			_tags[p.player_id] = l
 		l.visible = not p.is_dead
 		if l.visible:
-			_place(l, Vector2(t.x - 54, _track_y(t, p.global_position.y) + 6), 40)
+			_place(l, Vector2(t.x - 134, _track_y(t, p.global_position.y) + 6), 120)
+
+
+## A player's name, short enough for the track.
+static func _short(p: Player) -> String:
+	var n: String = p.info.display_name if p.info else "P%d" % p.player_id
+	return n if n.length() <= 10 else n.substr(0, 9) + "."
 
 
 # ── Off-screen arrows ────────────────────────

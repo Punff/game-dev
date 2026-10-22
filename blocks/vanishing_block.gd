@@ -51,7 +51,7 @@ func _process(delta: float) -> void:
 				Sfx.play("vanish", -4.0)
 		S.GONE:
 			_timer -= delta
-			if _timer <= 0.0:
+			if _timer <= 0.0 and not _ball_inside():
 				_state = S.SOLID
 				collision_layer = 1
 				set_process(false)
@@ -60,6 +60,15 @@ func _process(delta: float) -> void:
 	_body_art.position = _shake
 	_body_art.visible = _state != S.GONE
 	queue_redraw()
+
+
+## Coming back solid around a ball would trap it or fling it out: wait.
+func _ball_inside() -> bool:
+	var r := get_rect_global().grow(Player.RADIUS)
+	for p: Player in get_tree().get_nodes_in_group("player"):
+		if not p.is_dead and r.has_point(p.global_position):
+			return true
+	return false
 
 
 func _draw() -> void:

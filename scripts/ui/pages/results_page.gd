@@ -22,7 +22,7 @@ func _init(match_results: Dictionary = {}) -> void:
 		title = "%d m" % results.standings[0].max_height
 	else:
 		var winner: PlayerInfo = PlayerManager.players.get(results.get("winner", -1))
-		title = "P%d wins" % winner.player_id if winner else "Draw"
+		title = "%s wins" % winner.display_name if winner else "Draw"
 		if winner:
 			title_color = winner.color
 
@@ -116,7 +116,11 @@ func _row(place: int, info: PlayerInfo, won: bool) -> Control:
 	ball.custom_minimum_size = Vector2(40, 44)
 	ball.looks = [BallPortrait.look_for_color(info.color)]
 	h.add_child(ball)
-	h.add_child(UiTheme.title("P%d" % info.player_id, 28, info.color))
+	var who := UiTheme.title(info.display_name, 28, info.color)
+	who.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	who.clip_text = true
+	who.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	h.add_child(who)
 	if won:
 		var c := Crown.new(30.0)
 		c.bob = false

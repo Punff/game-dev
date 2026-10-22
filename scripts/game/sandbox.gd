@@ -5,8 +5,9 @@ extends Node2D
 ## and every block type, no lava and no way to lose. Concrete rebuilds itself
 ## and falling off puts you back at the station.
 ##
-## [F3] shows live stats; the event feed (see SandboxLog) is always on and is
-## also saved to user://logs/sandbox.log.
+## The station you're at is explained on a card in the corner, with a goal
+## that ticks off once you've done it. [F3] shows live stats and the event
+## feed (see SandboxLog), which is also saved to user://logs/sandbox.log.
 ##
 ## It can be driven by a script for testing:
 ##   godot --path . res://scenes/sandbox.tscn -- --sandbox-script=<file>
@@ -37,7 +38,7 @@ var event_log: SandboxLog
 var player: Player
 var dummy: Player
 
-var _stations: Array = []        # [{name, x}]
+var _stations: Array = []        # [{name, x, lines, goal, done}]
 var _station := -1
 var _concrete: Array = []        # [{pos, size, node, gone_at}]
 var _dummy_spot := Vector2.ZERO
@@ -52,6 +53,15 @@ var _hud := CanvasLayer.new()
 var _stats: Label
 var _feed: VBoxContainer
 var _station_label: Label
+var _progress: Label
+var _card: PanelContainer        # the current station's notes and goal
+var _card_title: Label
+var _card_lines: VBoxContainer
+var _card_goal: Label
+var _hints: Control
+var _tried_blocks := {}          # block ids stood on at the Blocks station
+var _goal_breaks := 0            # concrete broken at the Concrete station
+const BLOCK_KINDS := 8
 
 
 func _ready() -> void:
@@ -108,47 +118,53 @@ func _build_level() -> void:
 
 	# 1. Moving and jumping: steps that need a jump, then a double jump.
 	_add_station("Move & jump", 0, [
-		"%s %s move     %s jump" % [_k("left"), _k("right"), _k("jump")],
+		"{left} {right} move     {jump} jump",
 		"Jump again in mid-air for a double jump.",
-		"Jumping right next to someone shoves them."])
+		"Jumping right next to someone shoves them."],
+		"Stand on the high step")
 	_block(StaticPlatform, Vector2(420, -110), Vector2(180, 40))
 	_block(StaticPlatform, Vector2(700, -270), Vector2(180, 40))
 
 	# 2. Charge jump: a ledge a double jump can't reach.
 	_add_station("Charge jump", 1150, [
-		"Hold %s on the ground, let go to launch." % _k("charge"),
+		"Hold {charge} on the ground, let go to launch.",
 		"Charging keeps going if you run off a ledge.",
-		"Launch, then double jump at the top to reach the ledge."])
+		"Launch, then double jump at the top."],
+		"Reach the high ledge")
 	_block(StaticPlatform, Vector2(1600, -400), Vector2(260, 40))
 
 	# 3. Concrete: jump off it, or fast-fall onto it from the perch.
 	_add_station("Concrete", 2300, [
 		"Jump off concrete and it shatters behind you.",
-		"Hold %s in the air to fast-fall: land hard on concrete to smash it." % _k("down"),
-		"Flying chunks hit players and break more concrete."])
+		"Hold {down} in the air to fast-fall: land hard to smash it.",
+		"Flying chunks hit players and break more concrete."],
+		"Break two slabs")
 	_breakable(Vector2(2560, -120), Vector2(220, 40))
 	_block(StaticPlatform, Vector2(2830, -340), Vector2(160, 40))
 	_breakable(Vector2(3080, -120), Vector2(260, 40))
 
 	# 4. Gravity field: concrete on the floor to make chunks from.
 	_add_station("Gravity field", 3550, [
-		"Break concrete, then hold %s near the chunks." % _k("gravity"),
+		"Break concrete, then hold {gravity} near the chunks.",
 		"With no aim they stack into a floor under you.",
-		"Aim (%s %s %s %s) and let go to throw them." % [_k("up"), _k("left"), _k("down"), _k("right")]])
+		"Aim ({up} {left} {down} {right}) and let go to throw them."],
+		"Throw chunks with the field")
 	_breakable(Vector2(3830, -30), Vector2(300, 60))
 	_breakable(Vector2(4180, -30), Vector2(300, 60))
 
 	# 5. Shockwave: knock the dummy off its island.
 	_add_station("Shockwave", 4750, [
-		"%s fires a blast where you aim." % _k("shockwave"),
+		"{shockwave} fires a blast where you aim.",
 		"It knocks players back and shatters concrete.",
-		"Aim down and blast to rocket-jump. Knock the dummy off!"])
+		"Aim down and blast to rocket-jump."],
+		"Knock the dummy off its island")
 	_dummy_spot = Vector2(5200, -170 - Player.RADIUS - 1)
 	_block(StaticPlatform, Vector2(5150, -150), Vector2(380, 40))
 	_breakable(Vector2(5550, -300), Vector2(200, 40))
 
 	# 6. Every block type, each on its own plinth with a caption.
-	_add_station("Blocks", 6000, ["Every block you'll meet on the way up. Try them all."])
+	_add_station("Blocks", 6000, ["Every block you'll meet on the way up.", "Each one is labelled above it."],
+		"Stand on every kind of block")
 	var x := 6350.0
 	for entry in [
 		[BouncePad, "Bounce Pad", "Launches you sky-high."],
@@ -189,13 +205,20 @@ func _breakable(pos: Vector2, size: Vector2) -> void:
 	_concrete.append(c)
 
 
-func _add_station(title: String, x: float, lines: Array) -> void:
-	_stations.append({"name": title, "x": x})
-	var sign := _panel(Vector2(x - 60, -560), 520)
-	var col: VBoxContainer = sign.get_child(0)
-	col.add_child(UiTheme.title("%d · %s" % [_stations.size(), title], 32, Palette.MUSTARD))
-	for line in lines:
-		col.add_child(UiTheme.hint(line, 18, Palette.TEXT, false))
+## A station: where it starts, what to read (`{action}` becomes that key),
+## and a goal to tick off. A small numbered post marks it in the world.
+func _add_station(title: String, x: float, lines: Array, goal: String) -> void:
+	_stations.append({"name": title, "x": x, "lines": lines, "goal": goal, "done": false})
+	var post := _panel(Vector2(x - 150, -150), 0)
+	post.get_child(0).add_child(UiTheme.title("%d" % _stations.size(), 40, Palette.MUSTARD))
+
+
+## A line of station notes with the player's own keys in it.
+func _fmt(line: String) -> String:
+	var out := line
+	for a in Settings.ACTIONS:
+		out = out.replace("{%s}" % a, _k(a))
+	return out
 
 
 ## A captioned board standing in the world.
@@ -222,6 +245,9 @@ func _spawn_player(id: int, station: int) -> void:
 	world.add_child(player)
 	camera.targets = [player]
 	event_log.watch(player)
+	player.threw.connect(func(_n: int):
+		if _station == 3:
+			_done(3))
 	if dummy == null:
 		_spawn_dummy()
 
@@ -264,8 +290,9 @@ func _physics_process(delta: float) -> void:
 			s = i
 	if s != _station:
 		_station = s
-		_station_label.text = "%d / %d   %s" % [s + 1, _stations.size(), _stations[s].name]
+		_show_station()
 		event_log.write("STATION", "%d %s" % [s + 1, _stations[s].name])
+	_check_goals()
 
 	# How hard was the dummy hit, and how far has it flown 1 s later?
 	if dummy.velocity.length() - _dummy_vel.length() > 300.0:
@@ -283,6 +310,7 @@ func _physics_process(delta: float) -> void:
 	if off and _dummy_off_since < 0.0:
 		_dummy_off_since = _time
 		event_log.write("DUMMY", "knocked off, flying at %s" % SandboxLog._v(dummy.velocity))
+		_done(4)
 	if _dummy_off_since >= 0.0 and _time - _dummy_off_since > 2.0:
 		_spawn_dummy()
 
@@ -297,6 +325,64 @@ func _physics_process(delta: float) -> void:
 
 	if _stats.visible:
 		_stats.text = _stats_text()
+
+
+# ── Goals ────────────────────────────────────
+
+## Goals you finish by being somewhere or standing on something; the rest
+## tick off from events (a slab breaking, a throw, the dummy falling).
+func _check_goals() -> void:
+	if not player.is_on_floor():
+		return
+	var pos := player.global_position
+	if pos.y < -290.0 and absf(pos.x - 700.0) < 100.0:
+		_done(0)
+	if pos.y < -420.0 and absf(pos.x - 1600.0) < 140.0:
+		_done(1)
+	for b in player._floor_blocks:
+		if is_instance_valid(b) and b.global_position.x > _stations[5].x and not _tried_blocks.has(b.block_id):
+			_tried_blocks[b.block_id] = true
+			if _station == 5:
+				_card_goal.text = _goal_text(5)
+				UiFx.bump(_card_goal, 0.12)
+			if _tried_blocks.size() >= BLOCK_KINDS:
+				_done(5)
+
+
+func _on_block_broken(pos: Vector2) -> void:
+	if pos.x > _stations[2].x - 100.0 and pos.x < _stations[3].x - 100.0:
+		_goal_breaks += 1
+		if _goal_breaks >= 2:
+			_done(2)
+
+
+func _done(i: int) -> void:
+	if _stations[i].done:
+		return
+	_stations[i].done = true
+	event_log.write("GOAL", "%d %s" % [i + 1, _stations[i].goal])
+	Sfx.play("ui_select")
+	_update_progress()
+	if i == _station:
+		_card_goal.text = _goal_text(i)
+		_card_goal.add_theme_color_override("font_color", Palette.GOOD)
+		UiFx.stamp(_card_goal, 1.4, -4.0)
+
+
+func _goal_text(i: int) -> String:
+	var st: Dictionary = _stations[i]
+	var text: String = st.goal
+	if i == 5 and not st.done:
+		text += "  (%d / %d)" % [_tried_blocks.size(), BLOCK_KINDS]
+	return ("DONE  " if st.done else "GOAL  ") + text
+
+
+func _update_progress() -> void:
+	var n := _stations.filter(func(st): return st.done).size()
+	_progress.text = "%d / %d done" % [n, _stations.size()] if n < _stations.size() else "All done! [Esc] back to the menu when you're ready"
+	_progress.add_theme_color_override("font_color", Palette.GOOD if n == _stations.size() else Palette.PAPER_DIM)
+	if n > 0:
+		UiFx.bump(_progress, 0.15)
 
 
 func _teleport(station: int) -> void:
@@ -325,35 +411,93 @@ func _stats_text() -> String:
 func _build_hud() -> void:
 	add_child(_hud)
 	var top := VBoxContainer.new()
-	top.position = Vector2(24, 18)
-	top.add_theme_constant_override("separation", 4)
+	top.position = Vector2(28, 18)
+	top.add_theme_constant_override("separation", 2)
 	_hud.add_child(top)
-	top.add_child(UiTheme.title("sandbox", 30, Palette.PAPER))
-	_station_label = UiTheme.label("", 20, Palette.MUSTARD)
-	top.add_child(_station_label)
-	top.add_child(UiTheme.hint("[Esc] menu   [R] respawn   [1]-[%d] stations   [F3] stats" % _stations.size(), 16, Palette.PAPER_DIM, false))
+	var title := UiTheme.title("how to play", 40, Palette.PAPER)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	top.add_child(title)
+	_progress = UiTheme.label("", 18, Palette.PAPER_DIM)
+	top.add_child(_progress)
+	_hints = UiTheme.hint("[Esc] menu   [R] respawn   [1]-[%d] stations   [F3] stats" % _stations.size(), 15, Palette.PAPER_DIM, false)
+	_hints.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	_hints.offset_left = 28
+	_hints.offset_top = -44
+	_hud.add_child(_hints)
+
+	# The station's notes: a sleeve-style card in the top right.
+	_card = PanelContainer.new()
+	_card.add_theme_stylebox_override("panel", UiTheme.box(Color(Palette.INK, 0.92), Palette.PAPER, 2, 0, Vector2(22, 14), 8))
+	_card.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_card.offset_left = -500
+	_card.offset_right = -28
+	_card.offset_top = 22
+	_card.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_hud.add_child(_card)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 6)
+	_card.add_child(col)
+	_station_label = UiTheme.label("", 15, Palette.MUSTARD)
+	_station_label.add_theme_font_override("font", UiTheme.heavy())
+	col.add_child(_station_label)
+	_card_title = UiTheme.title("", 32, Palette.PAPER)
+	_card_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	col.add_child(_card_title)
+	_card_lines = VBoxContainer.new()
+	_card_lines.add_theme_constant_override("separation", 4)
+	col.add_child(_card_lines)
+	_card_goal = UiTheme.label("", 17, Palette.MUSTARD)
+	_card_goal.add_theme_font_override("font", UiTheme.heavy())
+	col.add_child(_card_goal)
 
 	_stats = UiTheme.label("", 15, Palette.PAPER)
 	_stats.add_theme_font_override("font", UiTheme.bold())
-	_stats.visible = false
 	var stats_bg := PanelContainer.new()
 	stats_bg.add_theme_stylebox_override("panel", UiTheme.box(Color(Palette.INK, 0.8), Palette.SMOKE, 2, 0, Vector2(12, 8)))
-	stats_bg.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	stats_bg.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	stats_bg.offset_left = -320
-	stats_bg.offset_top = 18
+	stats_bg.offset_top = -250
 	stats_bg.offset_right = -20
+	stats_bg.offset_bottom = -20
 	stats_bg.add_child(_stats)
 	_hud.add_child(stats_bg)
-	_stats.visibility_changed.connect(func(): stats_bg.visible = _stats.visible)
-	stats_bg.visible = false
 
+	# The event feed is for tuning: it only shows with the stats.
 	_feed = VBoxContainer.new()
 	_feed.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	_feed.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_feed.offset_left = 24
-	_feed.offset_bottom = -18
+	_feed.offset_left = 28
+	_feed.offset_bottom = -56
 	_feed.add_theme_constant_override("separation", 0)
 	_hud.add_child(_feed)
+	_stats.visibility_changed.connect(func():
+		stats_bg.visible = _stats.visible
+		_feed.visible = _stats.visible)
+	_stats.visible = false
+	stats_bg.visible = false
+	_feed.visible = false
+
+	SignalBus.block_broken.connect(_on_block_broken)
+	Input.joy_connection_changed.connect(func(_d, _c):
+		_profile = "pad" if not Input.get_connected_joypads().is_empty() else "kb_a"
+		_show_station())
+	_update_progress()
+
+
+## Fills the card for the station you're at.
+func _show_station() -> void:
+	if _station < 0 or _card == null:
+		return
+	var st: Dictionary = _stations[_station]
+	_station_label.text = "STATION %d OF %d" % [_station + 1, _stations.size()]
+	_card_title.text = st.name.to_upper()
+	for c in _card_lines.get_children():
+		c.queue_free()
+	for line in st.lines:
+		_card_lines.add_child(UiTheme.hint(_fmt(line), 18, Palette.TEXT, false))
+	_card_goal.text = _goal_text(_station)
+	_card_goal.add_theme_color_override("font_color", Palette.GOOD if st.done else Palette.MUSTARD)
+	UiFx.stamp(_card_title, 1.3, -4.0)
 
 
 func _on_logged(line: String) -> void:

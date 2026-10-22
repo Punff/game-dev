@@ -6,6 +6,8 @@ extends CharacterBody2D
 ## about what is reachable.
 
 signal died(player_id: int)
+## Let go of a gravity field while aiming: `count` chunks went flying.
+signal threw(count: int)
 
 # ── Movement ─────────────────────────────────
 # Values follow the original prototype: a small, slippery, floaty ball.
@@ -112,6 +114,7 @@ var _host_report: Array = []      # newest [ack, position, velocity], handled on
 var _vis_offset := Vector2.ZERO   # drawn offset that eases a correction in instead of jumping
 var _tag: Label
 const SNAP_CORRECTION := 600.0    ## further off than this and the ball just jumps to the host's
+const TAG_W := 180.0              ## room for an online name over the ball
 
 
 func _init() -> void:
@@ -147,8 +150,8 @@ func _ready() -> void:
 	tag.add_theme_color_override("font_color", color)
 	tag.add_theme_color_override("font_outline_color", Palette.INK)
 	tag.add_theme_constant_override("outline_size", 5)
-	tag.size = Vector2(60, 0)
-	tag.position = Vector2(-30, -RADIUS - 16 - UiTheme.heavy().get_ascent(16))
+	tag.size = Vector2(TAG_W, 0)
+	tag.position = Vector2(-TAG_W * 0.5, -RADIUS - 16 - UiTheme.heavy().get_ascent(16))
 	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(tag)
 	_tag = tag
@@ -363,6 +366,7 @@ func _end_field(allow_throw: bool) -> void:
 			f.held_by = null
 	_held.clear()
 	if thrown > 0:
+		threw.emit(thrown)
 		Sfx.play("throw", -2.0)
 		Fx.speed_lines(global_position, aim.normalized(), color)
 		_shake(3.0 + thrown)
@@ -649,7 +653,9 @@ func height_meters() -> int:
 
 
 func _tag_text() -> String:
-	return name_tag if name_tag != "" else "P%d" % player_id
+	if name_tag != "":
+		return name_tag
+	return info.display_name if info else "P%d" % player_id
 
 
 ## A point pulled inside the camera's view, so a knock-out far off the side
@@ -871,7 +877,7 @@ func _update_visuals(delta: float) -> void:
 	_squash = _squash.lerp(Vector2.ONE, minf(12.0 * delta, 1.0))
 	_vis_offset = _vis_offset.lerp(Vector2.ZERO, minf(10.0 * delta, 1.0))
 	if _tag:
-		_tag.position.x = -30.0 + _vis_offset.x
+		_tag.position.x = -TAG_W * 0.5 + _vis_offset.x
 		_tag.position.y = -RADIUS - 16 - UiTheme.heavy().get_ascent(16) + _vis_offset.y
 	if not Fx.reduced and velocity.length_squared() > 520.0 * 520.0:
 		_trail.append(global_position)

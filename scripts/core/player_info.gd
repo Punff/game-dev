@@ -20,8 +20,9 @@ var color: Color:
 	get: return Palette.PLAYER_COLORS[color_index]
 
 
+## Online: the player's name (account or Ball-XXXX); offline just "P1".
 var display_name: String:
-	get: return "P%d" % player_id
+	get: return nick if nick != "" else "P%d" % player_id
 
 
 func is_keyboard() -> bool:
