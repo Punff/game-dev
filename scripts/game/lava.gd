@@ -1,20 +1,33 @@
 class_name Lava
 extends Node2D
 
-## Rising lava. Rubber-banded: it eases off when someone is about to be
-## caught and speeds up when everyone is far ahead.
+## Rising lava. It gets faster the higher it has climbed, so every run ends:
+## the faster you climb, the higher you are when its pace passes yours.
+##
+## Around you it's rubber-banded, but a lead is yours to keep: while you're
+## ahead it only creeps at LEAD_CHASE x its pace, so climbing faster banks a
+## buffer (for detours, mistakes). Past LEAD_MAX it races to catch up, so the
+## lead has a ceiling. Just behind you it eases off (NEAR, EASE), less so the
+## higher it gets.
+##
+## Modelled for a steady climber: 1.5 m/s is caught around 450 m, 2.6 m/s
+## (a good run) around 850 m, 3.2 m/s around 1,150 m. (Before, a steady
+## climber was never caught at all: only mistakes ended a run.)
 
 const SHADER := preload("res://shaders/lava.gdshader")
-const BASE_SPEED := 36.0
-const MAX_SPEED := 180.0
-const RAMP := 0.9              ## base speed gained per 10 s of match time
-## px between the lowest player and the surface. Closer than NEAR it eases
-## off; from CHASE_FROM it speeds up, reaching MAX_SPEED at CHASE_FULL. Tuned
-## on a recorded solo climb (~2.7 m/s): it settles ~15 m below a steady
-## climber, a few rows down, instead of ~35 m (off screen).
-const NEAR := 260.0
-const CHASE_FROM := 300.0
-const CHASE_FULL := 900.0
+const BASE_SPEED := 50.0
+const RISE_PER_M := 0.11       ## px/s of pace per metre the lava has climbed
+const RAMP := 0.9              ## and per 10 s of match time
+const MAX_SPEED := 180.0       ## catch-up speed (plus RISE_PER_M x height)
+const LEAD_CHASE := 1.25       ## x pace while you're ahead
+const CHASE_FROM := 300.0      ## px ahead before it counts as a lead
+const LEAD_MAX := 1250.0       ## px (25 m): beyond this it races to catch up...
+const LEAD_RACE := 600.0       ## ...reaching full catch-up speed this much further
+const NEAR := 260.0            ## px: closer than this it eases off...
+const NEAR_HIGH := 140.0       ## ...a smaller zone up high
+const EASE := 0.45             ## x pace while easing off...
+const EASE_HIGH := 0.8         ## ...barely at all up high
+const HIGH_M := 700.0          ## "up high": where NEAR and EASE reach their high values
 const GLOW := 60.0
 
 var surface_y := 0.0
@@ -23,6 +36,7 @@ var active := false
 ## Extra px/s while a surge (MapEvents) is on. Only applies while nobody is
 ## already close to being caught, so a surge squeezes, it doesn't snipe.
 var surge := 0.0
+var _glow := 0.0   # 0..1, eases with the surge
 var _time := 0.0
 var _rect := ColorRect.new()
 var _mat := ShaderMaterial.new()
@@ -41,20 +55,37 @@ func _ready() -> void:
 	add_child(_embers)
 
 
+## How far up the lava has climbed (m above the start floor).
+func height_m() -> float:
+	return maxf(0.0, -surface_y / 50.0)
+
+
 func update_lava(delta: float, lowest_player_y: float, cam: Camera2D) -> void:
 	if active:
 		_time += delta
-		var base := BASE_SPEED + RAMP * _time / 10.0
+		var h := height_m()
+		var high := clampf(h / HIGH_M, 0.0, 1.0)
+		var base := BASE_SPEED + RISE_PER_M * h + RAMP * _time / 10.0
+		var max_speed := MAX_SPEED + RISE_PER_M * h
 		var gap := surface_y - lowest_player_y
+		var near := lerpf(NEAR, NEAR_HIGH, high)
 		var target := base
-		if gap < NEAR:
-			target = base * 0.45
+		if gap < near:
+			target = base * lerpf(EASE, EASE_HIGH, high)
+		elif gap > LEAD_MAX:
+			target = lerpf(base * LEAD_CHASE, max_speed, clampf((gap - LEAD_MAX) / LEAD_RACE, 0.0, 1.0))
 		elif gap > CHASE_FROM:
-			target = lerpf(base, MAX_SPEED, clampf((gap - CHASE_FROM) / (CHASE_FULL - CHASE_FROM), 0.0, 1.0))
-		if surge > 0.0 and gap >= NEAR:
+			target = base * LEAD_CHASE
+		target = minf(target, max_speed)
+		# A surge rides on top of all that (it used to be clamped away when
+		# the lava was already catching up, so some surges did nothing).
+		if surge > 0.0 and gap >= near:
 			target += surge
-		speed = move_toward(speed, minf(target, MAX_SPEED), 60.0 * delta)
+		speed = move_toward(speed, target, 60.0 * delta)
 		surface_y -= speed * delta
+	# A surge shows: the slag flares hotter while it's on.
+	_glow = move_toward(_glow, 1.0 if surge > 0.0 else 0.0, delta * 2.5)
+	_rect.modulate = Color(1, 1, 1).lerp(Color(1.45, 1.2, 0.85), _glow)
 	# Fit the rect to the visible area.
 	var vp := get_viewport_rect().size / cam.zoom
 	var center := cam.get_screen_center_position()

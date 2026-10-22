@@ -22,6 +22,11 @@ var _best_tag: Label     # solo: "BEST" beside the mark on the track
 var _shown_height := -1
 var _best_m := 0         # solo: best before this run
 var _beat_best := false
+## Solo: match time at each 100 m this run (saved as the new best's splits).
+var splits: Array = []
+var _best_splits: Array = []
+var _split_chip: Label
+const SPLIT_EVERY := 100
 
 
 func _ready() -> void:
@@ -47,6 +52,10 @@ func _ready() -> void:
 	_best = _label("BEST %d m" % _best_m, 15, Palette.PAPER_DIM, HORIZONTAL_ALIGNMENT_LEFT)
 	_best.add_theme_color_override("font_outline_color", Palette.INK)
 	_best_tag = _label("BEST", 12, Palette.MUSTARD, HORIZONTAL_ALIGNMENT_RIGHT)
+	_best_splits = Settings.get_value("best_splits")
+	_split_chip = _label("", 20, Palette.PAPER, HORIZONTAL_ALIGNMENT_LEFT)
+	_split_chip.add_theme_color_override("font_outline_color", Palette.INK)
+	_split_chip.visible = false
 	SignalBus.map_event_called.connect(func(text: String, color: Color): _show_callout(text, color))
 
 
@@ -132,11 +141,38 @@ func _update_height(vp: Vector2) -> void:
 	_best.visible = _solo() and _best_m > 0
 	if _best.visible:
 		_place(_best, Vector2(32, 88), 300)
+	_check_split(m)
+	if _split_chip.visible:
+		_place(_split_chip, Vector2(32, 116), 400)
 	if _solo() and _best_m > 0 and m > _best_m and not _beat_best:
 		_beat_best = true
 		_best.text = "NEW BEST"
 		_best.add_theme_color_override("font_color", Palette.GOOD)
 		_show_callout("New best!", Palette.GOOD)
+
+
+## Solo, every 100 m: the time, and how it compares with the best run's split.
+func _check_split(m: int) -> void:
+	if not _solo() or m < SPLIT_EVERY * (splits.size() + 1):
+		return
+	var t: float = game._match_time
+	splits.append(snappedf(t, 0.1))
+	var i := splits.size() - 1
+	var text := "%d m  %d:%04.1f" % [SPLIT_EVERY * (i + 1), int(t) / 60, fmod(t, 60.0)]
+	var color := Palette.PAPER
+	if i < _best_splits.size():
+		var diff: float = t - float(_best_splits[i])
+		text += "   %+.1f s" % diff
+		color = Palette.GOOD if diff < 0.0 else Palette.RUST
+	_split_chip.text = text
+	_split_chip.add_theme_color_override("font_color", color)
+	_split_chip.visible = true
+	_split_chip.modulate.a = 1.0
+	UiFx.stamp(_split_chip, 1.4, -3.0)
+	var tw := _split_chip.create_tween()
+	tw.tween_interval(3.0)
+	tw.tween_property(_split_chip, "modulate:a", 0.0, 0.4)
+	tw.tween_callback(func(): _split_chip.visible = false)
 
 
 func _show_callout(text: String, color := Palette.MUSTARD) -> void:
@@ -220,7 +256,18 @@ func _update_track_labels(vp: Vector2) -> void:
 	_best_tag.visible = by >= t.top and by <= t.bot
 	if _best_tag.visible:
 		_place(_best_tag, Vector2(t.x - 58, by + 4), 40)
-	_place(_lava_label, Vector2(t.x - 40, t.bot + 26), 80)
+	# How far below the lowest player the lava is: the lead you've banked.
+	var low := -INF
+	for p: Player in game.players:
+		if not p.is_dead:
+			low = maxf(low, p.global_position.y)
+	var lead := roundi((game.lava.surface_y - low) / 50.0) if low != -INF else 0
+	var surging: bool = game.lava.surge > 0.0   # (usually below the screen: say it here too)
+	var text := "%s %d m" % ["SURGE" if surging else "LAVA", maxi(lead, 0)]
+	if _lava_label.text != text:
+		_lava_label.text = text
+		_lava_label.add_theme_color_override("font_color", Palette.MUSTARD if surging or lead <= 6 else Palette.LAVA)
+	_place(_lava_label, Vector2(t.x - 70, t.bot + 26), 100)
 	for p: Player in game.players:
 		var l: Label = _tags.get(p.player_id)
 		if l == null:

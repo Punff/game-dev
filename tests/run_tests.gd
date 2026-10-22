@@ -20,6 +20,8 @@ func _ready() -> void:
 	await _test_game_smoke()
 	await _test_vanishing_waits()
 	await _test_field_spares_holder()
+	_test_lava_pressure()
+	await _test_wind_pushes()
 	await _test_map_events()
 	await _test_sandbox_smoke()
 	await _test_menu_smoke()
@@ -506,6 +508,55 @@ func _test_field_spares_holder() -> void:
 		f.free()
 	p.free()
 	q.free()
+	PlayerManager.clear()
+
+
+## The lava: a steady climber is eventually caught (faster gets higher), and
+## a lead built while you're faster than it holds.
+func _test_lava_pressure() -> void:
+	var cam := Camera2D.new()
+	get_tree().root.add_child(cam)
+	var caught := {}
+	for pace in [1.5, 2.6, 3.2]:   # m/s
+		var lava := Lava.new()
+		get_tree().root.add_child(lava)
+		lava.surface_y = 650.0
+		lava.active = true
+		var y := 0.0
+		var dt := 1.0 / 30.0
+		var t := 0.0
+		var biggest_gap := 0.0
+		while t < 900.0:
+			t += dt
+			y -= pace * 50.0 * dt
+			lava.update_lava(dt, y, cam)
+			biggest_gap = maxf(biggest_gap, lava.surface_y - y)
+			if y > lava.surface_y - 4.0:
+				break
+		caught[pace] = -y / 50.0
+		if pace == 3.2:
+			check(biggest_gap > 1000.0, "lava: a fast climber banks a lead (%.0f m)" % (biggest_gap / 50.0))
+		lava.free()
+	print("Lava catches a steady climber: 1.5 m/s at %.0f m, 2.6 at %.0f m, 3.2 at %.0f m" % [caught[1.5], caught[2.6], caught[3.2]])
+	check(caught[1.5] < caught[2.6] and caught[2.6] < caught[3.2], "lava: climbing faster gets you higher")
+	check(caught[2.6] > 600.0 and caught[2.6] < 1100.0, "lava: a good steady pace is caught somewhere around 850 m")
+	cam.free()
+
+
+## Map-event wind pushes a ball in the air.
+func _test_wind_pushes() -> void:
+	PlayerManager.clear()
+	var id := PlayerManager.join(Settings.DEVICE_KB_A)
+	var p := Player.new()
+	p.setup(PlayerManager.players[id])
+	get_tree().root.add_child(p)
+	p.global_position = Vector2(0, -12000)
+	Player.wind = MapEvents.WIND_PUSH
+	for i in 20:
+		await get_tree().physics_frame
+	check(p.velocity.x > 50.0, "wind pushes a ball in the air (%.0f px/s)" % p.velocity.x)
+	Player.wind = 0.0
+	p.free()
 	PlayerManager.clear()
 
 

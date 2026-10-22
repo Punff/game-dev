@@ -151,6 +151,7 @@ func _exit_tree() -> void:
 		Net.game = null
 	PlayerInput.suspended = false
 	Player.lava_y = INF
+	Player.wind = 0.0
 
 
 func player_by_id(id: int) -> Player:
@@ -255,6 +256,8 @@ func _finish(winner: Player) -> void:
 	for info in standings:
 		best_height = maxi(best_height, info.max_height)
 	var new_record := Settings.record_height(best_height) if not designer else false
+	if new_record and players.size() == 1:
+		Settings.set_value("best_splits", hud.splits)   # the pace to beat next time
 	var results := {
 		"winner": winner.player_id if winner else -1,
 		"solo": players.size() == 1,
@@ -468,7 +471,9 @@ func _client_tick(_delta: float) -> void:
 		highest = camera.global_position.y
 		lowest = highest
 	lava.active = false   # its height comes from the server
-	lava.update_lava(0.0, lowest, camera)
+	lava.update_lava(get_physics_process_delta_time(), lowest, camera)
+	if MatchManager.state == MatchManager.State.PLAYING:
+		events.tick(get_physics_process_delta_time(), 0.0)
 	camera.lava_y = lava.surface_y
 	Player.lava_y = lava.surface_y
 	map_gen.update_stream(highest, lava.surface_y)

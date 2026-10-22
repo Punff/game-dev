@@ -55,6 +55,9 @@ const JUMP_PUSH_FORCE := 260.0
 static var world_half_width := 800.0
 ## The lava's surface, for the heat glow (INF when there's no lava).
 static var lava_y := INF
+## A map event's gust: px/s of sideways drift (full in the air, a third on
+## the ground), the way a conveyor shifts the speed you settle at.
+static var wind := 0.0
 const HEAT_RANGE := 220.0
 const OUT_OF_BOUNDS := 500.0
 
@@ -272,7 +275,7 @@ func _handle_horizontal(delta: float, on_floor: bool) -> void:
 		dir = 0.0
 	if dir != 0.0:
 		facing = signf(dir)
-	var target := dir * SPEED + _push_applied
+	var target := dir * SPEED + _push_applied + wind * (0.33 if on_floor else 1.0)
 	var rate: float
 	if _ice_applied:
 		rate = ICE_ACCEL if dir != 0.0 else ICE_FRICTION

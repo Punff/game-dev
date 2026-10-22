@@ -155,7 +155,8 @@ func _on_started() -> void:
 		"speed": Player.SPEED, "gravity_cd": Player.GRAVITY_COOLDOWN, "shock_cd": Player.SHOCK_COOLDOWN,
 		"shock_force": Player.SHOCK_FORCE, "shock_range": Player.SHOCK_RANGE, "throw_speed": Player.THROW_SPEED,
 		"lava_base": Lava.BASE_SPEED, "lava_ramp": Lava.RAMP, "lava_max": Lava.MAX_SPEED,
-		"lava_chase_from": Lava.CHASE_FROM, "lava_chase_full": Lava.CHASE_FULL,
+		"lava_chase_from": Lava.CHASE_FROM, "lava_rise_per_m": Lava.RISE_PER_M,
+		"lava_lead_chase": Lava.LEAD_CHASE, "lava_lead_max": Lava.LEAD_MAX,
 		"lava_start_below": g.LAVA_START_BELOW, "lava_grace": g.LAVA_GRACE,
 	}
 	_rec = {

@@ -694,14 +694,17 @@ func _snapshot(header: PackedFloat32Array, players: PackedFloat32Array, frags: P
 
 # ── Map events ───────────────────────────────
 
-## Host: a map event's callout, for everyone's HUD.
-func relay_map_event(text: String, color: Color) -> void:
-	_send(true, func(): _map_event.rpc(text, color))
+## Host: a map event started - its callout for everyone's HUD, and what a
+## guest needs to show it and feel it (the wind on its own ball).
+func relay_map_event(kind: String, text: String, color: Color, wind_dir: float) -> void:
+	_send(true, func(): _map_event.rpc(kind, text, color, wind_dir))
 
 
 @rpc("authority", "reliable")
-func _map_event(text: String, color: Color) -> void:
+func _map_event(kind: String, text: String, color: Color, wind_dir: float) -> void:
 	SignalBus.map_event_called.emit(text, color)
+	if game and is_instance_valid(game):
+		game.events.start_remote(kind, wind_dir)
 
 
 # ── Ping ─────────────────────────────────────

@@ -80,6 +80,7 @@ const DEFAULTS := {
 	"deadzone": 0.3,
 	"rumble": true,
 	"best_height": 0,
+	"best_splits": [],        ## solo: match time (s) at each 100 m of the best run
 	"client_id": "",          ## random, made on first run: who this computer is to the stats server
 	"player_name": "",        ## leaderboard name before accounts; unused now
 	"auth_token": "",         ## logged-in session with the stats server (never the password)

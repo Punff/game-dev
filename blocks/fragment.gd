@@ -27,6 +27,9 @@ var thrown_by: Player = null
 var credit: Player = null
 var _thrown_time := 0.0
 var stun := 0.0
+## Falling things (a slab): once slower than this, it damps like any chunk and
+## floats where it ended up. 0: off.
+var settle_speed := 0.0
 var _was_fast := false
 
 # Online: the server numbers every chunk; clients get frozen puppets that
@@ -138,6 +141,9 @@ func _physics_process(delta: float) -> void:
 		global_position = Vector2(lerpf(_net_from.x, _net_to.x, _net_t), lerpf(_net_from.y, _net_to.y, _net_t))
 		rotation = lerp_angle(_net_from.z, _net_to.z, _net_t)
 	stun = maxf(stun - delta, 0.0)
+	if settle_speed > 0.0 and linear_velocity.length() < settle_speed and _age > 0.2:
+		settle_speed = 0.0
+		linear_damp = 1.1
 	_thrown_time = maxf(_thrown_time - delta, 0.0)
 	if _age > LIFETIME:
 		modulate.a = 1.0 - (_age - LIFETIME)
