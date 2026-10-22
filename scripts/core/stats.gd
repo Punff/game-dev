@@ -89,6 +89,7 @@ func _check_session() -> void:
 		if ok and reply.has("username") and reply.username != Settings.get_value("account_name"):
 			_set_session(Settings.get_value("auth_token"), reply.username)
 		elif not ok and reply.get("unauthorized", false):
+			Settings.set_value("onboarded", false, false)   # ask again on the main menu
 			_set_session("", ""))
 
 
@@ -113,6 +114,8 @@ func _request(path: String, method: int, body: String, done: Callable) -> void:
 			reply["retry"] = false
 		if code == 401:
 			reply["unauthorized"] = true
+		if not done.is_valid():
+			return   # whoever asked (a menu page) is gone
 		done.call(result == HTTPRequest.RESULT_SUCCESS and code >= 200 and code < 300, reply))
 	var headers := PackedStringArray(["Content-Type: application/json"])
 	if Settings.logged_in():

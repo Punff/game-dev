@@ -151,9 +151,4 @@ func _draw_preview() -> void:
 	var bob := sin(_t * (6.0 if _info.is_ready else 2.0)) * (5.0 if _info.is_ready else 2.0)
 	var p := c + Vector2(0, bob - sin(_pop * PI) * 14.0)
 	var k := 1.0 + sin(_pop * PI) * 0.15
-	_preview.draw_circle(c + Vector2(8, 8 + bob), 36, Color(Palette.INK, 0.5))
-	_preview.draw_circle(p, 38 * k, Palette.INK)
-	_preview.draw_circle(p, 33 * k, _info.color)
-	_preview.draw_arc(p + Vector2(4, 4), 26, 0.2, 1.9, 12, _info.color.darkened(0.35), 6.0)
-	_preview.draw_line(p + Vector2(-16, -8), p + Vector2(18, -8), Palette.INK, 12.0)
-	_preview.draw_line(p + Vector2(-12, -8), p + Vector2(14, -8), Palette.PAPER, 5.0)
+	BallPortrait.draw_ball(_preview, p, 33, BallPortrait.look_for_color(_info.color), Vector2(k, k))

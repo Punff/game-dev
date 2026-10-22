@@ -36,7 +36,7 @@ func _ready() -> void:
 			_menu.add_button("Change Players", func(): MatchManager.to_lobby()),
 			_menu.add_button("Main Menu", func(): MatchManager.to_menu()),
 		]
-	MenuBase.link_vertical(_buttons)
+	UiNav.link_vertical(_buttons)
 
 
 func open(note := "") -> void:

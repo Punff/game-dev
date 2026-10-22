@@ -23,7 +23,9 @@ func join(device_id: int) -> int:
 	var info := PlayerInfo.new()
 	info.player_id = _next_free_id()
 	info.device_id = device_id
-	info.color_index = _first_free_color(info.player_id - 1)
+	# Player 1 gets their Profile colour if it's free.
+	var preferred := int(Settings.get_value("ball_color")) if info.player_id == 1 else info.player_id - 1
+	info.color_index = _first_free_color(preferred)
 	players[info.player_id] = info
 	_build_actions(info)
 	SignalBus.player_joined.emit(info.player_id, device_id)

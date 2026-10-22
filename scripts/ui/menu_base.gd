@@ -1,15 +1,16 @@
 class_name MenuBase
 extends Control
 
-## Shared helpers for code-built menus: dim overlay, centred panel,
-## a vertical button list with wrap-around focus, and remembering focus.
+## Shared helpers for the in-game menus (Pause, Results): dim overlay,
+## centred panel, a vertical button list with wrap-around focus, and
+## remembering focus. The main menu is UiShell (scripts/ui/kit).
 
 signal closed
 
 var panel: PanelContainer
 var content: VBoxContainer
 var _last_focus: Control
-var sub_open := false   ## a nested menu (settings) currently owns input
+var sub_open := false   ## Settings is open on top and owns input
 
 
 func build_overlay(dim := 0.6, min_width := 420.0) -> void:
@@ -37,22 +38,8 @@ func add_button(text: String, callback: Callable) -> Button:
 	return b
 
 
-## Makes up/down wrap around a list of controls.
-static func link_vertical(controls: Array) -> void:
-	var list := controls.filter(func(c): return c.visible)
-	for i in list.size():
-		var c: Control = list[i]
-		c.focus_neighbor_top = c.get_path_to(list[(i - 1 + list.size()) % list.size()])
-		c.focus_neighbor_bottom = c.get_path_to(list[(i + 1) % list.size()])
-		c.focus_neighbor_left = c.get_path()
-		c.focus_neighbor_right = c.get_path()
-
-
 func focus_first() -> void:
-	for c in find_children("*", "BaseButton", true, false):
-		if c.visible and not c.disabled:
-			c.grab_focus.call_deferred()
-			return
+	UiNav.focus_first(self)
 
 
 func remember_focus() -> void:
@@ -66,18 +53,13 @@ func restore_focus() -> void:
 		focus_first()
 
 
-## Pops a centred SettingsMenu on top of this menu and refocuses afterwards.
+## Settings in a floating sleeve over this menu; refocuses once it closes.
 func open_settings() -> void:
-	open_sub(SettingsMenu.new())
-
-
-## Pops any overlay menu on top of this one and refocuses once it closes.
-func open_sub(s: MenuBase) -> void:
 	remember_focus()
-	s.process_mode = Node.PROCESS_MODE_ALWAYS
-	add_child(s)
+	var f := UiSleeve.floating(SettingsPage.new())
+	add_child(f)
 	sub_open = true
-	s.closed.connect(func():
-		s.queue_free()
+	f.closed.connect(func():
+		f.queue_free()
 		sub_open = false
 		restore_focus())

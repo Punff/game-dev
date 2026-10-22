@@ -113,7 +113,108 @@ static func build() -> Theme:
 
 	# Tooltips
 	t.set_stylebox("panel", "TooltipPanel", box(Palette.BG_DEEP, Palette.LINE, 2, 8, Vector2(10, 6)))
+
+	# Text fields: ink slips that get a mustard edge while you type.
+	t.set_stylebox("normal", "LineEdit", box(Palette.INK, Palette.SMOKE, 2, 0, Vector2(14, 8), 4))
+	t.set_stylebox("focus", "LineEdit", shadowed(Palette.INK, Palette.MUSTARD, Palette.MUSTARD, 5))
+	t.set_stylebox("read_only", "LineEdit", box(Palette.INK, Palette.SMOKE, 2, 0, Vector2(14, 8)))
+	t.set_color("font_color", "LineEdit", Palette.PAPER)
+	t.set_color("font_placeholder_color", "LineEdit", Color(Palette.PAPER_DIM, 0.45))
+	t.set_color("caret_color", "LineEdit", Palette.MUSTARD)
+	t.set_color("selection_color", "LineEdit", Color(Palette.MUSTARD, 0.35))
+	t.set_font("font", "LineEdit", heavy())
+	t.set_font_size("font_size", "LineEdit", 22)
+
+	_build_kit(t)
 	return t
+
+
+## Styles for the menu kit (scripts/ui/kit). Widgets read these by type name,
+## so the whole kit restyles from here.
+static func _build_kit(t: Theme) -> void:
+	# Tracklist entries: bare type until focused, then the paper sticker.
+	t.set_type_variation("TrackButton", "Button")
+	var track_pad := Vector2(18, 4)
+	var track_normal := box(Color.TRANSPARENT, Color.TRANSPARENT, 0, 0, track_pad)
+	track_normal.content_margin_left = 62
+	var track_hover := box(Color(Palette.INK_SOFT, 0.85), Color.TRANSPARENT, 0, 0, track_pad)
+	track_hover.content_margin_left = 62
+	var track_focus := shadowed(Palette.PAPER, Palette.INK, Palette.MUSTARD, 6)
+	track_focus.content_margin_left = 62
+	var track_pressed := box(Palette.MUSTARD, Palette.INK, 2, 0, track_pad)
+	track_pressed.content_margin_left = 62
+	for s in ["normal", "disabled"]:
+		t.set_stylebox(s, "TrackButton", track_normal)
+	t.set_stylebox("hover", "TrackButton", track_hover)
+	t.set_stylebox("focus", "TrackButton", track_focus)
+	t.set_stylebox("pressed", "TrackButton", track_pressed)
+	t.set_stylebox("hover_pressed", "TrackButton", track_pressed)
+	t.set_font_size("font_size", "TrackButton", 30)
+	t.set_color("font_hover_color", "TrackButton", Palette.MUSTARD)
+
+	# The sleeve: a heavy ink card thrown on the table.
+	t.set_type_variation("SleevePanel", "Panel")
+	var sleeve := box(Color(Palette.INK, 0.97), Palette.PAPER, 2, 0, Vector2(34, 26), 12)
+	t.set_stylebox("panel", "SleevePanel", sleeve)
+
+	# Setting rows: a hairline underneath, a paper sticker while in use.
+	var row := box(Color.TRANSPARENT, Palette.LINE, 0, 0, Vector2(14, 6))
+	row.border_width_bottom = 2
+	t.set_type_variation("UiRow", "PanelContainer")
+	t.set_stylebox("normal", "UiRow", row)
+	t.set_stylebox("panel", "UiRow", row)
+	var lit := shadowed(Palette.PAPER, Palette.INK, Palette.MUSTARD, 5)
+	lit.content_margin_left = 14
+	lit.content_margin_right = 14
+	lit.content_margin_top = 6
+	lit.content_margin_bottom = 6
+	t.set_stylebox("lit", "UiRow", lit)
+	t.set_color("font_color", "UiRow", Palette.TEXT)
+	t.set_color("font_lit_color", "UiRow", Palette.INK)
+
+	# Sliders on a row: the row is the focus highlight.
+	t.set_type_variation("RowSlider", "HSlider")
+	t.set_stylebox("focus", "RowSlider", StyleBoxEmpty.new())
+
+	# Big tiles (game modes, cosmetics).
+	t.set_type_variation("CardButton", "Button")
+	var card := box(Palette.INK_SOFT, Palette.SMOKE, 2, 0, Vector2(14, 14), 6)
+	var card_hover := box(Palette.SMOKE, Palette.PAPER_DIM, 2, 0, Vector2(14, 14), 6)
+	var card_focus := shadowed(Palette.PAPER, Palette.INK, Palette.MUSTARD, 9)
+	for side in [SIDE_LEFT, SIDE_TOP, SIDE_RIGHT, SIDE_BOTTOM]:
+		card_focus.set_content_margin(side, 14)
+	var card_pressed := box(Palette.MUSTARD, Palette.INK, 2, 0, Vector2(14, 14))
+	t.set_stylebox("normal", "CardButton", card)
+	t.set_stylebox("disabled", "CardButton", card)
+	t.set_stylebox("hover", "CardButton", card_hover)
+	t.set_stylebox("focus", "CardButton", card_focus)
+	t.set_stylebox("pressed", "CardButton", card_pressed)
+	t.set_stylebox("hover_pressed", "CardButton", card_pressed)
+
+	# Widgets that draw themselves (toggle, cycler, key binds) on a row.
+	t.set_type_variation("BareButton", "Button")
+	for s in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
+		t.set_stylebox(s, "BareButton", StyleBoxEmpty.new())
+
+	# Chips: little stamped tags (rank, NEW, SOON).
+	t.set_type_variation("Chip", "PanelContainer")
+	t.set_stylebox("panel", "Chip", box(Palette.MUSTARD, Palette.INK, 2, 0, Vector2(8, 0), 3))
+
+	# Tab strip under a page title.
+	t.set_type_variation("TabButton", "Button")
+	var tab := box(Color.TRANSPARENT, Palette.SMOKE, 0, 0, Vector2(14, 4))
+	tab.border_width_bottom = 3
+	var tab_on := box(Palette.MUSTARD, Palette.INK, 2, 0, Vector2(14, 4), 4)
+	for s in ["normal", "disabled", "focus"]:
+		t.set_stylebox(s, "TabButton", tab)
+	t.set_stylebox("hover", "TabButton", box(Color(Palette.INK_SOFT, 0.9), Palette.PAPER_DIM, 0, 0, Vector2(14, 4)))
+	t.set_stylebox("pressed", "TabButton", tab_on)
+	t.set_stylebox("hover_pressed", "TabButton", tab_on)
+	t.set_font_size("font_size", "TabButton", 19)
+	t.set_color("font_color", "TabButton", Palette.PAPER_DIM)
+	t.set_color("font_pressed_color", "TabButton", Palette.INK)
+	t.set_color("font_hover_pressed_color", "TabButton", Palette.INK)
+	t.set_color("font_focus_color", "TabButton", Palette.PAPER_DIM)
 
 
 static func _square(size: int, color: Color) -> ImageTexture:

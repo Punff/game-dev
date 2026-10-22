@@ -1,25 +1,19 @@
 extends MenuBase
 
-## Online play: create a room or join one with its code (works between
-## browsers anywhere), or connect directly by address (LAN / dedicated
-## server). Then the same player cards as the couch lobby. Each computer
-## brings one player, using either keyboard half or any gamepad. The match
-## starts once everyone is ready.
+## Online play once you're connecting (the main menu's Online page starts
+## it): the same player cards as the couch lobby. Each computer brings one
+## player, using either keyboard half or any gamepad. The match starts once
+## everyone is ready. If the connection is lost before a room, it goes back
+## to the Online page, which shows why.
 ##
-## Before you're in a room this is an ordinary focus-driven menu. Inside a
-## room it works like the couch lobby: your game keys or pad ready you up and
-## change colour, and the buttons are there for the mouse.
+## Inside a room it works like the couch lobby: your game keys or pad ready
+## you up and change colour, and the buttons are there for the mouse.
 
 enum View { CONNECT, WAITING, ROOM }
 
 var _title: Label
-var _subtitle: Label
-var _connect_box := VBoxContainer.new()
-var _direct_box := VBoxContainer.new()
 var _waiting_box := VBoxContainer.new()
 var _room_box := VBoxContainer.new()
-var _address := LineEdit.new()
-var _code := LineEdit.new()
 var _code_panel := PanelContainer.new()
 var _code_label: Label
 var _host_note: Label
@@ -28,8 +22,6 @@ var _room_status: Label
 var _slots: Array = []
 var _ready_button: Button
 var _cancel: Button
-var _menu_list: Array = []
-var _direct_list: Array = []
 var _view := -1
 var _stick_latch := 0
 
@@ -48,9 +40,6 @@ func _ready() -> void:
 	add_child(col)
 	_title = UiTheme.title("online", 56, Palette.PAPER)
 	col.add_child(_title)
-	_subtitle = UiTheme.label("Play with friends anywhere: one of you creates a room and shares its code.", 19, Palette.TEXT_DIM)
-	_subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	col.add_child(_subtitle)
 
 	# In a room: its code to share, and a reminder for browser hosts.
 	_code_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -69,58 +58,6 @@ func _ready() -> void:
 	_host_note = UiTheme.label("You're hosting: keep this tab open and in front, the match runs in your browser.", 16, Palette.TEXT_DIM)
 	_host_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(_host_note)
-
-	# Not connected: Create room / code + Join room / Direct connect / Back.
-	_connect_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	_connect_box.add_theme_constant_override("separation", 12)
-	col.add_child(_connect_box)
-	var create := _wide_button("Create room", _create_room)
-	_connect_box.add_child(create)
-	var code_row := HBoxContainer.new()
-	code_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	code_row.add_theme_constant_override("separation", 12)
-	_connect_box.add_child(code_row)
-	_code.placeholder_text = "ROOM CODE"
-	_code.max_length = 12
-	_code.custom_minimum_size = Vector2(204, 50)
-	_code.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_code.text_submitted.connect(func(_t): _join_room())
-	_code.text_changed.connect(func(t: String):
-		var col_pos := _code.caret_column
-		_code.text = t.to_upper()
-		_code.caret_column = col_pos)
-	code_row.add_child(_code)
-	var join_room := UiTheme.button("Join room", 204)
-	join_room.pressed.connect(_join_room)
-	code_row.add_child(join_room)
-	var direct := _wide_button("Direct connect...", _toggle_direct)
-	_connect_box.add_child(direct)
-
-	# Direct (WebSocket): address + Join, and Host on desktop.
-	_direct_box.visible = false
-	_direct_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	_direct_box.add_theme_constant_override("separation", 12)
-	_connect_box.add_child(_direct_box)
-	_address.text = Net.address
-	_address.custom_minimum_size = Vector2(420, 50)
-	_address.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_address.text_submitted.connect(func(_t): _join())
-	_direct_box.add_child(_address)
-	var direct_row := HBoxContainer.new()
-	direct_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	direct_row.add_theme_constant_override("separation", 12)
-	_direct_box.add_child(direct_row)
-	var join_direct := UiTheme.button("Join address", 204)
-	join_direct.pressed.connect(_join)
-	direct_row.add_child(join_direct)
-	var host_direct := UiTheme.button("Host (LAN)", 204)
-	host_direct.pressed.connect(_host)
-	host_direct.visible = Net.can_host()
-	direct_row.add_child(host_direct)
-	var back := _wide_button("Back", _back)
-	_connect_box.add_child(back)
-	_menu_list = [create, _code, join_room, direct, back]
-	_direct_list = [_address, join_direct, host_direct]
 
 	# Connecting: just a way out.
 	_waiting_box.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -177,11 +114,12 @@ func _refresh() -> void:
 	var me := Net.local_info()
 	var in_room := online and (me != null or Net.dedicated)
 	var view := View.ROOM if in_room else (View.WAITING if online else View.CONNECT)
-	_connect_box.visible = view == View.CONNECT
+	if view == View.CONNECT:
+		_leave_to_menu()
+		return
 	_waiting_box.visible = view == View.WAITING
 	_room_box.visible = view == View.ROOM
 	_title.visible = view != View.ROOM or Net.room_code == ""
-	_subtitle.visible = view == View.CONNECT
 	_code_panel.visible = view == View.ROOM and Net.room_code != ""
 	_code_label.text = Net.room_code
 	_host_note.visible = _code_panel.visible and Net.is_server() and Settings.is_web()
@@ -194,7 +132,6 @@ func _refresh() -> void:
 		_ready_button.text = "Not ready" if me.is_ready else "Ready"
 
 	var text := Net.status
-	var color := Palette.ACCENT_2 if view == View.CONNECT and text != "" else Palette.TEXT
 	if in_room:
 		var waiting := infos.filter(func(p): return not p.is_ready).size()
 		text = "Waiting for %d player%s to ready up" % [waiting, "" if waiting == 1 else "s"] if waiting > 0 else "Starting..."
@@ -202,7 +139,6 @@ func _refresh() -> void:
 			text += "    (hosting - others join ws://<your IP>:%d)" % Net.DEFAULT_PORT
 	_room_status.text = text
 	_status.text = text
-	_status.add_theme_color_override("font_color", color)
 	_status.visible = text != "" and not in_room
 
 	if view != _view:
@@ -214,9 +150,6 @@ func _refresh() -> void:
 ## otherwise it stays on a hidden button and the keys do nothing.
 func _focus_view() -> void:
 	match _view:
-		View.CONNECT:
-			_relink()
-			_menu_list[0].grab_focus.call_deferred()
 		View.WAITING:
 			_cancel.grab_focus.call_deferred()
 		View.ROOM:
@@ -226,57 +159,11 @@ func _focus_view() -> void:
 				f.release_focus()
 
 
-func _relink() -> void:
-	var list: Array = _menu_list.slice(0, 4)
-	if _direct_box.visible:
-		list.append_array(_direct_list)
-	list.append(_menu_list[4])
-	MenuBase.link_vertical(list)
-
-
-func _toggle_direct() -> void:
-	_direct_box.visible = not _direct_box.visible
-	_relink()
-	if _direct_box.visible:
-		_address.grab_focus.call_deferred()
-
-
 func _wide_button(text: String, callback: Callable) -> Button:
 	var b := UiTheme.button(text, 420)
 	b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	b.pressed.connect(callback)
 	return b
-
-
-func _create_room() -> void:
-	Net.create_room()
-	_refresh()
-
-
-func _join_room() -> void:
-	var code := _code.text.strip_edges()
-	if code == "":
-		_code.grab_focus()
-		return
-	Net.join_room(code)
-	_refresh()
-
-
-func _join() -> void:
-	var url := _address.text.strip_edges()
-	if url == "":
-		return
-	if not url.contains("://"):
-		url = "ws://" + url
-	if url.count(":") < 2:
-		url += ":%d" % Net.DEFAULT_PORT
-	Net.join(url)
-	_refresh()
-
-
-func _host() -> void:
-	Net.host()
-	_refresh()
 
 
 func _toggle_ready() -> void:
@@ -294,12 +181,18 @@ func _step_color(dir: int) -> void:
 
 func _back() -> void:
 	Sfx.play("ui_back")
-	if Net.is_online():
-		Net.leave()
-		Net.status = ""
-		_refresh()
-	else:
-		MatchManager.to_menu()
+	Net.leave()
+	Net.status = ""
+	_leave_to_menu()
+
+
+## Back to the main menu's Online page (it shows Net.status, if any).
+func _leave_to_menu() -> void:
+	if _view == -2:
+		return
+	_view = -2
+	UiShell.resume = "online"
+	MatchManager.to_menu()
 
 
 # ── Input ────────────────────────────────────

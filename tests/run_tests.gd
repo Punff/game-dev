@@ -18,6 +18,7 @@ func _ready() -> void:
 	await _test_jump_physics_matches_envelope()
 	await _test_game_smoke()
 	await _test_sandbox_smoke()
+	await _test_menu_smoke()
 	await _test_chaos()
 	await _test_knockout()
 	print("\n%d checks, %d failures" % [_checks, _failures])
@@ -286,6 +287,77 @@ func _test_field_holds_player() -> void:
 
 
 # ── Smoke test: the sandbox ("How to play") runs ─
+
+# ── Menus ────────────────────────────────────
+
+func _focus() -> Control:
+	return get_viewport().gui_get_focus_owner()
+
+
+func _frames(n := 3) -> void:
+	for i in n:
+		await get_tree().process_frame
+
+
+func _test_menu_smoke() -> void:
+	var saved := {"onboarded": Settings.get_value("onboarded"), "auth_token": Settings.get_value("auth_token"), "account_name": Settings.get_value("account_name")}
+	Settings.values.auth_token = ""
+	Settings.values.onboarded = false
+	var shell: UiShell = load(MatchManager.MAIN_MENU).instantiate()
+	get_tree().root.add_child(shell)
+	await _frames()
+
+	check(not shell.tracklist.visible and shell.sleeve.top() is SignInPage, "menu: first launch asks to sign in")
+	shell.sleeve.back()
+	check(shell.sleeve.top() is SignInPage, "menu: Back doesn't skip the sign-in gate")
+	(shell.sleeve.top() as SignInPage)._play_as_guest()
+	await _frames()
+	check(shell.tracklist.visible and _focus() is UiTrack, "menu: playing as a guest opens the tracklist")
+	check(Settings.get_value("onboarded"), "menu: the guest choice is remembered")
+
+	for id in ["play", "profile", "leaderboard", "settings"]:
+		shell.choose(id)
+		await _frames()
+		var page := shell.sleeve.top()
+		check(page != null and shell.sleeve.active, "menu: %s opens in the sleeve" % id)
+		check(_focus() != null and shell.sleeve.is_ancestor_of(_focus()), "menu: %s takes focus" % id)
+		if page and page.tabs:
+			for i in page.tabs.count():
+				page.tabs.show_tab(i)
+				await _frames(2)
+				check(_focus() != null and page.is_ancestor_of(_focus()), "menu: %s tab %s has focus" % [id, page.tabs.tab_name()])
+		shell.sleeve.back()
+		await _frames()
+		check(_focus() is UiTrack and (_focus() as UiTrack).id == id, "menu: back from %s returns to its track" % id)
+
+	shell.choose("play")
+	await _frames()
+	(shell.sleeve.top() as PlayPage).open_online()
+	await _frames()
+	check(shell.sleeve.depth() == 2 and shell.sleeve.top() is OnlinePage, "menu: Online opens on top of Play")
+	shell.sleeve.back()
+	await _frames()
+	check(shell.sleeve.depth() == 1 and shell.sleeve.is_ancestor_of(_focus()), "menu: back from Online returns to Play")
+	shell.free()
+
+	# Settings from an in-game menu floats over it and gives focus back.
+	var menu := MenuBase.new()
+	get_tree().root.add_child(menu)
+	menu.build_overlay()
+	var resume := menu.add_button("Resume", func(): pass)
+	resume.grab_focus()
+	menu.open_settings()
+	await _frames()
+	check(menu.sub_open and menu.is_ancestor_of(_focus()) and _focus() != resume, "menu: floating Settings takes focus")
+	(menu.get_child(-1) as UiSleeve.Floating).sleeve.back()
+	await _frames()
+	check(not menu.sub_open and _focus() == resume, "menu: closing floating Settings refocuses")
+	menu.free()
+	for k in saved:
+		Settings.values[k] = saved[k]
+	Settings.save_settings()
+	await _frames()
+
 
 func _test_sandbox_smoke() -> void:
 	var sb: Sandbox = load(Sandbox.SCENE).instantiate()

@@ -79,7 +79,7 @@ func _show(results: Dictionary) -> void:
 			_menu.add_button("Change Players", func(): MatchManager.to_lobby()),
 			_menu.add_button("Main Menu", func(): MatchManager.to_menu()),
 		]
-	MenuBase.link_vertical(buttons)
+	UiNav.link_vertical(buttons)
 	visible = true
 	get_tree().paused = true
 	_menu.modulate.a = 0.0
@@ -114,7 +114,7 @@ func _on_rank(reply: Dictionary) -> void:
 	if reply.has("rank"):
 		_rank.text = "#%d on the leaderboard (best %d m)" % [reply.rank, reply.best]
 	elif not Settings.logged_in():
-		_rank.text = "Log in from the Leaderboard screen to get ranked"
+		_rank.text = "Log in from Profile to get ranked"
 		_rank.add_theme_color_override("font_color", Palette.TEXT_DIM)
 	else:
 		return

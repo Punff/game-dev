@@ -85,6 +85,8 @@ const DEFAULTS := {
 	"auth_token": "",         ## logged-in session with the stats server (never the password)
 	"account_name": "",       ## username of that session
 	"share_stats": true,      ## send match results and gameplay stats to the server
+	"ball_color": 0,          ## Profile > Customise: preferred index into Palette.PLAYER_COLORS
+	"onboarded": false,       ## answered the first-launch sign-in (logged in or chose guest)
 }
 
 var values: Dictionary = DEFAULTS.duplicate()

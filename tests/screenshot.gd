@@ -25,6 +25,9 @@ func _ready() -> void:
 	if OS.get_environment("SHOT_FIXED") != "":
 		_svp = SubViewport.new()
 		_svp.size = Vector2i(1280, 720)
+		var want := OS.get_environment("SHOT_SIZE").split("x")   # e.g. SHOT_SIZE=1680x720
+		if want.size() == 2:
+			_svp.size = Vector2i(want[0].to_int(), want[1].to_int())
 		_svp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 		add_child(_svp)
 		_svp.add_child(load("res://scripts/core/grit.gd").new())   # the global overlay lives outside
@@ -49,22 +52,31 @@ func _ready() -> void:
 
 func _do_action(scene: Node, action: String) -> void:
 	match action:
-		"settings": scene.open_settings()
-		"leaderboard": scene.open_sub(LeaderboardMenu.new())
-		"account":
-			scene.open_sub(LeaderboardMenu.new())
-			await get_tree().process_frame
-			var lb: MenuBase = scene.get_child(-1)
-			lb.open_sub(AccountMenu.new())
+		# Main menu (UiShell): open a track, or a page inside one.
+		"play", "settings", "leaderboard", "profile": scene.choose(action)
+		"online":
+			scene.choose("play")
+			scene.sleeve.top().open_online()
+		"customise":
+			scene.choose("profile")
+			scene.sleeve.top().tabs.show_tab(1)
+		"signin":
+			scene.choose("profile")
+			scene.sleeve.top().push(SignInPage.new())
+		"gate": scene._show_gate()
+		"browse": scene.tracklist.track("leaderboard").grab_focus.call_deferred()
 		"room":
 			# Online lobby as a room host, with a made-up code.
 			Net.host()
 			Net.room_code = "FKLT8"
 			scene._refresh()
 		"controls":
-			scene.open_settings()
-			await get_tree().process_frame
-			scene.get_child(-1)._set_tab(1)
+			scene.choose("settings")
+			scene.sleeve.top().tabs.show_tab(3)
+		"pause_settings":
+			await get_tree().create_timer(4.5).timeout
+			scene.pause_menu.open()
+			scene.pause_menu._menu.open_settings()
 		"pause":
 			await get_tree().create_timer(4.5).timeout
 			scene.pause_menu.open()
