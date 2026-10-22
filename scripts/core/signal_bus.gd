@@ -20,3 +20,7 @@ signal screen_shake_requested(strength: float)
 signal game_paused(is_paused: bool)
 signal settings_changed()
 signal bindings_changed()
+
+## A map event is coming (MapEvents): the HUD stamps its callout. Online the
+## host sends it to everyone (Net._map_event).
+signal map_event_called(text: String, color: Color)

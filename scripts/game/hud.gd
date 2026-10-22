@@ -47,6 +47,7 @@ func _ready() -> void:
 	_best = _label("BEST %d m" % _best_m, 15, Palette.PAPER_DIM, HORIZONTAL_ALIGNMENT_LEFT)
 	_best.add_theme_color_override("font_outline_color", Palette.INK)
 	_best_tag = _label("BEST", 12, Palette.MUSTARD, HORIZONTAL_ALIGNMENT_RIGHT)
+	SignalBus.map_event_called.connect(func(text: String, color: Color): _show_callout(text, color))
 
 
 func _label(text: String, size: int, col: Color, align: HorizontalAlignment, heavy := true) -> Label:

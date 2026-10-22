@@ -64,18 +64,24 @@ func start(kind: String) -> void:
 	_t = -WARN
 	var cam: Camera2D = game.camera
 	var top := cam.get_screen_center_position() - Vector2(0, get_viewport().get_visible_rect().size.y / cam.zoom.y * 0.5)
+	var text: String = CALLOUT[kind]
+	var color := Palette.RUST
 	match kind:
 		"slab":
 			_target = _pick_target()
 			if _target == null:
 				_kind = ""
 				return
-			Fx.popup(Vector2(_target.global_position.x, top.y + 90.0), CALLOUT[kind], Palette.RUST, 34)
+			text = "%s, look up!" % _target.info.display_name if game.players.size() > 1 and _target.info else text
 		"wind":
 			_wind_dir = 1.0 if _rng.randf() < 0.5 else -1.0
-			Fx.popup(top + Vector2(0, 110), CALLOUT[kind] + (" >>" if _wind_dir > 0 else " <<"), Palette.PAPER, 34)
-		_:
-			Fx.popup(top + Vector2(0, 110), CALLOUT[kind], Palette.MUSTARD if kind == "quake" else Palette.RUST, 36)
+			text += " >>" if _wind_dir > 0 else " <<"
+			color = Palette.PAPER
+		"quake":
+			color = Palette.MUSTARD
+	SignalBus.map_event_called.emit(text, color)
+	if Net.is_server():
+		Net.relay_map_event(text, color)
 	Telemetry.world("map_event", top, {"kind": kind})
 	Sfx.play("count")
 

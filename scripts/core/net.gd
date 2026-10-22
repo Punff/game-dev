@@ -692,6 +692,18 @@ func _snapshot(header: PackedFloat32Array, players: PackedFloat32Array, frags: P
 		game.apply_state(header, players, frags)
 
 
+# ── Map events ───────────────────────────────
+
+## Host: a map event's callout, for everyone's HUD.
+func relay_map_event(text: String, color: Color) -> void:
+	_send(true, func(): _map_event.rpc(text, color))
+
+
+@rpc("authority", "reliable")
+func _map_event(text: String, color: Color) -> void:
+	SignalBus.map_event_called.emit(text, color)
+
+
 # ── Ping ─────────────────────────────────────
 
 ## Host: time a round trip to every guest, and share what the last ones took.
