@@ -173,6 +173,8 @@ func _choose(p: Player, b: Dictionary) -> void:
 			charged = true
 		var kind := 1.0 if blk is StaticPlatform else (0.6 if blk is BreakableBlock else 0.3)
 		var s := dy * kind - absf(r.get_center().x - here.get_center().x) * 0.15 - (60.0 if charged else 0.0)
+		if blk is CatchupPad and blk.armed and p != CatchupPad.leader:
+			s += 600.0   # a lit catch-up pad: take it, like people would
 		if s > score:
 			score = s
 			best = r

@@ -18,6 +18,7 @@ var BLOCK_TYPES := {
 	"ice": IceBlock,
 	"moving": MovingPlatform,
 	"reverse": ReverseBlock,
+	"catchup": CatchupPad,
 }
 
 @export var map_seed := 0
@@ -25,6 +26,8 @@ var BLOCK_TYPES := {
 var height_offset := 0.0
 ## See MapPlanner.biome_scale.
 var biome_scale := 1.0
+## See MapPlanner.catchup_pads.
+var catchup_pads := false
 
 var planner: MapPlanner
 var floor_y := 0.0
@@ -63,6 +66,7 @@ func generate(start_floor_y: float) -> void:
 	planner = MapPlanner.new(map_seed)
 	planner.height_offset = height_offset
 	planner.biome_scale = biome_scale
+	planner.catchup_pads = catchup_pads
 	floor_y = start_floor_y
 	_spawn_row(planner.start(floor_y))
 	_stream_to(floor_y - STREAM_AHEAD)

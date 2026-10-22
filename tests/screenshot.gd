@@ -126,6 +126,24 @@ func _do_action(scene: Node, action: String) -> void:
 				if ps.size() > 2:
 					ps[2].global_position = from + Vector2(-700, -1300) * k
 				scene.lava.surface_y = 650.0
+		"catchup":
+			# The first catch-up pad, dead, then lit once P1 climbs past it.
+			await get_tree().create_timer(4.0).timeout
+			var pads := get_tree().get_nodes_in_group("blocks").filter(func(b): return b is CatchupPad)
+			if pads.is_empty():
+				return
+			pads.sort_custom(func(a, b): return a.global_position.y > b.global_position.y)
+			var pad: CatchupPad = pads[0]
+			var ps: Array = scene.players
+			for p in ps:
+				p.set_physics_process(false)
+			ps[1].global_position = pad.global_position + Vector2(-40, -Block.HEIGHT * 0.5 - Player.RADIUS - 1)
+			ps[0].global_position = pad.global_position + Vector2(260, -120)
+			scene.lava.surface_y = pad.global_position.y + 900.0
+			scene.camera.snap()
+			await get_tree().create_timer(1.0).timeout
+			ps[0].global_position.y = pad.global_position.y - CatchupPad.PAD_ARM - 60.0
+			ps[0].max_height_px = ps[0].spawn_y - ps[0].global_position.y
 		"blast":
 			# Shatter nearby concrete and fire a shockwave to preview debris.
 			await get_tree().create_timer(4.2).timeout

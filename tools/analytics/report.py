@@ -41,7 +41,8 @@ ABILITY_NAMES = {"jump": "Jump", "air_jump": "Double jump", "charge": "Charge ju
                  "shock": "Shockwave", "pound": "Ground pound"}
 BLOCK_NAMES = {"static_platform": "Steel", "breakable_block": "Concrete", "bounce_pad": "Bounce pad",
                "speed_block": "Speed", "conveyor_block": "Conveyor", "push_zone": "Push zone",
-               "vanishing_block": "Vanishing", "ice_block": "Ice", "moving_platform": "Moving", "reverse_block": "Reverse"}
+               "vanishing_block": "Vanishing", "ice_block": "Ice", "moving_platform": "Moving", "reverse_block": "Reverse",
+               "catchup_pad": "Catch-up pad"}
 
 
 # ── Loading ──────────────────────────────────

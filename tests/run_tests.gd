@@ -35,6 +35,8 @@ func _ready() -> void:
 	_test_blasts_dont_stack()
 	await _test_start_walls()
 	_test_biome_scale()
+	_test_catchup_planner()
+	await _test_catchup_pad()
 	print("\n%d checks, %d failures" % [_checks, _failures])
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -921,4 +923,78 @@ func _test_lead_slab() -> void:
 	check(ev._kind == "", "lead slab: none while the players are close")
 	scene.queue_free()
 	await get_tree().process_frame
+	PlayerManager.clear()
+
+
+## Multiplayer maps get catch-up pads now and then, never as the only way up;
+## solo maps don't.
+func _test_catchup_planner() -> void:
+	for pads in [false, true]:
+		var planner := MapPlanner.new(31)
+		planner.catchup_pads = pads
+		planner.start(0.0)
+		planner.generate_until(-12000.0)
+		var found := 0
+		var sole := 0
+		for row in planner.rows:
+			for p in row.platforms:
+				if p.type == "catchup":
+					found += 1
+					if not row.platforms.any(func(q): return q != p and q.reachable and q.anchor_ok):
+						sole += 1
+		if pads:
+			check(found >= 4, "catch-up pads: a 240 m multiplayer map has several (%d)" % found)
+			check(sole == 0, "catch-up pads: never the only way up")
+		else:
+			check(found == 0, "catch-up pads: none in solo maps")
+
+
+## A pad stays dead until the leader has passed it; then it launches anyone
+## behind (up through the platform overhead), but not the leader.
+func _test_catchup_pad() -> void:
+	PlayerManager.clear()
+	var ids := [PlayerManager.join(Settings.DEVICE_KB_A), PlayerManager.join(Settings.DEVICE_KB_B)]
+	var y0 := -20000.0
+	var pad := CatchupPad.new()
+	pad.position = Vector2(0, y0 + Block.HEIGHT * 0.5)
+	pad.set_block_size(Vector2(160, Block.HEIGHT))
+	get_tree().root.add_child(pad)
+	var lid := StaticPlatform.new()   # right overhead
+	lid.position = Vector2(0, y0 - 260.0)
+	lid.set_block_size(Vector2(300, Block.HEIGHT))
+	get_tree().root.add_child(lid)
+	var lead := Player.new()
+	lead.setup(PlayerManager.players[ids[0]])
+	get_tree().root.add_child(lead)
+	var back := Player.new()
+	back.setup(PlayerManager.players[ids[1]])
+	get_tree().root.add_child(back)
+	CatchupPad.leader = lead
+	lead.global_position = Vector2(700, y0 - 100.0)
+	lead.max_height_px = lead.spawn_y - lead.global_position.y
+	back.global_position = Vector2(0, y0 - 60.0)
+	for i in 30:
+		await get_tree().physics_frame
+	check(not pad.armed, "catch-up pad: dead while the leader is close above it")
+	check(back.is_on_floor() and back.velocity.y > -100.0, "catch-up pad: a dead pad is just a plate")
+	lead.global_position.y = y0 - CatchupPad.PAD_ARM - 200.0
+	lead.max_height_px = lead.spawn_y - lead.global_position.y
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	check(pad.armed, "catch-up pad: lit once the leader is past it")
+	back.global_position = Vector2(0, y0 - 80.0)   # drop onto it
+	var top := 0.0
+	for i in 120:
+		await get_tree().physics_frame
+		top = minf(top, back.global_position.y - y0)
+	check(top < -400.0, "catch-up pad: launches whoever is behind (%.0f px)" % top)
+	check(back.global_position.y < lid.position.y, "...up through the platform overhead")
+	lead.global_position = Vector2(0, y0 - 80.0)
+	lead.velocity = Vector2.ZERO
+	for i in 40:
+		await get_tree().physics_frame
+	check(lead.global_position.y > y0 - 60.0, "catch-up pad: the leader gets nothing from it (%s, back %s)" % [lead.global_position - Vector2(0, y0), back.global_position - Vector2(0, y0)])
+	for n in [pad, lid, lead, back]:
+		n.free()
+	CatchupPad.leader = null
 	PlayerManager.clear()

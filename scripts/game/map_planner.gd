@@ -51,6 +51,14 @@ var height_offset := 0.0
 ## Biomes start at `from` x this. Multiplayer brings them much closer (see
 ## game.gd MULTI_BIOME_SCALE): matches there rarely climb past the first.
 var biome_scale := 1.0
+## Multiplayer: now and then a platform is a catch-up pad (CatchupPad), never
+## one the route depends on. Its own random stream, so the rest of the map
+## comes out the same either way.
+var catchup_pads := false
+const PAD_FROM := 750.0                     ## px climbed before the first
+const PAD_EVERY := Vector2(1250.0, 2000.0)  ## px between them
+var _pad_rng := RandomNumberGenerator.new()
+var _next_pad := PAD_FROM
 
 static var _env_double: PackedVector2Array
 static var _env_charged: PackedVector2Array
@@ -58,6 +66,7 @@ static var _env_charged: PackedVector2Array
 
 func _init(seed_value: int = 0) -> void:
 	rng.seed = seed_value if seed_value != 0 else randi()
+	_pad_rng.seed = rng.seed + 77
 	_ensure_envelopes()
 
 
@@ -122,6 +131,8 @@ func _next_row() -> Dictionary:
 	_fit_moving(plats)
 	_keep_clear_of_previous(plats)
 	_ensure_reachable(plats, charged_row, gap)
+	if catchup_pads:
+		_place_pad(plats, start_y - y)
 
 	var anchors := plats.filter(func(p): return p.anchor_ok and p.reachable)
 	if not anchors.is_empty():
@@ -269,6 +280,29 @@ func _assign_types(plats: Array, biome: Dictionary, _tmpl: int) -> void:
 		if t in ["speed", "conveyor"]:
 			p["dir"] = 1.0 if rng.randf() < 0.5 else -1.0
 		p.anchor_ok = not t in ["moving", "vanishing", "breakable"]
+
+
+func _place_pad(plats: Array, height: float) -> void:
+	if height < _next_pad:
+		return
+	var anchors := plats.filter(func(p): return p.reachable and p.anchor_ok)
+	var spots := plats.filter(func(p): return p.reachable and not p.type in ["moving", "vanishing"])
+	var first := _pad_rng.randi() % maxi(spots.size(), 1)
+	for i in spots.size():
+		var p: Dictionary = spots[(first + i) % spots.size()]
+		if not anchors.any(func(a): return a != p):
+			continue   # the only way up: leave it be
+		var top := top_of(p)
+		var c: float = (p.x0 + p.x1) * 0.5
+		var hw := minf(p.x1 - p.x0, MAX_SPECIAL_WIDTH) * 0.5
+		p.x0 = c - hw
+		p.x1 = c + hw
+		p.h = Block.HEIGHT
+		p.y = top + Block.HEIGHT * 0.5
+		p.type = "catchup"
+		p.anchor_ok = false
+		_next_pad = height + _pad_rng.randf_range(PAD_EVERY.x, PAD_EVERY.y)
+		return
 
 
 func _weighted(weights: Dictionary) -> String:

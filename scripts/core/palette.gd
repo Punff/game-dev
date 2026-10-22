@@ -53,4 +53,7 @@ const BLOCKS := {
 	"ice_block": [Color("a3bfc8"), Color("f2efe6")],
 	"moving_platform": [Color("4b6a8c"), Color("d8e4f0")],
 	"reverse_block": [Color("7e1f2c"), Color("f08a9a")],
+	# A dead plate until the leader passes it, then lit up (CatchupPad).
+	"catchup_pad": [Color("625d55"), Color("a39b8b")],
+	"catchup_pad_armed": [Color("d39a22"), Color("fff0bf")],
 }

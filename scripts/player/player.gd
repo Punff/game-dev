@@ -118,6 +118,7 @@ var _trail: PackedVector2Array = []
 var _hit_flash := 0.0
 var _rocket_time := 0.0             # after a downward blast, holding down doesn't fast-fall
 var _blast := Vector2.ZERO          # push taken from blasts in the last SHOCK_STACK_TIME
+var _through: Array = []            # blocks a catch-up launch carries us up through
 var _blast_time := 0.0
 var _last_aim := Vector2.ZERO       # recent aim, so a throw survives letting go of it a moment early
 var _last_aim_time := 0.0
@@ -293,6 +294,8 @@ func _step(delta: float) -> void:
 	var before := velocity.y
 	var side_before := absf(velocity.x)
 	move_and_slide()
+	if not _through.is_empty() and velocity.y >= 0.0:
+		_end_through()
 	# Leaving a chunk you stood on (or one that caught you from below this
 	# very step) hands you its speed: spend the ride budget.
 	var touched := _on_debris
@@ -736,6 +739,31 @@ func launch(vy: float) -> void:
 	_coyote = 0.0
 	_squash = Vector2(0.6, 1.5)
 	_rumble(0.2, 0.0, 0.1)
+
+
+## A catch-up pad's launch (CatchupPad): straight up through the platforms
+## overhead, landing on top of whichever one we're inside at the top of it.
+func launch_through(vy: float) -> void:
+	launch(vy)
+	var rise := vy * vy / (2.0 * GRAVITY) + 120.0
+	var column := Rect2(global_position.x - 140.0, global_position.y - rise, 280.0, rise - RADIUS - 2.0)
+	for b: Block in get_tree().get_nodes_in_group("blocks"):
+		if not b in _through and b.get_rect_global().intersects(column):
+			add_collision_exception_with(b)
+			_through.append(b)
+
+
+func _end_through() -> void:
+	var me := Rect2(global_position - Vector2(RADIUS, RADIUS), Vector2(RADIUS, RADIUS) * 2.0)
+	for b in _through:
+		if not is_instance_valid(b):
+			continue
+		var r: Rect2 = b.get_rect_global()
+		if r.intersects(me):
+			global_position.y = r.position.y - RADIUS - 1.0
+			velocity.y = 0.0
+		remove_collision_exception_with(b)
+	_through.clear()
 
 
 func reverse_controls(duration: float) -> void:

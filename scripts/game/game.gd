@@ -66,6 +66,7 @@ func _ready() -> void:
 		MatchManager.next_map_seed = 0
 	# (Every peer knows the player count, and replays record it: same map.)
 	map_gen.biome_scale = MULTI_BIOME_SCALE if PlayerManager.players.size() > 1 else 1.0
+	map_gen.catchup_pads = PlayerManager.players.size() > 1
 	background.biome_scale = map_gen.biome_scale
 	if not Net.is_online():
 		_designer_flags()
@@ -170,6 +171,7 @@ func _exit_tree() -> void:
 	PlayerInput.suspended = false
 	Player.lava_y = INF
 	Player.wind = 0.0
+	CatchupPad.leader = null
 
 
 func player_by_id(id: int) -> Player:
@@ -182,6 +184,7 @@ func player_by_id(id: int) -> Player:
 func _physics_process(delta: float) -> void:
 	_tick_hit_stop()
 	PlayerInput.suspended = Net.is_online() and pause_menu.visible
+	CatchupPad.leader = leader()   # (before the players and the map step)
 	if Net.is_client():
 		_client_tick(delta)
 		return
