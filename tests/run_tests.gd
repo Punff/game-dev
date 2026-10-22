@@ -27,6 +27,7 @@ func _ready() -> void:
 	await _test_slab_shatters()
 	await _test_wind_pushes()
 	await _test_map_events()
+	await _test_lead_slab()
 	await _test_sandbox_smoke()
 	await _test_menu_smoke()
 	await _test_chaos()
@@ -889,3 +890,35 @@ func _test_biome_scale() -> void:
 	planner.biome_scale = 0.3
 	check(planner.biome_at(inferno * 0.5).name == "Inferno", "multiplayer: the same height is Inferno")
 	check(is_equal_approx(MapPlanner.biome_from(1, 0.3), inferno * 0.3), "biome_from scales")
+
+
+## A player far enough out in front draws a slab of their own; whoever is
+## behind never does.
+func _test_lead_slab() -> void:
+	PlayerManager.clear()
+	PlayerManager.join(Settings.DEVICE_KB_A)
+	PlayerManager.join(Settings.DEVICE_KB_B)
+	var scene: Node = load("res://scenes/game.tscn").instantiate()
+	get_tree().root.add_child(scene)
+	await get_tree().create_timer(4.2).timeout   # countdown
+	var ev: MapEvents = scene.events
+	ev._next = 1e9   # no timed events
+	scene.lava.surface_y = 60000.0
+	var front: Player = scene.players[0]
+	var back: Player = scene.players[1]
+	for p: Player in scene.players:
+		p.set_physics_process(false)   # hold them where they're put
+	front.global_position = Vector2(0, -MapEvents.LEAD_SLAB - 200.0)
+	back.global_position = Vector2(300, -Player.RADIUS - 1.0)
+	await get_tree().create_timer(MapEvents.LEAD_HOLD * 0.5).timeout
+	check(ev._kind == "", "lead slab: not before the lead has lasted")
+	await get_tree().create_timer(MapEvents.LEAD_HOLD * 0.5 + 0.2).timeout
+	check(ev._kind == "slab" and ev._target == front, "lead slab: the player out in front gets one")
+	ev.stop()
+	front.global_position = Vector2(0, -60.0)   # caught up: no more
+	ev._last_lead_slab = -INF
+	await get_tree().create_timer(MapEvents.LEAD_HOLD + 0.3).timeout
+	check(ev._kind == "", "lead slab: none while the players are close")
+	scene.queue_free()
+	await get_tree().process_frame
+	PlayerManager.clear()

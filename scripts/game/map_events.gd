@@ -46,6 +46,12 @@ const SLAB_SIZE := Vector2(200, 60)
 const SLAB_DROP := 480.0          ## px above its target it appears (about the top of the view)
 const SLAB_SPEED := 720.0
 const SLAB_SETTLE := 260.0        ## once it's slowed below this (px/s) it floats, a stepping stone
+## Multiplayer catch-up: whoever is out in front by more than this (px)
+## for LEAD_HOLD s gets a slab of their own, at most every LEAD_SLAB_GAP s.
+## (Live matches: once someone was 10 m up, nobody could reach them.)
+const LEAD_SLAB := 500.0
+const LEAD_HOLD := 3.0
+const LEAD_SLAB_GAP := 10.0
 ## Quakes crack concrete in this box around the leader (a 1280x720 view).
 const QUAKE_AREA := Vector2(1280, 720)
 
@@ -62,6 +68,8 @@ var _wind_dir := 1.0
 var _target: Player
 var _last := -INF                  # match time of the last event
 var _quiet := 0.0                  # s since any concrete broke
+var _ahead := 0.0                  # s the front player has led by LEAD_SLAB
+var _last_lead_slab := -INF
 
 
 func setup(g: Node, seed_value: int) -> void:
@@ -84,7 +92,14 @@ func tick(delta: float, match_time: float) -> void:
 		return
 	if _quiet >= QUIET:
 		_next = minf(_next, maxf(_last + MIN_GAP, match_time))
-	if match_time >= _next:
+	_ahead = _ahead + delta if _front_lead() > LEAD_SLAB else 0.0
+	if _ahead >= LEAD_HOLD and match_time - _last_lead_slab >= LEAD_SLAB_GAP and only == "":
+		start("slab", "lead")
+		_last_lead_slab = match_time
+		_ahead = 0.0
+		_last = match_time
+		_next = maxf(_next, match_time + MIN_GAP)
+	elif match_time >= _next:
 		start(only if only != "" else _kind_here())
 		_last = match_time
 		_quiet = 0.0
@@ -99,7 +114,8 @@ func _kind_here() -> String:
 
 
 ## Starts an event (warning first). Tests and designers call it directly.
-func start(kind: String) -> void:
+## `why` is "lead" for the slab that catches a runaway leader.
+func start(kind: String, why := "") -> void:
 	_kind = kind
 	_t = -WARN
 	var text: String = CALLOUT[kind]
@@ -121,7 +137,10 @@ func start(kind: String) -> void:
 	if Net.is_server():
 		Net.relay_map_event(kind, text, color, _wind_dir)
 	var lead: Player = game.leader()
-	Telemetry.world("map_event", lead.global_position if lead else Vector2.ZERO, {"kind": kind})
+	var detail := {"kind": kind}
+	if why != "":
+		detail["why"] = why
+	Telemetry.world("map_event", lead.global_position if lead else Vector2.ZERO, detail)
 	Sfx.play("count")
 
 
@@ -181,14 +200,24 @@ func stop() -> void:
 
 # ── Slab ─────────────────────────────────────
 
-## Usually the leader (falling slabs keep the front honest), sometimes anyone.
+## Always whoever is highest right now: falling slabs hold the front back so
+## the others can catch up (Mario Kart's blue shell, but you can see it
+## coming and dodge it).
 func _pick_target() -> Player:
-	var alive: Array = game.players.filter(func(p): return not p.is_dead)
-	if alive.is_empty():
-		return null
-	if _rng.randf() < 0.6:
-		return game.leader()
-	return alive[_rng.randi() % alive.size()]
+	var front: Player = null
+	for p: Player in game.players:
+		if not p.is_dead and (front == null or p.global_position.y < front.global_position.y):
+			front = p
+	return front
+
+
+## px the highest living player is above the next one (0 with fewer than two).
+func _front_lead() -> float:
+	var ys: Array = game.players.filter(func(p): return not p.is_dead).map(func(p): return p.global_position.y)
+	if ys.size() < 2:
+		return 0.0
+	ys.sort()
+	return ys[1] - ys[0]
 
 
 ## Where it'll come down: a ring over the player, and a mark on whatever
