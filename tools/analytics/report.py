@@ -46,6 +46,11 @@ BLOCK_NAMES = {"static_platform": "Steel", "breakable_block": "Concrete", "bounc
 
 # ── Loading ──────────────────────────────────
 
+# Anomalies that mean something is broken, not just that a match went badly
+# (report --check, used in CI on bot matches).
+BROKEN = ["Impossible position", "Event cap hit", "Stuck most of a match"]
+
+
 def load_files(paths):
     recs, skipped = [], 0
     for p in paths:
@@ -551,6 +556,8 @@ def main():
     ap.add_argument("--only-bots", action="store_true")
     ap.add_argument("--save", help="also write the loaded records to this JSONL file")
     ap.add_argument("--out", default=str(Path(__file__).parent / "out" / "report.html"))
+    ap.add_argument("--check", nargs="?", const=",".join(BROKEN), metavar="KINDS",
+                    help="exit 1 if any of these anomaly kinds turn up (default: %s)" % ", ".join(BROKEN))
     a = ap.parse_args()
 
     skipped = 0
@@ -572,6 +579,12 @@ def main():
     print(f"{len(recs)} matches ({skipped} old/unreadable lines skipped) -> {a.out}")
     for k, t in A["notes"]:
         print(("! " if k == "warn" else "- ") + t)
+    if a.check:
+        kinds = {k.strip() for k in a.check.split(",")}
+        found = {k: v for k, v in A["anomalies"].items() if k in kinds}
+        for kind, items in found.items():
+            print(f"BROKEN: {kind} x{len(items)}: {items[0][0] if isinstance(items[0], tuple) else items[0]}")
+        sys.exit(1 if found else 0)
 
 
 if __name__ == "__main__":

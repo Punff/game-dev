@@ -117,6 +117,28 @@ works and for a rough first look at a tuning change; they don't stand in
 for people. Their records are tagged `"bot"` and only upload to a local server
 (`BOT_UPLOAD=1` and `--signaling=ws://127.0.0.1:8787`).
 
+### Before and after a change
+
+Bot matches use fixed map seeds (`--seed-base=N`, default 1000), so two runs
+play the same maps:
+
+```bash
+TELEMETRY_LOG=/tmp/before.jsonl godot --headless --path . res://tests/bot_matches.tscn -- --matches=12
+# ...make the change...
+TELEMETRY_LOG=/tmp/after.jsonl godot --headless --path . res://tests/bot_matches.tscn -- --matches=12
+python3 tools/analytics/compare.py /tmp/before.jsonl /tmp/after.jsonl
+```
+
+`compare.py` pairs matches by seed and flags changes over 15%.
+`report.py --check` exits 1 when records show something broken (impossible
+positions, a player stuck most of a match, the event cap hit). CI
+(`.github/workflows/checks.yml`) runs the tests and six bot matches through
+it on every push.
+
+The bots climb with the map planner's own jump policy (see
+`tests/bot_matches.gd`): good enough to compare changes, not to stand in for
+people. They reach roughly 20-40 m; people go much further.
+
 ## Leaderboards, accounts and player stats
 
 Only **accounts** (username and password) are ranked. Anyone can play and

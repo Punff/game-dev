@@ -1,0 +1,61 @@
+# Runs the test suite and a few bot matches on every push / PR, and fails if
+# the bots' records show something broken (report.py --check: impossible
+# positions, stuck most of a match, event cap hit). Nothing is uploaded.
+name: Checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Godot
+        id: godot-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/godot-bin
+          key: godot-bin-${{ env.GODOT_VERSION }}
+
+      - name: Download Godot
+        if: steps.godot-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/godot-bin && cd ~/godot-bin
+          curl -sSfL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip && mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 godot && rm godot.zip
+
+      - name: Install Godot
+        run: echo ~/godot-bin >> "$GITHUB_PATH"
+
+      # --import, not --editor: a first-time editor run drops the Net autoload.
+      - name: Import
+        run: godot --headless --import
+
+      - name: Tests
+        run: NO_STATS=1 godot --headless res://tests/run_tests.tscn
+
+      - name: Bot matches
+        run: NO_STATS=1 TELEMETRY_LOG=bots.jsonl godot --headless res://tests/bot_matches.tscn -- --matches=6
+
+      - name: Bot records look sane
+        run: python3 tools/analytics/report.py --file bots.jsonl --only-bots --all-builds --out bot_report.html --check
+
+      - name: Keep the bot report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bot-report
+          path: |
+            bot_report.html
+            bots.jsonl
