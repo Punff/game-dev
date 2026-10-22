@@ -43,11 +43,12 @@ const FLOOR_WIDTH := 300.0          ## gravity-field floor row width before chun
 const FLOOR_GAP := 2.0
 const FLOOR_ARRIVE := 10.0          ## a chunk this close to its floor slot turns solid
 ## Riding your debris up (aim the field up while standing on it) is fine, but
-## all the upward speed you take from chunks over one field adds up to at most
-## this - about a full charge jump's worth. (Each time you left a rising chunk
-## it handed you its speed, and the field then pulled the chunks faster to
-## keep up with you: rides ratcheted up to 1,200+ px/s.)
-const RIDE_BUDGET := 1300.0
+## all the height chunks give you over one field - lifts off them and being
+## carried on them - adds up to at most this (px), a bit under a full charge
+## jump. (Each time you left a rising chunk it handed you its speed, and the
+## field then pulled the chunks faster to keep up with you: one field could
+## be worth 10-18 m.) Once it's spent, the field stops lifting chunks under you.
+const RIDE_BUDGET := 250.0
 ## And no single push off debris leaves you rising faster than this (riding a
 ## throw from under your own feet could hand you 1,000+ in one go).
 const RIDE_PEAK := 860.0
@@ -93,7 +94,7 @@ var _coyote := 0.0
 var _jump_buffer := 0.0
 var _was_on_floor := false
 var _on_debris := false          # standing on a chunk (not a block) after the last move
-var _ride_left := RIDE_BUDGET    # upward speed chunks may still give us this field
+var _ride_left := RIDE_BUDGET    # height (px) chunks may still give us this field
 var _reverse_timer := 0.0
 var _charging := false
 var _charge := 0.0
@@ -269,10 +270,14 @@ func _step(delta: float) -> void:
 	for i in get_slide_collision_count():
 		if get_slide_collision(i).get_collider() is Fragment:
 			touched = true
-	if touched and not is_on_floor() and velocity.y < before:
-		var take := minf(before - velocity.y, _ride_left)
-		velocity.y = maxf(before - take, minf(before, -RIDE_PEAK))
-		_ride_left -= before - velocity.y
+	var up_before := maxf(-before, 0.0)
+	if touched and not is_on_floor() and -velocity.y > up_before:
+		var most := minf(sqrt(up_before * up_before + 2.0 * GRAVITY * _ride_left), maxf(RIDE_PEAK, up_before))
+		var up := minf(-velocity.y, most)
+		velocity.y = -up
+		_ride_left = maxf(_ride_left - (up * up - up_before * up_before) / (2.0 * GRAVITY), 0.0)
+	elif _on_debris and is_on_floor():
+		_ride_left = maxf(_ride_left + minf(get_platform_velocity().y, 0.0) * delta, 0.0)   # carried up
 	# (Standing still reports no slide collisions: look at what's underfoot.)
 	_on_debris = false
 	if is_on_floor():
@@ -442,6 +447,8 @@ func _update_field(delta: float) -> void:
 func _pull(f: Fragment, target: Vector2, delta: float) -> void:
 	var to_target := target - f.global_position
 	var desired := to_target.normalized() * minf(to_target.length() * 7.0, 900.0) + velocity
+	if _ride_left <= 0.0 and f.global_position.y > global_position.y:
+		desired.y = maxf(desired.y, 0.0)   # ridden out: chunks under you stop lifting
 	f.linear_velocity = f.linear_velocity.lerp(desired, minf(6.5 * delta, 1.0))
 
 

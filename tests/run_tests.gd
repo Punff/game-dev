@@ -516,6 +516,19 @@ func _test_field_spares_holder() -> void:
 ## Riding your debris up is allowed, but within the field's ride budget: it
 ## used to ratchet into a launch of 1,000+ px/s, more than a full charge.
 func _test_no_field_launch() -> void:
+	# (Let go of the field while aiming up: the chunks under you fly off.)
+	var r := await _field_ride(true, false)
+	check(r.fastest < 950.0, "throwing your debris floor up doesn't launch you (%.0f px/s)" % r.fastest)
+	# Jump, field, air jump, aim up and ride it out - against the same jumps
+	# with no field at all.
+	var plain := await _field_ride(false, true)
+	var ride := await _field_ride(true, true)
+	var gain: float = (ride.rise - plain.rise) / 50.0
+	print("Field ride: %.1f m above jumping alone (budget %.1f m)" % [gain, Player.RIDE_BUDGET / 50.0])
+	check(gain < Player.RIDE_BUDGET / 50.0 + 1.5, "riding your debris up gains about its budget (%.1f m)" % gain)
+
+
+func _field_ride(field: bool, ride_out: bool) -> Dictionary:
 	PlayerManager.clear()
 	var id := PlayerManager.join(Settings.DEVICE_KB_A)
 	var block := BreakableBlock.new()
@@ -525,32 +538,42 @@ func _test_no_field_launch() -> void:
 	var p := Player.new()
 	p.setup(PlayerManager.players[id])
 	get_tree().root.add_child(p)
-	p.global_position = Vector2(0, -8600 - 30 - Player.RADIUS - 1)
+	var start_y := -8600.0 - 30.0 - Player.RADIUS - 1.0
+	p.global_position = Vector2(0, start_y)
 	for i in 30:
 		await get_tree().physics_frame
 	p.controls_enabled = true
 	var act := func(a): return PlayerManager.action(id, a)
+	var top := start_y
+	var fastest := 0.0
 	Input.action_press(act.call("jump"))
 	await get_tree().physics_frame
 	Input.action_release(act.call("jump"))
-	Input.action_press(act.call("gravity"))
-	for i in 50:
+	if field:
+		Input.action_press(act.call("gravity"))
+	for i in 50 if not ride_out else 20:
 		await get_tree().physics_frame
+		top = minf(top, p.global_position.y)
+	if ride_out:
+		Input.action_press(act.call("jump"))   # the air jump
+		await get_tree().physics_frame
+		Input.action_release(act.call("jump"))
 	Input.action_press(act.call("up"))
-	var fastest := 0.0
-	for i in 64:
-		if i == 4:
+	for i in 64 if not ride_out else 150:
+		if i == 4 and not ride_out:
 			Input.action_release(act.call("gravity"))
 		await get_tree().physics_frame
 		fastest = maxf(fastest, -p.velocity.y)
+		top = minf(top, p.global_position.y)
 	Input.action_release(act.call("up"))
-	check(fastest < 950.0, "riding your debris stays within its budget (%.0f px/s)" % fastest)
+	Input.action_release(act.call("gravity"))
 	for f in get_tree().get_nodes_in_group("fragments"):
 		f.free()
 	p.free()
 	if is_instance_valid(block):
 		block.free()
 	PlayerManager.clear()
+	return {"fastest": fastest, "rise": start_y - top}
 
 
 ## The lava: a steady climber is eventually caught (faster gets higher), and
