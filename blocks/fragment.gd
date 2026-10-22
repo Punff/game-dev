@@ -123,6 +123,14 @@ func throw(by: Player, velocity: Vector2) -> void:
 	angular_velocity = r.randf_range(-8, 8)
 
 
+## Let go of by a gravity field without a throw: the same short grace a
+## throw gets, so it doesn't knock the player who was just holding it.
+func release(by: Player) -> void:
+	held_by = null
+	thrown_by = by
+	_thrown_time = 0.35
+
+
 func _physics_process(delta: float) -> void:
 	_age += delta
 	if puppet:
@@ -151,7 +159,10 @@ func _on_body_entered(body: Node) -> void:
 		# break nothing more, cutting chain reactions short).
 		body.schedule_break(0, global_position, speed * 0.6, "chunk", credit)
 	elif body is Player:
-		if body == thrown_by and _thrown_time > 0.0:
+		# Never the player whose gravity field is carrying it, nor right after
+		# they let go (live data: most chunk hits were players' own fields
+		# pulling debris into them).
+		if body == held_by or body == thrown_by and _thrown_time > 0.0:
 			return
 		var weight := clampf(mass / MASS, 0.5, 2.0)
 		body.hit_by_chunk(linear_velocity * 0.55 * weight, self)

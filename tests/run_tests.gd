@@ -19,6 +19,7 @@ func _ready() -> void:
 	await _test_jump_physics_matches_envelope()
 	await _test_game_smoke()
 	await _test_vanishing_waits()
+	await _test_field_spares_holder()
 	await _test_map_events()
 	await _test_sandbox_smoke()
 	await _test_menu_smoke()
@@ -462,6 +463,49 @@ func _test_map_events() -> void:
 	check(loose.is_empty() or moved > 0, "map events: wind drifts the debris")
 	scene.queue_free()
 	await get_tree().process_frame
+	PlayerManager.clear()
+
+
+## Your own gravity field doesn't batter you with the chunks it carries (live
+## data: most chunk hits were players' own fields pulling debris into them),
+## nor right after you let go of them. Someone else's chunks still hit.
+func _test_field_spares_holder() -> void:
+	PlayerManager.clear()
+	var id := PlayerManager.join(Settings.DEVICE_KB_A)
+	var other_id := PlayerManager.join(Settings.DEVICE_KB_B)
+	var p := Player.new()
+	p.setup(PlayerManager.players[id])
+	get_tree().root.add_child(p)
+	var q := Player.new()
+	q.setup(PlayerManager.players[other_id])
+	get_tree().root.add_child(q)
+	for who in [["carried", p, p], ["just let go", p, p], ["someone else's", p, q]]:
+		p.global_position = Vector2(0, -9500)
+		p.velocity = Vector2.ZERO
+		p._hit_flash = 0.0
+		q.global_position = Vector2(4000, -9500)
+		var f := Fragment.new()
+		var r := Rect2(-20, -12, 40, 24)
+		f.setup(PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]), Color.GRAY, Color.WHITE)
+		get_tree().root.add_child(f)
+		f.global_position = p.global_position + Vector2(-70, 0)
+		var owner: Player = who[2]
+		if who[0] == "carried":
+			f.held_by = owner
+		elif who[0] == "just let go":
+			f.release(owner)
+		else:
+			f.held_by = owner
+		f.linear_velocity = Vector2(900, 0)
+		var hit := false
+		for i in 12:
+			await get_tree().physics_frame
+			f.linear_velocity = Vector2(900, 0) if i < 6 else f.linear_velocity
+			hit = hit or p._hit_flash > 0.0
+		check(hit == (who[0] == "someone else's"), "field chunks: %s chunk %s you" % [who[0], "hits" if who[0] == "someone else's" else "doesn't hit"])
+		f.free()
+	p.free()
+	q.free()
 	PlayerManager.clear()
 
 

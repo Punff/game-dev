@@ -367,7 +367,10 @@ func _end_field(allow_throw: bool) -> void:
 	Telemetry.ev("field_end", self, {"held": _held.size(), "thrown": thrown, "dur": snappedf(_field_time, 0.01), "cut": not allow_throw})
 	for f in _held:
 		if is_instance_valid(f):
-			f.held_by = null
+			if thrown == 0:
+				f.release(self)   # a short grace, like a throw's
+			else:
+				f.held_by = null
 	_held.clear()
 	if thrown > 0:
 		threw.emit(thrown)

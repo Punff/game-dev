@@ -52,8 +52,11 @@ def metrics(recs):
         "stalls per player": sum(p.get("stalls", 0) for p in pp) / max(len(pp), 1),
         "near lava (s) per player": statistics.mean(p.get("near_lava_s", 0) for p in pp),
     }
-    for kind in ["jump", "air_jump", "charge", "shock", "field", "break", "bounce", "map_event"]:
+    for kind in ["jump", "air_jump", "charge", "shock", "field", "break", "chain", "bounce", "map_event"]:
         m["%s per player-min" % kind] = events.get(kind, 0) / minutes
+    hits = [e for r in recs for e in r.get("events", []) if e[1] == "hit" and len(e) > 5]
+    m["own / stray debris hits per player-min"] = sum(1 for e in hits if e[5].get("how") == "chunk" and e[5].get("by", 0) == 0) / minutes
+    m["hits from players per player-min"] = sum(1 for e in hits if e[5].get("by", 0) != 0) / minutes
     return m
 
 
