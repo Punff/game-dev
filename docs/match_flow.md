@@ -72,15 +72,32 @@ python3 tools/analytics/abilities.py --remote             # ability use by dista
 - **Gravity field** is a movement and rescue tool: 1.1 uses per player-minute, 79% catch no chunks, 10% end in a throw.
   - The user uses it to climb, to catch the slab, and as a clutch save.
 
-## What we're changing (one at a time, measured)
+## What we changed (2026-10-22, one commit each)
 
-Before/after numbers come from `report.py`'s Match shape section, on 48 bot matches with fixed seeds. The bots blast and use the field at people's rates (`tests/bot_matches.gd`), and they show the opening brawl even more strongly (93% of bot deaths happen below 10 m). Then we play it.
+| Change | Where | Knobs |
+|---|---|---|
+| Walls at the start floor's ends; spawns spread out (about 8 m apart with two players) | `MapPlanner.start`, `game.gd` | `START_WALL`, `SPAWN_SPACING`, `SPAWN_SPREAD` |
+| Biomes come 3x sooner with 2+ players (Inferno at 54 m) | `MapPlanner.biome_scale` | `MULTI_BIOME_SCALE` |
+| The slab always targets whoever is highest; a 10 m lead held for 3 s calls one down | `map_events.gd` | `LEAD_SLAB`, `LEAD_HOLD`, `LEAD_SLAB_GAP` |
+| Catch-up pads: dead until the leader is 6 m past, then gold; they launch anyone but the leader ~11 m through the platforms above | `blocks/catchup_pad.gd`, `MapPlanner._place_pad` | `PAD_ARM`, `LAUNCH_VELOCITY`, `PAD_FROM`, `PAD_EVERY` |
+| Field and blast recharge up to 1.5x faster 15 m behind the leader | `Player.cooldown_rate` | `CATCHUP_FROM`, `CATCHUP_FULL`, `CATCHUP_RATE` |
 
-1. **The opener:** walls at the ends of the start floor, and spawns spread across it. Blasting at the start stays possible; it just stops being an instant kill.
-2. **Biomes sooner in multiplayer:** biome heights scaled to about 0.3 with 2+ players. Solo keeps the long climb.
-3. **The slab hunts the leader:** in multiplayer it always targets the leader, and a big enough lead calls it down.
-4. **Catch-up pads:** a strong launch pad that turns on only after the leader has passed it. No callout; it just lights up. So it's a shortcut for everyone behind.
-5. **Cooldowns run faster the further you trail.**
+Bots, 48 matches on the same seeds, before all of it → after:
+- first death: 5 s → 11 s
+- blasts in the first 5 s: 64% → 46%
+- match length (median): 16 s → 19 s
+- best height (median): 9 m → 15 m
+
+People would probably move further; the bots fight harder at the start than
+people do (93% of bot deaths happened below 10 m).
+
+The runaway changes (slab, pads, cooldowns) barely show in bot runs: bot
+matches end before anyone builds a real lead (6 lead slabs and 1 pad launch
+in 32 multiplayer matches). These need playing; then check the live numbers
+with `report.py --remote --since 2026-10-23`:
+- **winner's lead** and **height spread at 20/30 s** should come down;
+- **match length** should go up;
+- **catchup** events, and `map_event` with `why: "lead"`, show how often each fires.
 
 ## Later (ideas, not built)
 

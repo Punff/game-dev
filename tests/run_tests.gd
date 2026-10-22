@@ -37,6 +37,7 @@ func _ready() -> void:
 	_test_biome_scale()
 	_test_catchup_planner()
 	await _test_catchup_pad()
+	_test_catchup_cooldowns()
 	print("\n%d checks, %d failures" % [_checks, _failures])
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -998,3 +999,18 @@ func _test_catchup_pad() -> void:
 		n.free()
 	CatchupPad.leader = null
 	PlayerManager.clear()
+
+
+## Trailing the leader recharges your abilities faster; leading doesn't.
+func _test_catchup_cooldowns() -> void:
+	var p := Player.new()
+	p.spawn_y = 0.0
+	p.global_position = Vector2(0, -100.0)
+	Player.lead_height = -INF
+	check(p.cooldown_rate() == 1.0, "catch-up cooldowns: normal in solo")
+	Player.lead_height = 150.0
+	check(p.cooldown_rate() == 1.0, "...and when close behind")
+	Player.lead_height = 100.0 + Player.CATCHUP_FULL + 100.0
+	check(is_equal_approx(p.cooldown_rate(), Player.CATCHUP_RATE), "...full speed-up far behind")
+	Player.lead_height = -INF
+	p.free()

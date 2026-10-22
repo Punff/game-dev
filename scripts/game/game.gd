@@ -172,6 +172,7 @@ func _exit_tree() -> void:
 	Player.lava_y = INF
 	Player.wind = 0.0
 	CatchupPad.leader = null
+	Player.lead_height = -INF
 
 
 func player_by_id(id: int) -> Player:
@@ -185,6 +186,7 @@ func _physics_process(delta: float) -> void:
 	_tick_hit_stop()
 	PlayerInput.suspended = Net.is_online() and pause_menu.visible
 	CatchupPad.leader = leader()   # (before the players and the map step)
+	Player.lead_height = CatchupPad.leader.max_height_px if CatchupPad.leader and players.size() > 1 else -INF
 	if Net.is_client():
 		_client_tick(delta)
 		return

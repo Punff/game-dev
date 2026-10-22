@@ -66,11 +66,20 @@ const SHOCK_RECOIL := 420.0
 const SHOCK_STACK_TIME := 0.3
 const ROCKET_NO_FASTFALL := 0.25   ## s after a downward shockwave when "down" won't fast-fall
 const AIM_GRACE := 0.12            ## s an aim is remembered for a gravity-field throw
+## Multiplayer catch-up: field and blast recharge faster the further you are
+## below the leader's best height - from CATCHUP_FROM px behind, up to
+## CATCHUP_RATE x at CATCHUP_FULL px. The pips show it.
+const CATCHUP_FROM := 250.0
+const CATCHUP_FULL := 750.0
+const CATCHUP_RATE := 1.5
 const JUMP_PUSH_RADIUS := 200.0
 const JUMP_PUSH_FORCE := 260.0
 
 ## Half width of the arena; past this (plus a margin) you've been knocked out.
 static var world_half_width := 800.0
+## The leader's best height (px climbed); -INF when there's nobody to catch
+## (solo). Set by the game every tick.
+static var lead_height := -INF
 ## The lava's surface, for the heat glow (INF when there's no lava).
 static var lava_y := INF
 ## A map event's gust: px/s of sideways drift (full in the air, a third on
@@ -247,8 +256,9 @@ func _physics_process(delta: float) -> void:
 
 func _step(delta: float) -> void:
 	var on_floor := is_on_floor()
-	gravity_cd = maxf(gravity_cd - delta, 0.0)
-	shock_cd = maxf(shock_cd - delta, 0.0)
+	var recharge := delta * cooldown_rate()
+	gravity_cd = maxf(gravity_cd - recharge, 0.0)
+	shock_cd = maxf(shock_cd - recharge, 0.0)
 	_reverse_timer = maxf(_reverse_timer - delta, 0.0)
 	_hit_flash = maxf(_hit_flash - delta, 0.0)
 	_rocket_time = maxf(_rocket_time - delta, 0.0)
@@ -798,6 +808,12 @@ func _on_screen(p: Vector2) -> Vector2:
 	var c := cam.get_screen_center_position()
 	var m := Vector2(minf(160.0, half.x), minf(80.0, half.y))
 	return p.clamp(c - half + m, c + half - m)
+
+
+## How fast cooldowns run (see CATCHUP_RATE).
+func cooldown_rate() -> float:
+	var behind := lead_height - (spawn_y - global_position.y)
+	return lerpf(1.0, CATCHUP_RATE, clampf((behind - CATCHUP_FROM) / (CATCHUP_FULL - CATCHUP_FROM), 0.0, 1.0))
 
 
 func gravity_ready() -> float:
