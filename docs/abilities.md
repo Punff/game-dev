@@ -8,6 +8,12 @@ roadmap, one change at a time, tested with players.
 player-minutes). The live database wasn't reachable. Treat every number
 below as a hint until `report.py --remote` agrees.
 
+**Update (live data, 2026-10-22):** 143 multiplayer player-minutes say
+otherwise about the shockwave. It's *the* PvP weapon: 5.3 uses/min, 78% hit
+someone, and half of all blasts come in the first 5 s of a match. The
+gravity field is the rare one: 1.1 uses/min, and 79% catch no chunks. See
+`docs/match_flow.md`. The shockwave points below (1, 3) are out of date.
+
 ## What each one is for
 
 | Move | Climb | Escape | Sabotage | Breaks concrete | Notes |

@@ -13,7 +13,9 @@ exists today and what it depends on. Order is a suggestion, not a commitment.
 | 4. Testing and AI | Planner-aware bots on fixed seeds; `compare.py`; `report.py --check`; replays from recorded controls (deterministic gameplay); CI runs tests, bots, replays; bots blast and use fields at people's rates (`abilities.py` checks it against live matches) | Bots that move like people: they bunch up (people spend most of a match 9 m+ apart), so they still blast about twice as often overall |
 | 5. Abilities | Analysis: `docs/abilities.md` | Decide on the candidates there with live data |
 
-The audit behind several fixes is in `docs/audit.md`.
+The audit behind several fixes is in `docs/audit.md`. Why multiplayer matches are short, and the
+catch-up changes being tried (opener, biomes sooner, the leader's slab,
+catch-up pads, trailing cooldowns), are in `docs/match_flow.md`.
 
 ## 1. Menus and UI (one rework, do these together)
 

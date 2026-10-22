@@ -48,6 +48,10 @@ BLOCK_NAMES = {"static_platform": "Steel", "breakable_block": "Concrete", "bounc
 
 # Anomalies that mean something is broken, not just that a match went badly
 # (report --check, used in CI on bot matches).
+## Where each biome starts (m), as MapPlanner.BIOMES (px / 50), before a
+## match's tuning "biome_scale" (multiplayer brings them closer).
+BIOME_FROM_M = {"Inferno": 180, "Void": 420, "Storm": 720}
+SPREAD_AT = (10, 20, 30)
 BROKEN = ["Impossible position", "Event cap hit", "Stuck most of a match"]
 
 
@@ -259,8 +263,41 @@ def analyse(recs):
     for kind, text, r in anomalies:
         grouped[kind].append((text, r))
     A["anomalies"] = grouped
+    A["shape"] = match_shape([r for r in recs if r["mode"] != "solo"])
     A["notes"] = notes(A)
     return A
+
+
+def match_shape(recs):
+    """Multiplayer: does it end in an opening brawl, or does someone run away?"""
+    S = {"matches": len(recs), "first_death": [], "deaths": 0, "low_deaths": 0, "shots": 0, "early_shots": 0,
+         "spread": {t: [] for t in SPREAD_AT}, "lead": [], "biomes": Counter(), "with_event": 0}
+    for r in recs:
+        per = r.get("per_player", {}).values()
+        deaths = sorted(p["death"]["t"] for p in per if p.get("death"))
+        if deaths:
+            S["first_death"].append(deaths[0])
+        for p in per:
+            if p.get("death"):
+                S["deaths"] += 1
+                S["low_deaths"] += p.get("max_m", 0) < 10
+        tops = sorted((p.get("max_m", 0) for p in per), reverse=True)
+        if len(tops) >= 2:
+            S["lead"].append(tops[0] - tops[1])
+        for e in r.get("events", []):
+            if e[1] == "shock":
+                S["shots"] += 1
+                S["early_shots"] += e[0] < 5
+        S["with_event"] += any(e[1] == "map_event" for e in r.get("events", []))
+        for t in SPREAD_AT:
+            row = next((smp[3] for smp in r.get("samples", []) if abs(smp[0] - t) < 0.26), None)
+            hs = [p[1] for p in row if p] if row else []
+            if len(hs) >= 2:
+                S["spread"][t].append(max(hs) - min(hs))
+        scale = r.get("tuning", {}).get("biome_scale", 1.0)
+        for name, m in BIOME_FROM_M.items():
+            S["biomes"][name] += r.get("best_height", 0) >= m * scale
+    return S
 
 
 def _who(r, pid):
@@ -306,6 +343,15 @@ def notes(A):
             l = A["lose_use"][ab] / A["lose_min"]
             if l > 0.1 and w / l > 1.6:
                 out.append(("warn", f"Winners use {ABILITY_NAMES[ab]} {w / l:.1f}x as often as everyone else - check it isn't dominant."))
+    sh = A["shape"]
+    if sh["matches"]:
+        out.append(("info", f"Multiplayer: first death at {med(sh['first_death']):.0f} s (median); {pct(sh['low_deaths'], sh['deaths']):.0f}% of deaths "
+                            f"never got above 10 m; {pct(sh['early_shots'], sh['shots']):.0f}% of blasts come in the first 5 s; "
+                            f"the winner out-climbs the runner-up by {med(sh['lead']):.0f} m."))
+        if pct(sh["low_deaths"], sh["deaths"]) > 25:
+            out.append(("warn", "Over a quarter of multiplayer deaths happen before the player got 10 m up: the opening decides too much."))
+        if pct(sh["biomes"]["Inferno"], sh["matches"]) < 20:
+            out.append(("warn", f"Only {pct(sh['biomes']['Inferno'], sh['matches']):.0f}% of multiplayer matches reach the second biome."))
     if A["charge_ratios"]:
         low = pct(sum(1 for x in A["charge_ratios"] if x < 0.15), len(A["charge_ratios"]))
         full = pct(sum(1 for x in A["charge_ratios"] if x >= 0.99), len(A["charge_ratios"]))
@@ -465,6 +511,18 @@ def render(A, title):
     P.append("<h2>Pace and lava pressure</h2><p class='sub'>How fast the leader climbs against the lava, and how much room players usually have.</p><div class='grid2'>")
     P.append(f"<div class='card'><b>Climb vs lava over match time</b>{pace_chart(A['pace'], A['lava_pace'])}</div>")
     P.append(f"<div class='card'><b>Gap to the lava (all samples)</b>{histogram([g for g in A['gap'] if g < 60], 5, ' m')}</div></div>")
+
+    sh = A["shape"]
+    if sh["matches"]:
+        P.append("<h2>Match shape (multiplayer)</h2><p class='sub'>An opening brawl, or a runaway? Both end matches early.</p><div class='tiles'>")
+        shape_tiles = [("First death (median)", f"{med(sh['first_death']):.0f} s"),
+                       ("Deaths below 10 m", f"{pct(sh['low_deaths'], sh['deaths']):.0f}%"),
+                       ("Blasts in the first 5 s", f"{pct(sh['early_shots'], sh['shots']):.0f}%"),
+                       ("Winner's lead (median)", f"{med(sh['lead']):.0f} m")]
+        shape_tiles += [(f"Height spread at {t} s", f"{med(v):.0f} m" if v else "-") for t, v in sh["spread"].items()]
+        shape_tiles += [(f"Reach {name}", f"{pct(n, sh['matches']):.0f}%") for name, n in sh["biomes"].items()]
+        shape_tiles.append(("See a map event", f"{pct(sh['with_event'], sh['matches']):.0f}%"))
+        P.append("".join(f"<div class='card tile'><div class='v'>{esc(v)}</div><div class='k'>{esc(k)}</div></div>" for k, v in shape_tiles) + "</div>")
 
     P.append("<h2>How players die</h2><div class='grid2'>")
     names = {"lava": "Lava", "side": "Knocked off the side", "quit": "Disconnected"}
