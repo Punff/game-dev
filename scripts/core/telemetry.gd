@@ -100,7 +100,7 @@ func hit(victim: Player, attacker: Player, kind: String, impulse: Vector2) -> vo
 
 
 ## A breakable block shattered: cause is jump / pound / shock / chunk.
-func broke(block: Block, cause: String, by: Player) -> void:
+func broke(block: Node2D, cause: String, by: Player) -> void:
 	if recording:
 		_add("break", by.player_id if is_instance_valid(by) else 0, block.global_position, {"how": cause})
 

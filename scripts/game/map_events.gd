@@ -4,8 +4,9 @@ extends Node
 ## Now and then the climb gets shaken up, by something that belongs to the
 ## part of the map the leader is in - that's most of what makes a biome feel
 ## like a place, not just a palette. Each biome draws from its own pool:
-##   slab    a slab of concrete drops onto someone (marked where it'll land),
-##           then floats there as a stepping stone
+##   slab    a slab of concrete drops onto someone (marked where it'll land):
+##           it shatters on whoever it hits, or floats where it stops as a
+##           stepping stone you can break like any concrete
 ##   surge   the slag flares and surges up for a few seconds
 ##   wind    a gust pushes everyone (and the floating debris) sideways
 ##   quake   the ground shakes and nearby concrete cracks apart
@@ -15,9 +16,17 @@ extends Node
 ## event too (Net._map_event), for the callout, the glow, and the wind on
 ## their own ball, which they simulate themselves. Off with Settings
 ## "map_events".
+##
+## Where things happen is worked out from the players, never the camera or
+## the window: those depend on screen shape and frame timing, and a match has
+## to replay the same anywhere.
 
 const FIRST_AFTER := 25.0         ## s into the match
 const GAP := Vector2(22.0, 38.0)  ## s between events
+## A stretch where nobody breaks any concrete brings the next event
+## forward (but never closer than MIN_GAP after the last one).
+const QUIET := 12.0
+const MIN_GAP := 14.0
 const WARN := 1.2                 ## s of warning before it hits
 const POOL := {
 	"Rubble": ["slab"],
@@ -34,8 +43,11 @@ const WIND_PUSH := 140.0          ## px/s of drift on players in the air (a thir
 const WIND_TIME := 4.0
 const QUAKE_BREAKS := 3
 const SLAB_SIZE := Vector2(200, 60)
+const SLAB_DROP := 480.0          ## px above its target it appears (about the top of the view)
 const SLAB_SPEED := 720.0
 const SLAB_SETTLE := 260.0        ## once it's slowed below this (px/s) it floats, a stepping stone
+## Quakes crack concrete in this box around the leader (a 1280x720 view).
+const QUAKE_AREA := Vector2(1280, 720)
 
 var game: Node                     # game.gd
 ## Every event is this kind (designer runs: --event=quake).
@@ -48,19 +60,34 @@ var _kind := ""                    # event under way, "" when none
 var _t := 0.0                      # time into it (negative while warning)
 var _wind_dir := 1.0
 var _target: Player
+var _last := -INF                  # match time of the last event
+var _quiet := 0.0                  # s since any concrete broke
 
 
 func setup(g: Node, seed_value: int) -> void:
 	game = g
 	_rng.seed = seed_value + 9091
+	SignalBus.block_broken.connect(_on_block_broken)
+
+
+func _on_block_broken(_at: Vector2) -> void:
+	_quiet = 0.0
 
 
 ## Called by the game every physics tick while the match is on.
 func tick(delta: float, match_time: float) -> void:
+	_quiet += delta
 	if _kind != "":
 		_run(delta)
-	elif not remote and match_time >= _next and Settings.get_value("map_events"):
+		return
+	if remote or not Settings.get_value("map_events"):
+		return
+	if _quiet >= QUIET:
+		_next = minf(_next, maxf(_last + MIN_GAP, match_time))
+	if match_time >= _next:
 		start(only if only != "" else _kind_here())
+		_last = match_time
+		_quiet = 0.0
 		_next = match_time + _rng.randf_range(GAP.x, GAP.y)
 
 
@@ -93,7 +120,8 @@ func start(kind: String) -> void:
 	SignalBus.map_event_called.emit(text, color)
 	if Net.is_server():
 		Net.relay_map_event(kind, text, color, _wind_dir)
-	Telemetry.world("map_event", game.camera.get_screen_center_position(), {"kind": kind})
+	var lead: Player = game.leader()
+	Telemetry.world("map_event", lead.global_position if lead else Vector2.ZERO, {"kind": kind})
 	Sfx.play("count")
 
 
@@ -188,10 +216,8 @@ func _ground_below(p: Vector2) -> Vector2:
 func _drop_slab() -> void:
 	if not is_instance_valid(_target):
 		return
-	var cam: Camera2D = game.camera
-	var view_h: float = get_viewport().get_visible_rect().size.y / cam.zoom.y
 	var x := _target.global_position.x + _target.velocity.x * 0.25   # a little ahead of where they're going
-	var y := cam.get_screen_center_position().y - view_h * 0.5 - SLAB_SIZE.y
+	var y := _target.global_position.y - SLAB_DROP
 	var r := Rect2(-SLAB_SIZE * 0.5, SLAB_SIZE)
 	var poly := PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)])
 	var cols: Array = Palette.BLOCKS["breakable_block"]
@@ -199,6 +225,7 @@ func _drop_slab() -> void:
 	f.setup(poly, cols[0], cols[1])
 	f.linear_damp = 0.1               # it's falling, not floating...
 	f.settle_speed = SLAB_SETTLE      # ...until it's hit something: then it floats there
+	f.concrete = true                 # and breaks like concrete
 	# It drops through platforms above its target, so it actually arrives -
 	# then hits them, or smashes what they're standing on.
 	var below := _target.global_position.y - 30.0
@@ -229,16 +256,17 @@ func _blow(delta: float) -> void:
 
 # ── Quake ────────────────────────────────────
 
-## Cracks a few concrete blocks on screen, never one somebody is standing on
+## Cracks a few concrete blocks around the leader, never one somebody is standing on
 ## (that would be a coin-flip death, not a scramble).
 func _crack() -> void:
 	var under := {}
 	for p: Player in game.players:
 		for b in p._floor_blocks:
 			under[b] = true
-	var cam: Camera2D = game.camera
-	var view := Rect2(cam.get_screen_center_position() - get_viewport().get_visible_rect().size / cam.zoom * 0.5,
-		get_viewport().get_visible_rect().size / cam.zoom)
+	var lead: Player = game.leader()
+	if lead == null:
+		return
+	var view := Rect2(lead.global_position - QUAKE_AREA * 0.5, QUAKE_AREA)
 	var candidates: Array = get_tree().get_nodes_in_group("blocks").filter(func(b):
 		return b is BreakableBlock and not under.has(b) and view.has_point(b.global_position))
 	for i in mini(QUAKE_BREAKS, candidates.size()):

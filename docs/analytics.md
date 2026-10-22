@@ -138,7 +138,16 @@ The second checks every record replays exactly (heights and knock-out times)
 and exits 1 if one doesn't. That needs gameplay to be deterministic: no
 global random numbers in gameplay code (seed a RandomNumberGenerator from
 the block / player / map), timers on physics ticks or the game clock
-(`Block.clock`), never real time.
+(`Block.clock`), never real time, and nothing worked out from the camera
+or the window (their size and smoothing differ between machines and frame
+rates: map events place themselves from the players).
+
+One limit is the physics engine's: Godot's 2D physics solves bodies pressed
+together (chunks packed against a ball by a gravity field) in an order that
+depends on memory, so a run played by a person can drift from its replay
+after such a moment, by a fraction of a pixel that then grows. Bot records,
+played back fresh in the same kind of process, replay exactly, which is what
+the check guards. A person's run is still worth watching back up to there.
 
 ### Before and after a change
 

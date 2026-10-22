@@ -52,6 +52,9 @@ const RIDE_BUDGET := 250.0
 ## And no single push off debris leaves you rising faster than this (riding a
 ## throw from under your own feet could hand you 1,000+ in one go).
 const RIDE_PEAK := 860.0
+## Nor does debris ever fling you, or carry you, sideways faster than you can
+## run (stepping off your own throw rode it out of the arena).
+const RIDE_SIDE := SPEED
 const SHOCK_COOLDOWN := 2.5
 const SHOCK_RANGE := 450.0
 const SHOCK_FORCE := 1350.0
@@ -111,6 +114,10 @@ var _hit_flash := 0.0
 var _rocket_time := 0.0             # after a downward blast, holding down doesn't fast-fall
 var _last_aim := Vector2.ZERO       # recent aim, so a throw survives letting go of it a moment early
 var _last_aim_time := 0.0
+## Jump and up are often one key (W). An up that came with a jump doesn't
+## aim the gravity field until it's let go (see _field_aim).
+var _jump_aim_off := false
+var _up_age := 0.0                  # s since up was pressed
 var _ring := PackedVector2Array()   # the boiling outline, rebuilt ~10 times a second
 var _ring_boil := -1
 var input := PlayerInput.new()   ## where controls come from: this machine or the network
@@ -194,6 +201,16 @@ func aim_vector() -> Vector2:
 	return v
 
 
+## Where the gravity field aims: an up that came with a jump isn't aiming, or
+## jumping during a field would send the floor under you up over your head.
+## (Out of jumps, the same press does aim.)
+func _field_aim() -> Vector2:
+	var v := aim_vector()
+	if _jump_aim_off:
+		v.y = maxf(v.y, 0.0)
+	return v
+
+
 # ── Main loop ────────────────────────────────
 
 func _physics_process(delta: float) -> void:
@@ -227,7 +244,10 @@ func _step(delta: float) -> void:
 	_reverse_timer = maxf(_reverse_timer - delta, 0.0)
 	_hit_flash = maxf(_hit_flash - delta, 0.0)
 	_rocket_time = maxf(_rocket_time - delta, 0.0)
-	var aim := aim_vector()
+	_up_age = 0.0 if _just_pressed("up") else _up_age + delta
+	if aim_vector().y > -0.2:
+		_jump_aim_off = false
+	var aim := _field_aim()
 	if aim.length_squared() > 0.2:
 		_last_aim = aim
 		_last_aim_time = AIM_GRACE
@@ -263,6 +283,7 @@ func _step(delta: float) -> void:
 
 	var fall_speed := velocity.y
 	var before := velocity.y
+	var side_before := absf(velocity.x)
 	move_and_slide()
 	# Leaving a chunk you stood on (or one that caught you from below this
 	# very step) hands you its speed: spend the ride budget.
@@ -278,6 +299,13 @@ func _step(delta: float) -> void:
 		_ride_left = maxf(_ride_left - (up * up - up_before * up_before) / (2.0 * GRAVITY), 0.0)
 	elif _on_debris and is_on_floor():
 		_ride_left = maxf(_ride_left + minf(get_platform_velocity().y, 0.0) * delta, 0.0)   # carried up
+	var side_most := maxf(side_before, RIDE_SIDE)
+	if touched and absf(velocity.x) > side_most:
+		velocity.x = signf(velocity.x) * side_most
+	if _on_debris and is_on_floor():
+		var carry := get_platform_velocity().x
+		if absf(carry) > RIDE_SIDE:   # slide back over it instead
+			global_position.x -= signf(carry) * (absf(carry) - RIDE_SIDE) * delta
 	# (Standing still reports no slide collisions: look at what's underfoot.)
 	_on_debris = false
 	if is_on_floor():
@@ -330,6 +358,9 @@ func _handle_jump(delta: float) -> void:
 		_coyote = 0.0
 		jumps_left -= 1
 		velocity.y = -JUMP_VELOCITY
+		if _up_age <= JUMP_BUFFER and aim_vector().y < -0.2:
+			_jump_aim_off = true   # this up was the jump (W), not aiming
+			_last_aim_time = 0.0
 		_squash = Vector2(0.65, 1.4)
 		_on_jumped(1.0, grounded_jump)
 		Telemetry.ev("jump" if grounded_jump else "air_jump", self)
@@ -391,7 +422,7 @@ func _end_field(allow_throw: bool) -> void:
 	_field_active = false
 	_set_phasing([])
 	gravity_cd = GRAVITY_COOLDOWN
-	var aim := aim_vector()
+	var aim := _field_aim()
 	if aim.length_squared() <= 0.2 and _last_aim_time > 0.0:
 		aim = _last_aim   # let go of the aim a hair before the field: still a throw
 	var thrown := 0
@@ -416,7 +447,7 @@ func _end_field(allow_throw: bool) -> void:
 
 
 func _update_field(delta: float) -> void:
-	var aim := aim_vector()
+	var aim := _field_aim()
 	var frame := Engine.get_physics_frames()
 	var held: Array[Fragment] = []
 	for f: Fragment in get_tree().get_nodes_in_group("fragments"):
@@ -651,8 +682,8 @@ func _update_floor_blocks(delta: float) -> void:
 			if col.get_normal().y > -0.6:
 				continue
 			var b := col.get_collider()
-			if b is Block and not b in now:
-				now.append(b)
+			if (b is Block or b is Fragment and b.concrete) and not b in now:
+				now.append(b)   # (a slab breaks like concrete)
 	for b in now:
 		if not b in _floor_blocks:
 			b.on_player_land(self)
@@ -882,7 +913,7 @@ func _reconcile(ack: int, pos: Vector2, vel: Vector2) -> void:
 func _capture() -> Array:
 	return [global_position, velocity, is_on_floor(), jumps_left, _coyote, _jump_buffer, _was_on_floor,
 		_reverse_timer, _charging, _charge, gravity_cd, shock_cd, _field_time, _field_active,
-		_rocket_time, _last_aim, _last_aim_time, facing]
+		_rocket_time, _last_aim, _last_aim_time, facing, _jump_aim_off, _up_age]
 
 
 func _restore(st: Array) -> void:
@@ -908,6 +939,8 @@ func _restore(st: Array) -> void:
 	_last_aim = st[15]
 	_last_aim_time = st[16]
 	facing = st[17]
+	_jump_aim_off = st[18]
+	_up_age = st[19]
 
 
 func _snap_to(pos: Vector2, vel: Vector2) -> void:

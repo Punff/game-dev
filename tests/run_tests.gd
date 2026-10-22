@@ -22,6 +22,9 @@ func _ready() -> void:
 	await _test_field_spares_holder()
 	_test_lava_pressure()
 	await _test_no_field_launch()
+	await _test_field_jump_keeps_floor()
+	await _test_no_side_fling()
+	await _test_slab_shatters()
 	await _test_wind_pushes()
 	await _test_map_events()
 	await _test_sandbox_smoke()
@@ -435,6 +438,7 @@ func _test_map_events() -> void:
 	get_tree().root.add_child(scene)
 	await get_tree().create_timer(4.2).timeout   # countdown
 	var ev: MapEvents = scene.events
+	scene.lava.surface_y = 60000.0   # (standing still at the start, the lava would end the match)
 
 	ev.start("slab")
 	var falling := false
@@ -443,6 +447,9 @@ func _test_map_events() -> void:
 		for f in get_tree().get_nodes_in_group("fragments"):
 			falling = falling or f.linear_velocity.y > 600.0
 	check(falling, "map events: a slab drops")
+	for i in 50:
+		await get_tree().physics_frame
+	check(get_tree().get_nodes_in_group("fragments").all(func(f): return not f.concrete), "map events: the slab shatters on the ball it lands on")
 
 	ev.start("surge")
 	await get_tree().create_timer(MapEvents.WARN + 0.2).timeout
@@ -465,6 +472,15 @@ func _test_map_events() -> void:
 		if is_instance_valid(loose[i]) and absf(loose[i].linear_velocity.x - xs[i]) > 50.0:
 			moved += 1
 	check(loose.is_empty() or moved > 0, "map events: wind drifts the debris")
+
+	await get_tree().create_timer(MapEvents.WIND_TIME).timeout
+	ev._next = 1e9          # nothing due for ages...
+	ev._last = -INF
+	ev._quiet = MapEvents.QUIET   # ...but nothing has broken in a while
+	for i in 2:   # (the signal comes before the game's own step)
+		await get_tree().physics_frame
+	check(ev._kind != "", "map events: a quiet stretch brings the next event forward")
+	ev.stop()
 	scene.queue_free()
 	await get_tree().process_frame
 	PlayerManager.clear()
@@ -576,6 +592,121 @@ func _field_ride(field: bool, ride_out: bool) -> Dictionary:
 	return {"fastest": fastest, "rise": start_y - top}
 
 
+## Jump off concrete with the field held: by the apex the chunks are a floor
+## under you. Returns the player (the caller frees it and the chunks).
+func _on_field_floor(id: int, y: float) -> Player:
+	var block := BreakableBlock.new()
+	block.position = Vector2(0, y)
+	block.set_block_size(Vector2(340, 60))
+	get_tree().root.add_child(block)
+	var p := Player.new()
+	p.setup(PlayerManager.players[id])
+	get_tree().root.add_child(p)
+	p.global_position = Vector2(0, y - 30 - Player.RADIUS - 1)
+	for i in 30:
+		await get_tree().physics_frame
+		if p.is_on_floor():
+			break
+	p.controls_enabled = true
+	Input.action_press(PlayerManager.action(id, "jump"))
+	await get_tree().physics_frame
+	Input.action_release(PlayerManager.action(id, "jump"))
+	Input.action_press(PlayerManager.action(id, "gravity"))
+	for i in 50:
+		await get_tree().physics_frame
+	return p
+
+
+func _clear_field_test(p: Player, id: int) -> void:
+	for a in ["jump", "up", "left", "gravity"]:
+		Input.action_release(PlayerManager.action(id, a))
+	for f in get_tree().get_nodes_in_group("fragments"):
+		f.free()
+	p.free()
+	PlayerManager.clear()
+
+
+## Jump and up are one key on keyboard (W): jumping while the field holds a
+## floor under you mustn't aim it up and pull the floor out from under you.
+func _test_field_jump_keeps_floor() -> void:
+	PlayerManager.clear()
+	var id := PlayerManager.join(Settings.DEVICE_KB_A)
+	var p := await _on_field_floor(id, -7400)
+	Input.action_press(PlayerManager.action(id, "jump"))
+	Input.action_press(PlayerManager.action(id, "up"))
+	var above := 0
+	for i in 30:
+		await get_tree().physics_frame
+		for f in get_tree().get_nodes_in_group("fragments"):
+			if f.held_by == p and f.global_position.y < p.global_position.y:
+				above += 1
+	check(above == 0, "a jump during the field doesn't aim it up (%d chunk-frames above you)" % above)
+	_clear_field_test(p, id)
+
+
+## Letting go of the field while steering sideways throws the floor that way
+## from under you: it mustn't take you with it (it rode a player out of the
+## arena).
+func _test_no_side_fling() -> void:
+	PlayerManager.clear()
+	var id := PlayerManager.join(Settings.DEVICE_KB_A)
+	var p := await _on_field_floor(id, -6800)
+	var x0 := p.global_position.x
+	Input.action_press(PlayerManager.action(id, "left"))
+	await get_tree().physics_frame
+	Input.action_release(PlayerManager.action(id, "gravity"))
+	var fastest := 0.0
+	for i in 60:
+		await get_tree().physics_frame
+		fastest = maxf(fastest, absf(p.velocity.x))
+	var moved := absf(p.global_position.x - x0)
+	check(fastest <= Player.SPEED + 1.0, "throwing your floor sideways doesn't fling you (%.0f px/s)" % fastest)
+	check(moved < Player.SPEED * 1.1, "...nor carry you off with it (%.0f px in 1 s)" % moved)
+	_clear_field_test(p, id)
+
+
+## The falling slab is concrete: it shatters on whoever it hits, a knock and
+## not a long fall.
+func _test_slab_shatters() -> void:
+	PlayerManager.clear()
+	var id := PlayerManager.join(Settings.DEVICE_KB_A)
+	var ground := StaticPlatform.new()
+	ground.position = Vector2(0, -6200 + Player.RADIUS + Block.HEIGHT * 0.5 + 1)
+	ground.set_block_size(Vector2(400, Block.HEIGHT))
+	get_tree().root.add_child(ground)
+	var p := Player.new()
+	p.setup(PlayerManager.players[id])
+	get_tree().root.add_child(p)
+	p.global_position = Vector2(0, -6200)
+	for i in 10:
+		await get_tree().physics_frame
+	var r := Rect2(-MapEvents.SLAB_SIZE * 0.5, MapEvents.SLAB_SIZE)
+	var slab := Fragment.new()
+	slab.setup(PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]), Color.GRAY, Color.WHITE)
+	slab.concrete = true
+	slab.linear_damp = 0.1
+	get_tree().root.add_child(slab)
+	slab.global_position = p.global_position + Vector2(0, -260)
+	slab.linear_velocity = Vector2(0, MapEvents.SLAB_SPEED)
+	var hit := false
+	var knock := 0.0
+	for i in 40:
+		var vy := p.velocity.y
+		await get_tree().physics_frame
+		if p._hit_flash > 0.0 and not hit:
+			hit = true
+			knock = p.velocity.y - vy
+	check(hit, "a falling slab hits the ball under it")
+	check(not is_instance_valid(slab), "...and shatters on it")
+	check(get_tree().get_nodes_in_group("fragments").size() >= 3, "...into chunks")
+	check(knock < 350.0, "...knocking it, not slamming it down (%.0f px/s)" % knock)
+	for f in get_tree().get_nodes_in_group("fragments"):
+		f.free()
+	ground.free()
+	p.free()
+	PlayerManager.clear()
+
+
 ## The lava: a steady climber is eventually caught (faster gets higher), and
 ## a lead built while you're faster than it holds.
 func _test_lava_pressure() -> void:
@@ -600,11 +731,11 @@ func _test_lava_pressure() -> void:
 				break
 		caught[pace] = -y / 50.0
 		if pace == 3.2:
-			check(biggest_gap > 1000.0, "lava: a fast climber banks a lead (%.0f m)" % (biggest_gap / 50.0))
+			check(biggest_gap > 600.0 and biggest_gap < 1300.0, "lava: a fast climber banks a short lead (%.0f m)" % (biggest_gap / 50.0))
 		lava.free()
 	print("Lava catches a steady climber: 1.5 m/s at %.0f m, 2.6 at %.0f m, 3.2 at %.0f m" % [caught[1.5], caught[2.6], caught[3.2]])
 	check(caught[1.5] < caught[2.6] and caught[2.6] < caught[3.2], "lava: climbing faster gets you higher")
-	check(caught[2.6] > 600.0 and caught[2.6] < 1100.0, "lava: a good steady pace is caught somewhere around 850 m")
+	check(caught[2.6] > 420.0 and caught[2.6] < 680.0, "lava: a good steady pace is caught somewhere around 540 m")
 	cam.free()
 
 

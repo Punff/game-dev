@@ -10,19 +10,22 @@ extends Node2D
 ## lead has a ceiling. Just behind you it eases off (NEAR, EASE), less so the
 ## higher it gets.
 ##
-## Modelled for a steady climber: 1.5 m/s is caught around 450 m, 2.6 m/s
-## (a good run) around 850 m, 3.2 m/s around 1,150 m. (Before, a steady
-## climber was never caught at all: only mistakes ended a run.)
+## Modelled for a steady climber: 1.5 m/s is caught around 290 m, 2.6 m/s
+## (a good run) around 540 m, 3.2 m/s around 650 m - all after about three
+## and a half minutes, so climbing faster is what gets you higher. The lead
+## is kept short (14 m) so a real mistake (a 10 m fall) brings it right up
+## behind you. (Before: 25 m, and a good climber sat at the cap for minutes
+## with the lava just following; live runs never came near it.)
 
 const SHADER := preload("res://shaders/lava.gdshader")
-const BASE_SPEED := 50.0
-const RISE_PER_M := 0.11       ## px/s of pace per metre the lava has climbed
-const RAMP := 0.9              ## and per 10 s of match time
+const BASE_SPEED := 55.0
+const RISE_PER_M := 0.22       ## px/s of pace per metre the lava has climbed
+const RAMP := 1.5              ## and per 10 s of match time
 const MAX_SPEED := 180.0       ## catch-up speed (plus RISE_PER_M x height)
 const LEAD_CHASE := 1.25       ## x pace while you're ahead
 const CHASE_FROM := 300.0      ## px ahead before it counts as a lead
-const LEAD_MAX := 1250.0       ## px (25 m): beyond this it races to catch up...
-const LEAD_RACE := 600.0       ## ...reaching full catch-up speed this much further
+const LEAD_MAX := 700.0        ## px (14 m): beyond this it races to catch up...
+const LEAD_RACE := 400.0       ## ...reaching full catch-up speed this much further
 const NEAR := 260.0            ## px: closer than this it eases off...
 const NEAR_HIGH := 140.0       ## ...a smaller zone up high
 const EASE := 0.45             ## x pace while easing off...

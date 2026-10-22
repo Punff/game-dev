@@ -56,6 +56,24 @@ below as a hint until `report.py --remote` agrees.
   players choose one of field / shockwave per match, or find a third as a
   pick-up. Large change; only after the two above.
 
+## Riding debris (live runs, October)
+
+The field's debris used to be a launch pad: stepping off chunks it was
+lifting handed you their speed, the field then pulled them faster to keep
+up, and a field was worth 10-18 m (a full charge jump is 5.7 m). Letting go
+while steering sideways threw the floor from under you and took you out of
+the arena with it. Now:
+
+- Debris stays solid, and riding it up is fine, but one field's debris
+  gives at most `RIDE_BUDGET` (5 m) of height, lifts and being carried
+  alike; after that the field stops lifting chunks under you.
+- No lift leaves you rising faster than a charge jump (`RIDE_PEAK`), and
+  debris never flings or carries you sideways faster than you run
+  (`RIDE_SIDE`).
+- On keyboard jump and up are one key (W). An up that comes with a jump
+  doesn't aim the field, so jumping during a field keeps the floor under
+  you (it used to fly up over your head). With no jump left, W aims up.
+
 ## How to measure a change
 
 ```bash
