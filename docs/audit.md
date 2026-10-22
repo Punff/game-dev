@@ -31,6 +31,13 @@ best ~10 m).
 | 11 | `MapPlanner` has a `DOOR` template that's never picked. | Left: harmless; delete or add to `_pick_template` |
 | 12 | Tests that add a new `class_name` file can fail to parse until the project is imported once (`godot --headless --import`); same for an open editor. | Left: note for whoever adds classes |
 
+| 13 | Map planner: some seeds (about 1 map in 15) had rows with no guaranteed route; for seed 230 nothing above 3 m was. | Fixed on `roadmap`: 0 in 59k rows |
+| 14 | A chunk breaking concrete did so inside the physics step: the new chunks couldn't report contacts, so chain reactions stopped after one link. | Fixed on `roadmap` |
+| 15 | Chain-reaction history carried over between matches, so later matches could fire chains and hit-stops on stale breaks. | Fixed on `roadmap` |
+| 16 | Vanishing blocks timed themselves on render frames: on a slow or fast machine they vanished at different moments. | Fixed on `roadmap` (physics ticks) |
+| 17 | A login made while the startup session check was still out could be renamed to the previous account. | Fixed on `roadmap` |
+| 18 | Offline, every failed server request logged a JSON parse error. | Fixed on `roadmap` |
+
 ## Improvements made
 
 - **HUD height readout.** The leader's height, big, top left, in their
