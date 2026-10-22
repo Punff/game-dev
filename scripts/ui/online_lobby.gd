@@ -24,6 +24,14 @@ var _ready_button: Button
 var _cancel: Button
 var _view := -1
 var _stick_latch := 0
+# Inviting friends into this room (logged in, in a room with a code).
+var _invite_panel := PanelContainer.new()
+var _invite_rows := VBoxContainer.new()
+var _invite_poll := 0.0
+var _invitable: Array = []      # online friends not in this room
+var _invited := {}              # name -> true, for this room
+const INVITE_POLL := 10.0
+const INVITE_ROWS := 3
 
 
 func _ready() -> void:
@@ -104,12 +112,93 @@ func _ready() -> void:
 	_room_box.add_child(hint)
 	_room_box.add_child(buttons)
 
+	_build_invites()
 	Net.roster_changed.connect(_refresh)
 	Net.pings_changed.connect(func():
 		for s in _slots:
 			s.show_ping())
 	Net.status_changed.connect(_refresh)
 	_refresh()
+
+
+# ── Inviting friends ─────────────────────────
+
+func _build_invites() -> void:
+	_invite_panel.add_theme_stylebox_override("panel", UiTheme.box(Color(Palette.INK, 0.92), Palette.SMOKE, 2, 0, Vector2(14, 10), 5))
+	_invite_panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	_invite_panel.offset_left = 24
+	_invite_panel.offset_bottom = -24
+	_invite_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_invite_panel.custom_minimum_size.x = 280
+	_invite_panel.visible = false
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 6)
+	_invite_panel.add_child(v)
+	var head := HBoxContainer.new()
+	var t := UiTheme.label("INVITE FRIENDS", 15, Palette.MUSTARD)
+	t.add_theme_font_override("font", UiTheme.heavy())
+	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(t)
+	head.add_child(UiTheme.hint("[Tab] all", 14, Palette.PAPER_DIM, false))
+	v.add_child(head)
+	_invite_rows.add_theme_constant_override("separation", 4)
+	v.add_child(_invite_rows)
+	add_child(_invite_panel)
+
+
+func _process(delta: float) -> void:
+	var can := _view == View.ROOM and Net.room_code != "" and Settings.logged_in() and Stats.enabled()
+	if not can:
+		_invite_panel.visible = false
+		return
+	_invite_poll -= delta
+	if _invite_poll > 0.0:
+		return
+	_invite_poll = INVITE_POLL
+	Stats.friends(func(ok: bool, reply: Dictionary):
+		if ok:
+			_invitable = reply.get("friends", []).filter(func(f): return f.online and str(f.get("room", "")) != Net.room_code)
+			_fill_invites())
+
+
+func _fill_invites() -> void:
+	for c in _invite_rows.get_children():
+		c.queue_free()
+	_invite_panel.visible = true
+	if _invitable.is_empty():
+		_invite_rows.add_child(UiTheme.label("No friends online right now", 15, Palette.TEXT_DIM))
+		return
+	for i in mini(_invitable.size(), INVITE_ROWS):
+		var who: String = _invitable[i].name
+		var h := HBoxContainer.new()
+		var n := UiTheme.label(who, 18, Palette.PAPER)
+		n.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		n.clip_text = true
+		h.add_child(n)
+		var b := UiTheme.button("Invited" if _invited.has(who) else "Invite", 96)
+		b.custom_minimum_size.y = 34
+		b.add_theme_font_size_override("font_size", 16)
+		b.focus_mode = Control.FOCUS_NONE   # keys/pad drive the room; Tab invites everyone
+		b.disabled = _invited.has(who)
+		b.pressed.connect(_invite.bind(who))
+		h.add_child(b)
+		_invite_rows.add_child(h)
+	if _invitable.size() > INVITE_ROWS:
+		_invite_rows.add_child(UiTheme.label("+%d more" % (_invitable.size() - INVITE_ROWS), 14, Palette.TEXT_DIM))
+
+
+func _invite(who: String) -> void:
+	if _invited.has(who):
+		return
+	_invited[who] = true
+	Stats.friend_action("invite", who, func(_ok, _r): pass, Net.room_code)
+	Sfx.play("ui_select")
+	_fill_invites()
+
+
+func _invite_all() -> void:
+	for f in _invitable:
+		_invite(f.name)
 
 
 func _refresh() -> void:
@@ -204,6 +293,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Taken up front: readying up can start the match, which frees this screen
 	# before we get to mark the key as used.
 	var viewport := get_viewport()
+	if _view == View.ROOM and _invite_panel.visible and (event.is_action_pressed("ui_tab_next") or event.is_action_pressed("ui_tab_prev")):
+		viewport.set_input_as_handled()
+		_invite_all()
+		return
 	if _view == View.ROOM and Net.local_info() and _room_input(event):
 		viewport.set_input_as_handled()
 		return

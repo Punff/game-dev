@@ -16,6 +16,8 @@ const TRACKS := [
 		"notes": "Climb alone, with friends on one screen, or online with a room code."},
 	{"id": "profile", "side": "A", "text": "Profile", "biome": 2,
 		"notes": "Your ball, your account and your numbers. Cosmetics are coming here."},
+	{"id": "friends", "side": "A", "text": "Friends", "biome": 0,
+		"notes": "Add friends by username, see who's online and jump into their rooms."},
 	{"id": "leaderboard", "side": "A", "text": "Leaderboard", "biome": 1,
 		"notes": "The highest solo climbs and the most online wins."},
 	{"id": "howto", "side": "B", "text": "How to play",
@@ -48,6 +50,9 @@ var _intro := 0.0        # 0 -> 1 as the screen first comes in
 var _sky := 0.0
 var _previewing := ""
 var _gate: SignInPage
+var _friends_poll := 0.0
+var _seen_invites := {}
+const FRIENDS_POLL := 20.0
 
 
 func _ready() -> void:
@@ -182,6 +187,7 @@ func _make_page(id: String) -> UiPage:
 		"play": return PlayPage.new()
 		"profile": return ProfilePage.new()
 		"leaderboard": return LeaderboardPage.new()
+		"friends": return FriendsPage.new()
 		"settings": return SettingsPage.new()
 	return UiPage.new()
 
@@ -286,6 +292,43 @@ func _tint(t: Dictionary) -> void:
 	tw.tween_method(func(h: float):
 		_sky = h
 		_bg.set_height(h), _sky, to, 0.9).set_trans(Tween.TRANS_SINE)
+
+
+# ── Friends ──────────────────────────────────
+
+## Invites and requests waiting: a badge on the Friends track, and a new
+## invite stamps a banner. Polled while the menu is up (no push).
+func _process(delta: float) -> void:
+	if not Settings.logged_in() or not Stats.enabled():
+		return
+	_friends_poll -= delta
+	if _friends_poll > 0.0:
+		return
+	_friends_poll = FRIENDS_POLL
+	Stats.friends(func(ok: bool, reply: Dictionary):
+		if not ok:
+			return
+		var invites: Array = reply.get("invites", [])
+		var waiting: int = invites.size() + (reply.get("incoming", []) as Array).size()
+		var t := tracklist.track("friends")
+		if t:
+			t.badge = str(waiting) if waiting > 0 else ""
+		for inv in invites:
+			var key := "%s:%s" % [inv.from, inv.room]
+			if not _seen_invites.has(key):
+				_seen_invites[key] = true
+				_banner("%s invited you - open Friends to join" % inv.from))
+
+
+func _banner(text: String) -> void:
+	var chip := UiChip.new(text, Palette.MUSTARD, 18)
+	add_child(chip)
+	chip.position = Vector2(MARGIN, 134.0)   # under the tagline, clear of the tracklist
+	UiFx.stamp(chip, 1.5, -5.0)
+	var tw := chip.create_tween()
+	tw.tween_interval(6.0)
+	tw.tween_property(chip, "modulate:a", 0.0, 0.4)
+	tw.tween_callback(chip.queue_free)
 
 
 func _refresh_player() -> void:

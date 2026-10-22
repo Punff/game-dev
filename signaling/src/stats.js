@@ -9,6 +9,7 @@
 //                                    (the top of the board if they aren't on it)
 //   GET  /v1/players/<client>     -> {player: {...totals, account, rank_height, rank_wins} | null}
 //   /v1/auth/...                  accounts, see auth.js
+//   /v1/friends..., /v1/presence  friends and invites, see friends.js
 //
 // Everyone's matches are stored (that's the design data), but only accounts
 // are ranked. A request with "Authorization: Bearer <token>" speaks for that
@@ -20,6 +21,7 @@
 // and the accidental floods.
 
 import { accountForClient, accountFromRequest, accountKey, handleAuth, linkDevice } from "./auth.js";
+import { handleFriends } from "./friends.js";
 
 const MAX_BODY = 1_500_000;
 const CLIENT_RE = /^[0-9a-f]{16}$/;
@@ -38,6 +40,10 @@ export async function handleApi(request, env, cors) {
   try {
     if (url.pathname.startsWith("/v1/auth/")) {
       const res = await handleAuth(request, env, reply, url.pathname);
+      if (res) return res;
+    }
+    if (url.pathname.startsWith("/v1/friends") || url.pathname === "/v1/presence") {
+      const res = await handleFriends(request, env, reply, url.pathname);
       if (res) return res;
     }
     if (url.pathname === "/v1/matches" && request.method === "POST") return await postMatch(request, env, reply);

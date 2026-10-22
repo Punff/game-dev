@@ -71,6 +71,14 @@ API (JSON). Requests from a logged-in game carry `Authorization: Bearer <token>`
   Each row has its `rank`. Add `&around=me` for `limit` rows centred on the
   viewer's place (the results screen uses this).
 - `GET /v1/players/<client id>`
+- Friends (accounts only, Bearer token), see `src/friends.js`:
+  `GET /v1/friends` (friends with online status and room, requests,
+  invites), `POST /v1/friends/request|accept|remove {username}`,
+  `POST /v1/friends/invite {username, room}`, and the game's heartbeat
+  `POST /v1/presence {status, room}` (about once a minute while logged in;
+  "online" = seen in the last 2.5 minutes). No push: the game polls while
+  the menu or a room is open. Needs migration `0003_friends.sql`:
+  `npx wrangler d1 migrations apply cakum-pakum-stats --remote`.
 
 ### Resetting a forgotten password
 

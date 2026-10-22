@@ -18,6 +18,12 @@ func _ready() -> void:
 		var id := PlayerManager.join(devices[i])
 		if OS.get_environment("SHOT_READY") != "":
 			PlayerManager.players[id].is_ready = i % 2 == 0
+	var login := OS.get_environment("SHOT_LOGIN").split(":")   # user:password, against --signaling
+	if login.size() == 2:
+		var done := [false]
+		Stats.login(login[0], login[1], func(_ok, _e): done[0] = true)
+		while not done[0]:
+			await get_tree().process_frame
 	if OS.get_environment("SHOT_ACTION") == "room":
 		# Online lobby as a room host, with a made-up code (it leaves for the
 		# menu if it opens offline, so this goes first).
@@ -58,7 +64,7 @@ func _ready() -> void:
 func _do_action(scene: Node, action: String) -> void:
 	match action:
 		# Main menu (UiShell): open a track, or a page inside one.
-		"play", "settings", "leaderboard", "profile": scene.choose(action)
+		"play", "settings", "leaderboard", "profile", "friends": scene.choose(action)
 		"online":
 			scene.choose("play")
 			scene.sleeve.top().open_online()

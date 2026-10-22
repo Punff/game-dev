@@ -111,10 +111,18 @@ func _join_address() -> void:
 ## Start connecting; the lobby screen shows the rest. If it failed on the
 ## spot (bad address, no room service) say why and stay here.
 func _connect(start: Callable) -> void:
+	var problem := OnlinePage.connect_with(start)
+	if problem != "":
+		UiPage.say(_status, problem, Palette.ACCENT_2)
+
+
+## Start connecting (Net.create_room, Net.join_room.bind(code)...) and head to
+## the online lobby. Returns "" when it's on its way, or what went wrong.
+static func connect_with(start: Callable) -> String:
 	Net.status = ""
 	start.call()
 	if Net.is_online():
 		MatchManager.state = MatchManager.State.LOBBY
 		MatchManager.goto(Net.ONLINE_LOBBY)
-	else:
-		UiPage.say(_status, Net.status if Net.status != "" else "Couldn't connect.", Palette.ACCENT_2)
+		return ""
+	return Net.status if Net.status != "" else "Couldn't connect."

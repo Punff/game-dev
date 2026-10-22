@@ -58,6 +58,56 @@ func my_stats(done: Callable) -> void:
 	_request("/v1/players/" + Settings.client_id(), HTTPClient.METHOD_GET, "", done)
 
 
+# ── Friends ──────────────────────────────────
+
+const PRESENCE_EVERY := 60.0   ## heartbeat while logged in (friends see you online)
+var _presence_sent := ""      # status|room last sent
+var _presence_clock := PRESENCE_EVERY
+var _presence_check := 0.0
+
+
+## done(ok, {"friends": [{name, online, status, room}], "incoming": [name],
+## "outgoing": [name], "invites": [{from, room}]})
+func friends(done: Callable) -> void:
+	_request("/v1/friends", HTTPClient.METHOD_GET, "", done)
+
+
+## kind: "request", "accept", "remove" or "invite" (with `room`).
+## done(ok, {"status"?, "error"?})
+func friend_action(kind: String, username: String, done: Callable, room := "") -> void:
+	var body := {"username": username.strip_edges()}
+	if room != "":
+		body["room"] = room
+	_request("/v1/friends/" + kind, HTTPClient.METHOD_POST, JSON.stringify(body), done)
+
+
+## Where this game is, for friends: "menu", "room" (with its code) or "match".
+func presence_now() -> Array:
+	if Net.is_online() and MatchManager.state in [MatchManager.State.COUNTDOWN, MatchManager.State.PLAYING]:
+		return ["match", ""]
+	if Net.is_online() and Net.room_code != "":
+		return ["room", Net.room_code]
+	return ["menu", ""]
+
+
+## Heartbeat: once a minute, and at once when the status changes (opening a
+## room, starting a match), checked every second.
+func _process(delta: float) -> void:
+	if not Settings.logged_in() or not enabled():
+		return
+	_presence_clock += delta
+	_presence_check += delta
+	if _presence_check < 1.0:
+		return
+	_presence_check = 0.0
+	var now := presence_now()
+	var key := "%s|%s" % now
+	if key != _presence_sent or _presence_clock >= PRESENCE_EVERY:
+		_presence_sent = key
+		_presence_clock = 0.0
+		_request("/v1/presence", HTTPClient.METHOD_POST, JSON.stringify({"status": now[0], "room": now[1]}), func(_ok, _r): pass)
+
+
 # ── Account ──────────────────────────────────
 
 ## done(ok, error message). On success Settings holds the new session.
@@ -90,7 +140,10 @@ func _auth(path: String, username: String, password: String, done: Callable) -> 
 func _check_session() -> void:
 	if not Settings.logged_in() or not enabled():
 		return
+	var asked_with: String = Settings.get_value("auth_token")
 	_request("/v1/auth/me", HTTPClient.METHOD_GET, "", func(ok: bool, reply: Dictionary):
+		if Settings.get_value("auth_token") != asked_with:
+			return   # logged in or out meanwhile: this answer is about the old session
 		if ok and reply.has("username") and reply.username != Settings.get_value("account_name"):
 			_set_session(Settings.get_value("auth_token"), reply.username)
 		elif not ok and reply.get("unauthorized", false):
