@@ -21,6 +21,7 @@ func _ready() -> void:
 	await _test_vanishing_waits()
 	await _test_field_spares_holder()
 	_test_lava_pressure()
+	await _test_no_field_launch()
 	await _test_wind_pushes()
 	await _test_map_events()
 	await _test_sandbox_smoke()
@@ -508,6 +509,46 @@ func _test_field_spares_holder() -> void:
 		f.free()
 	p.free()
 	q.free()
+	PlayerManager.clear()
+
+
+## Aiming the field from your own debris floor doesn't launch you: the chunks
+## pulled up from under your feet used to lift you faster than a full charge.
+func _test_no_field_launch() -> void:
+	PlayerManager.clear()
+	var id := PlayerManager.join(Settings.DEVICE_KB_A)
+	var block := BreakableBlock.new()
+	block.position = Vector2(0, -8600)
+	block.set_block_size(Vector2(340, 60))
+	get_tree().root.add_child(block)
+	var p := Player.new()
+	p.setup(PlayerManager.players[id])
+	get_tree().root.add_child(p)
+	p.global_position = Vector2(0, -8600 - 30 - Player.RADIUS - 1)
+	for i in 30:
+		await get_tree().physics_frame
+	p.controls_enabled = true
+	var act := func(a): return PlayerManager.action(id, a)
+	Input.action_press(act.call("jump"))
+	await get_tree().physics_frame
+	Input.action_release(act.call("jump"))
+	Input.action_press(act.call("gravity"))
+	for i in 50:
+		await get_tree().physics_frame
+	Input.action_press(act.call("up"))
+	var fastest := 0.0
+	for i in 64:
+		if i == 4:
+			Input.action_release(act.call("gravity"))
+		await get_tree().physics_frame
+		fastest = maxf(fastest, -p.velocity.y)
+	Input.action_release(act.call("up"))
+	check(fastest < Player.JUMP_VELOCITY, "aiming the field up from your debris floor doesn't launch you (%.0f px/s)" % fastest)
+	for f in get_tree().get_nodes_in_group("fragments"):
+		f.free()
+	p.free()
+	if is_instance_valid(block):
+		block.free()
 	PlayerManager.clear()
 
 

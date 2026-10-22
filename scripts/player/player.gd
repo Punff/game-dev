@@ -92,6 +92,7 @@ var _field_time := 0.0
 var _field_active := false
 var _held: Array[Fragment] = []
 var _phasing: Array[Fragment] = []
+var _aim_passing: Array[Fragment] = []   # held chunks passing through us while we aim
 var _floor_blocks: Array = []
 var _squash := Vector2.ONE
 var _trail: PackedVector2Array = []
@@ -357,6 +358,7 @@ func _handle_abilities(delta: float) -> void:
 func _end_field(allow_throw: bool) -> void:
 	_field_active = false
 	_set_phasing([])
+	_set_aim_passing([])   # (a thrown chunk then passes through us on its own, see Fragment.throw)
 	gravity_cd = GRAVITY_COOLDOWN
 	var aim := aim_vector()
 	if aim.length_squared() <= 0.2 and _last_aim_time > 0.0:
@@ -399,14 +401,18 @@ func _update_field(delta: float) -> void:
 		f.held_by = self
 		held.append(f)
 	if aim.length_squared() > 0.2:
-		# Chunks gather in a loose cluster where you aim.
+		# Chunks gather in a loose cluster where you aim. They pass through
+		# you on the way (only you): pulled up out from under your feet they
+		# would otherwise lift you, a launch stronger than a charge jump.
 		_set_phasing([])
+		_set_aim_passing(held)
 		for idx in held.size():
 			var f := held[idx]
 			var target := global_position + aim.normalized() * 95.0 + Vector2(cos(idx * 2.4), sin(idx * 2.4)) * (20.0 + idx * 4.0)
 			_pull(f, target, delta)
 			f.angular_velocity = lerpf(f.angular_velocity, 0.0, minf(10.0 * delta, 1.0))
 	else:
+		_set_aim_passing([])
 		_pack_floor(held, delta)
 	_held = held
 
@@ -452,6 +458,18 @@ func _pack_floor(held: Array[Fragment], delta: float) -> void:
 			x += f.extent.size.x + FLOOR_GAP
 		top += row_h + FLOOR_GAP
 	_set_phasing(phasing)
+
+
+## Held chunks in `list` pass through this player (while aiming); the rest
+## don't.
+func _set_aim_passing(list: Array[Fragment]) -> void:
+	for f in _aim_passing:
+		if is_instance_valid(f) and not f in list:
+			f.remove_collision_exception_with(self)
+	for f in list:
+		if not f in _aim_passing:
+			f.add_collision_exception_with(self)
+	_aim_passing = list
 
 
 ## Chunks in `list` pass through this player; every other one is solid again.

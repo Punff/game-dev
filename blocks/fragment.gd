@@ -26,6 +26,7 @@ var thrown_by: Player = null
 ## whoever broke the block it came from.
 var credit: Player = null
 var _thrown_time := 0.0
+var _passing: Player = null   # its thrower, while it flies through them
 var stun := 0.0
 ## Falling things (a slab): once slower than this, it damps like any chunk and
 ## floats where it ended up. 0: off.
@@ -119,6 +120,12 @@ func throw(by: Player, velocity: Vector2) -> void:
 	thrown_by = by
 	credit = by
 	_thrown_time = 0.35
+	# It flies through its thrower until the grace is up: otherwise a floor
+	# of chunks thrown upward carries you with it, a launch stronger than a
+	# full charge jump (you leave it with its speed).
+	if is_instance_valid(by) and not _passing:
+		add_collision_exception_with(by)
+		_passing = by
 	linear_velocity = velocity
 	# Spin from where it is, not the global random: replays come out the same.
 	var r := RandomNumberGenerator.new()
@@ -145,6 +152,10 @@ func _physics_process(delta: float) -> void:
 		settle_speed = 0.0
 		linear_damp = 1.1
 	_thrown_time = maxf(_thrown_time - delta, 0.0)
+	if _passing and _thrown_time <= 0.0:
+		if is_instance_valid(_passing):
+			remove_collision_exception_with(_passing)
+		_passing = null
 	if _age > LIFETIME:
 		modulate.a = 1.0 - (_age - LIFETIME)
 		if _age > LIFETIME + 1.0:

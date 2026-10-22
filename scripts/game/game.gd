@@ -353,7 +353,7 @@ func build_snapshot(tick: int, with_fragments: bool) -> Array:
 	# once in place); that player's guest needs to know to let them through.
 	var phasing := {}
 	for p in players:
-		for f in p._phasing:
+		for f in p._phasing + p._aim_passing:
 			phasing[f] = p.player_id
 	# Resting chunks are skipped, but now and then everything is resent in
 	# case the update that put a chunk to rest got lost on the way.
