@@ -101,6 +101,7 @@ func show_player(info: PlayerInfo) -> void:
 		_name.text = info.display_name.to_upper()
 		_name.add_theme_color_override("font_color", info.color)
 		_device.text = info.device_label()
+		show_ping()
 		_colour_row.visible = true
 		_colour.text = Palette.PLAYER_COLOR_NAMES[info.color_index]
 		var can_change := info.is_local() and not info.is_ready
@@ -111,6 +112,22 @@ func show_player(info: PlayerInfo) -> void:
 		var none: Array[String] = []
 		_set_controls(_control_summary(info) if info.is_local() else none)
 	_preview.queue_redraw()
+
+
+## Online: how long a round trip to the host takes, coloured by how it'll feel.
+func show_ping() -> void:
+	if not online or _info == null:
+		return
+	var ms: int = Net.pings.get(_info.player_id, -1)
+	if ms < 0:
+		_device.text = _info.device_label()
+		_device.add_theme_color_override("font_color", Palette.TEXT_DIM)
+	elif _info.peer_id == 1:
+		_device.text = "%s  ·  host" % _info.device_label()
+		_device.add_theme_color_override("font_color", Palette.TEXT_DIM)
+	else:
+		_device.text = "%s  ·  %d ms" % [_info.device_label(), ms]
+		_device.add_theme_color_override("font_color", Palette.GOOD if ms < 80 else (Palette.MUSTARD if ms < 150 else Palette.RUST))
 
 
 func _set_controls(lines: Array[String]) -> void:

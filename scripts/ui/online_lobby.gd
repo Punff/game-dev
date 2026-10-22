@@ -105,6 +105,9 @@ func _ready() -> void:
 	_room_box.add_child(buttons)
 
 	Net.roster_changed.connect(_refresh)
+	Net.pings_changed.connect(func():
+		for s in _slots:
+			s.show_ping())
 	Net.status_changed.connect(_refresh)
 	_refresh()
 

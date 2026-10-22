@@ -17,6 +17,7 @@ extends Node
 signal roster_changed
 signal status_changed
 signal rematch_changed
+signal pings_changed
 
 enum Mode { OFFLINE, SERVER, CLIENT }
 
@@ -72,6 +73,12 @@ var _last_reliable_at := 0.0
 ## Prediction health, for the bots: how often and how far our ball had to be
 ## corrected, how often another ball ran past its newest snapshot, and (host)
 ## how often a guest's frame was late.
+## Round trip to the host per player id, in ms, as the host measured it
+## (the host's own player is 0). Shared with everyone once a second.
+var pings := {}
+const PING_EVERY := 1.0
+var _ping_clock := 0.0
+
 var stats := {"corrections": 0, "snaps": 0, "error_sum": 0.0, "error_max": 0.0, "extrapolated": 0, "stalls": 0, "skips": 0}
 
 
@@ -234,6 +241,7 @@ func leave() -> void:
 	_newest_tick = -1
 	_held_back.clear()
 	_gone_peers.clear()
+	pings.clear()
 	PlayerManager.clear()   # the online roster means nothing offline
 	roster_changed.emit()
 
@@ -310,7 +318,9 @@ func _hello(protocol: int, client_id := "", nick := "") -> void:
 		reason = "The server is full."
 	if reason != "":
 		_refused.rpc_id(id, reason)
-		get_tree().create_timer(0.5).timeout.connect(func(): if _peer: _peer.disconnect_peer(id))
+		get_tree().create_timer(0.5).timeout.connect(func():
+			if _peer and id in multiplayer.get_peers():   # unless they've already gone
+				_peer.disconnect_peer(id))
 		return
 	# Each remote player gets an id/colour like a local join; their device is
 	# irrelevant here since their controls arrive over the network.
@@ -640,6 +650,11 @@ func _release_held_back() -> void:
 func _process(delta: float) -> void:
 	if not _held_back.is_empty():
 		_release_held_back()
+	if is_server():
+		_ping_clock += delta
+		if _ping_clock >= PING_EVERY:
+			_ping_clock = 0.0
+			_ping_everyone()
 	if _room:
 		_room.poll()
 	# Without a TURN relay some networks can't link up directly; say so
@@ -675,6 +690,43 @@ func _events(spawns: Array, gone: PackedInt32Array, blocks: PackedInt32Array) ->
 func _snapshot(header: PackedFloat32Array, players: PackedFloat32Array, frags: PackedFloat32Array) -> void:
 	if game and is_instance_valid(game):
 		game.apply_state(header, players, frags)
+
+
+# ── Ping ─────────────────────────────────────
+
+## Host: time a round trip to every guest, and share what the last ones took.
+func _ping_everyone() -> void:
+	var now := Time.get_ticks_msec()
+	for info in PlayerManager.players.values():
+		if info.peer_id == 1:
+			pings[info.player_id] = 0
+		elif info.peer_id > 1:
+			var peer: int = info.peer_id
+			_send(false, func(): _ping.rpc_id(peer, now))
+	if not pings.is_empty():
+		var shared := pings.duplicate()
+		_send(false, func(): _pings.rpc(shared))
+		pings_changed.emit()
+
+
+@rpc("authority", "unreliable")
+func _ping(sent_ms: int) -> void:
+	_send(false, func(): _pong.rpc_id(1, sent_ms))
+
+
+@rpc("any_peer", "unreliable")
+func _pong(sent_ms: int) -> void:
+	if not is_server():
+		return
+	var info := _info_for_peer(multiplayer.get_remote_sender_id())
+	if info:
+		pings[info.player_id] = Time.get_ticks_msec() - sent_ms
+
+
+@rpc("authority", "unreliable")
+func _pings(by_player: Dictionary) -> void:
+	pings = by_player
+	pings_changed.emit()
 
 
 static func snapshot_interval() -> float:
