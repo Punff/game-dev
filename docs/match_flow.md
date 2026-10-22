@@ -78,7 +78,7 @@ python3 tools/analytics/abilities.py --remote             # ability use by dista
 |---|---|---|
 | Walls at the start floor's ends; spawns spread out (about 8 m apart with two players) | `MapPlanner.start`, `game.gd` | `START_WALL`, `SPAWN_SPACING`, `SPAWN_SPREAD` |
 | Biomes come 3x sooner with 2+ players (Inferno at 54 m) | `MapPlanner.biome_scale` | `MULTI_BIOME_SCALE` |
-| The slab always targets whoever is highest; a 10 m lead held for 3 s calls one down | `map_events.gd` | `LEAD_SLAB`, `LEAD_HOLD`, `LEAD_SLAB_GAP` |
+| The slab always targets whoever is highest; a 15 m lead held for 4 s calls one down (at most every 20 s: about once per long match, by the live data) | `map_events.gd` | `LEAD_SLAB`, `LEAD_HOLD`, `LEAD_SLAB_GAP` |
 | Catch-up pads: dead until the leader is 6 m past, then gold; they launch anyone but the leader ~11 m through the platforms above | `blocks/catchup_pad.gd`, `MapPlanner._place_pad` | `PAD_ARM`, `LAUNCH_VELOCITY`, `PAD_FROM`, `PAD_EVERY` |
 | Field and blast recharge up to 1.5x faster 15 m behind the leader | `Player.cooldown_rate` | `CATCHUP_FROM`, `CATCHUP_FULL`, `CATCHUP_RATE` |
 

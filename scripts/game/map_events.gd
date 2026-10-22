@@ -48,10 +48,13 @@ const SLAB_SPEED := 720.0
 const SLAB_SETTLE := 260.0        ## once it's slowed below this (px/s) it floats, a stepping stone
 ## Multiplayer catch-up: whoever is out in front by more than this (px)
 ## for LEAD_HOLD s gets a slab of their own, at most every LEAD_SLAB_GAP s.
-## (Live matches: once someone was 10 m up, nobody could reach them.)
-const LEAD_SLAB := 500.0
-const LEAD_HOLD := 3.0
-const LEAD_SLAB_GAP := 10.0
+## Kept for real runaways: replayed over the live matches, 15 m / 4 s / 20 s
+## fires about once every 80 s of a long match (10 m / 3 s / 10 s was every
+## 26 s, on top of the timed events - a constant hail on the leader). The
+## catch-up pads and faster cooldowns do the everyday catching up.
+const LEAD_SLAB := 750.0
+const LEAD_HOLD := 4.0
+const LEAD_SLAB_GAP := 20.0
 ## Quakes crack concrete in this box around the leader (a 1280x720 view).
 const QUAKE_AREA := Vector2(1280, 720)
 
