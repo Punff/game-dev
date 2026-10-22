@@ -59,6 +59,11 @@ const SHOCK_COOLDOWN := 2.5
 const SHOCK_RANGE := 450.0
 const SHOCK_FORCE := 1350.0
 const SHOCK_RECOIL := 420.0
+## Blasts landing on you this close together (yours and others', recoil
+## included) don't add up: together they push no harder than the strongest
+## one alone. (Two or three players firing at once used to send you flying
+## at 2-3x the speed of any single blast.)
+const SHOCK_STACK_TIME := 0.3
 const ROCKET_NO_FASTFALL := 0.25   ## s after a downward shockwave when "down" won't fast-fall
 const AIM_GRACE := 0.12            ## s an aim is remembered for a gravity-field throw
 const JUMP_PUSH_RADIUS := 200.0
@@ -112,6 +117,8 @@ var _squash := Vector2.ONE
 var _trail: PackedVector2Array = []
 var _hit_flash := 0.0
 var _rocket_time := 0.0             # after a downward blast, holding down doesn't fast-fall
+var _blast := Vector2.ZERO          # push taken from blasts in the last SHOCK_STACK_TIME
+var _blast_time := 0.0
 var _last_aim := Vector2.ZERO       # recent aim, so a throw survives letting go of it a moment early
 var _last_aim_time := 0.0
 ## Jump and up are often one key (W). An up that came with a jump doesn't
@@ -244,6 +251,7 @@ func _step(delta: float) -> void:
 	_reverse_timer = maxf(_reverse_timer - delta, 0.0)
 	_hit_flash = maxf(_hit_flash - delta, 0.0)
 	_rocket_time = maxf(_rocket_time - delta, 0.0)
+	_blast_time = maxf(_blast_time - delta, 0.0)
 	_up_age = 0.0 if _just_pressed("up") else _up_age + delta
 	if aim_vector().y > -0.2:
 		_jump_aim_off = false
@@ -548,7 +556,7 @@ func _fire_shockwave() -> void:
 	_rumble(0.4, 0.3, 0.15)
 
 	# Recoil: firing downwards gives a rocket-jump.
-	velocity -= dir * SHOCK_RECOIL
+	_push_by_blast(-dir * SHOCK_RECOIL)
 	if dir.y > 0.5:
 		velocity.y = minf(velocity.y, -SHOCK_RECOIL * 1.4)
 		_rocket_time = ROCKET_NO_FASTFALL
@@ -588,7 +596,7 @@ func _fire_shockwave() -> void:
 
 func hit_by_shockwave(impulse: Vector2, from: Player) -> void:
 	Telemetry.hit(self, from, "shock", impulse)
-	_take_hit(impulse)
+	_take_hit(impulse, true)
 	Fx.burst(global_position, color, 8, 260.0, 0.35)
 
 
@@ -599,10 +607,24 @@ func hit_by_chunk(impulse: Vector2, chunk: Fragment) -> void:
 	Fx.burst(global_position, Palette.PAPER_DIM, 6, 200.0, 0.3)
 
 
-func _take_hit(impulse: Vector2) -> void:
+## A shockwave's push, merged with any others from the last moment (see
+## SHOCK_STACK_TIME): their directions combine, their strength doesn't.
+func _push_by_blast(impulse: Vector2) -> void:
+	if _blast_time <= 0.0:
+		_blast = Vector2.ZERO
+	var total := (_blast + impulse).limit_length(maxf(_blast.length(), impulse.length()))
+	velocity += total - _blast
+	_blast = total
+	_blast_time = SHOCK_STACK_TIME
+
+
+func _take_hit(impulse: Vector2, blast := false) -> void:
 	if is_dead:
 		return
-	velocity += impulse
+	if blast:
+		_push_by_blast(impulse)
+	else:
+		velocity += impulse
 	if _field_active:
 		_end_field(false)
 	_charging = false
@@ -913,7 +935,7 @@ func _reconcile(ack: int, pos: Vector2, vel: Vector2) -> void:
 func _capture() -> Array:
 	return [global_position, velocity, is_on_floor(), jumps_left, _coyote, _jump_buffer, _was_on_floor,
 		_reverse_timer, _charging, _charge, gravity_cd, shock_cd, _field_time, _field_active,
-		_rocket_time, _last_aim, _last_aim_time, facing, _jump_aim_off, _up_age]
+		_rocket_time, _last_aim, _last_aim_time, facing, _jump_aim_off, _up_age, _blast, _blast_time]
 
 
 func _restore(st: Array) -> void:
@@ -941,6 +963,8 @@ func _restore(st: Array) -> void:
 	facing = st[17]
 	_jump_aim_off = st[18]
 	_up_age = st[19]
+	_blast = st[20]
+	_blast_time = st[21]
 
 
 func _snap_to(pos: Vector2, vel: Vector2) -> void:

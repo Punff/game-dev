@@ -90,8 +90,13 @@ func update_lava(delta: float, lowest_player_y: float, cam: Camera2D) -> void:
 	_glow = move_toward(_glow, 1.0 if surge > 0.0 else 0.0, delta * 2.5)
 	_rect.modulate = Color(1, 1, 1).lerp(Color(1.45, 1.2, 0.85), _glow)
 	# Fit the rect to the visible area.
+	# (Every view's worth when the screen is split.)
 	var vp := get_viewport_rect().size / cam.zoom
 	var center := cam.get_screen_center_position()
+	if cam is GameCamera and cam.is_split():
+		var all: Rect2 = cam.view_rect()
+		vp = all.size
+		center = all.get_center()
 	var size := Vector2(vp.x + 200.0, maxf(vp.y, 400.0) + 400.0)
 	_rect.position = Vector2(center.x - size.x * 0.5, surface_y - GLOW)
 	_rect.size = size

@@ -289,6 +289,8 @@ static func _short(p: Player) -> String:
 ## Where the arrow for a player off screen goes, or {} if they're visible.
 func _arrow(vp: Vector2, p: Player) -> Dictionary:
 	var sp: Vector2 = game.get_viewport().get_canvas_transform() * p.global_position
+	if game.camera.is_split():
+		return {}   # everyone has a view of their own
 	if p.is_dead or Rect2(Vector2.ZERO, vp).grow(-6).has_point(sp):
 		return {}
 	var margin := 28.0

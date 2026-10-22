@@ -110,6 +110,22 @@ func _do_action(scene: Node, action: String) -> void:
 			await get_tree().create_timer(1.2).timeout
 			scene.players[2].global_position.y = scene.lava.surface_y + 2.0
 			scene.players[3].global_position.y = scene.lava.surface_y + 2.0
+		"split":
+			# Couch split screen: P2 floats away up and to the side, the view splits, then they come back.
+			await get_tree().create_timer(4.0).timeout
+			var ps: Array = scene.players
+			for p in ps:
+				p.set_physics_process(false)
+			var from: Vector2 = ps[1].global_position
+			var t := 0.0
+			while t < 6.0:
+				await get_tree().physics_frame
+				t += get_physics_process_delta_time()
+				var k := t / 3.0 if t < 3.0 else (6.0 - t) / 3.0
+				ps[1].global_position = from + Vector2(700, -2600) * k
+				if ps.size() > 2:
+					ps[2].global_position = from + Vector2(-700, -1300) * k
+				scene.lava.surface_y = 650.0
 		"blast":
 			# Shatter nearby concrete and fire a shockwave to preview debris.
 			await get_tree().create_timer(4.2).timeout

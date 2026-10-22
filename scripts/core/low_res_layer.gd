@@ -23,7 +23,7 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_svp.disable_3d = true
-	_svp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	_svp.render_target_update_mode = SubViewport.UPDATE_WHEN_PARENT_VISIBLE   # hidden costs nothing
 	_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_svp.add_child(_rect)

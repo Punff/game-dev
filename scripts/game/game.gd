@@ -23,6 +23,7 @@ var world := Node2D.new()
 var map_gen: Node2D
 var lava := Lava.new()
 var camera := GameCamera.new()
+var split_screen := SplitScreen.new()
 var events := MapEvents.new()
 ## Started with designer flags: nothing it does counts.
 var designer := false
@@ -76,6 +77,9 @@ func _ready() -> void:
 	events.setup(self, map_gen.map_seed)
 	add_child(events)
 	background.set_half_width(MapPlanner.HALF_WIDTH + 20.0)
+	split_screen.setup(camera, background, world)
+	add_child(split_screen)
+	split_screen.set_half_width(MapPlanner.HALF_WIDTH + 20.0)
 
 	if PlayerManager.players.is_empty() and not Net.is_online():
 		PlayerManager.join(Settings.DEVICE_KB_A)   # launched directly (editor / tests)
@@ -95,6 +99,9 @@ func _ready() -> void:
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 
 	camera.targets = players
+	# Couch play: everyone here is on this screen. (Online, this screen's
+	# players are all that matter, and they're usually one.)
+	camera.split_screen = not Net.is_online() and players.size() > 1
 	camera.lava_y = lava.surface_y
 	camera.snap()
 	_countdown = COUNTDOWN + 0.6
@@ -199,6 +206,7 @@ func _physics_process(delta: float) -> void:
 	Player.lava_y = lava.surface_y
 	map_gen.update_stream(highest, lava.surface_y)
 	background.set_height(map_gen.height_of(camera.global_position.y))
+	split_screen.set_height(map_gen.height_of(camera.global_position.y))
 
 
 func _start_match() -> void:
@@ -478,3 +486,4 @@ func _client_tick(_delta: float) -> void:
 	Player.lava_y = lava.surface_y
 	map_gen.update_stream(highest, lava.surface_y)
 	background.set_height(map_gen.height_of(camera.global_position.y))
+	split_screen.set_height(map_gen.height_of(camera.global_position.y))

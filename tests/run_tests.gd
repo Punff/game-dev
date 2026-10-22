@@ -31,6 +31,7 @@ func _ready() -> void:
 	await _test_menu_smoke()
 	await _test_chaos()
 	await _test_knockout()
+	_test_blasts_dont_stack()
 	print("\n%d checks, %d failures" % [_checks, _failures])
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -827,4 +828,27 @@ func _test_knockout() -> void:
 	await get_tree().physics_frame
 	check(p.is_dead, "knocked past the arena edge = out")
 	p.queue_free()
+	PlayerManager.clear()
+
+
+## Several shockwaves landing at once push no harder than the strongest one.
+func _test_blasts_dont_stack() -> void:
+	PlayerManager.clear()
+	var id := PlayerManager.join(Settings.DEVICE_KB_A)
+	var p := Player.new()
+	p.setup(PlayerManager.players[id])
+	get_tree().root.add_child(p)
+	p.velocity = Vector2.ZERO
+	for i in 3:
+		p.hit_by_shockwave(Vector2(Player.SHOCK_FORCE, 0), null)
+	check(p.velocity.length() <= Player.SHOCK_FORCE + 1.0, "three blasts at once push like one (%.0f px/s)" % p.velocity.length())
+	p.velocity = Vector2.ZERO
+	p.hit_by_shockwave(Vector2(Player.SHOCK_FORCE, 0), null)
+	p.hit_by_shockwave(Vector2(0, -Player.SHOCK_FORCE * 0.5), null)
+	check(p.velocity.length() <= Player.SHOCK_FORCE + 1.0 and p.velocity.y < -1.0, "...their directions still combine")
+	p._blast_time = 0.0   # (as if SHOCK_STACK_TIME had passed)
+	p.velocity = Vector2.ZERO
+	p.hit_by_shockwave(Vector2(Player.SHOCK_FORCE, 0), null)
+	check(is_equal_approx(p.velocity.x, Player.SHOCK_FORCE), "a blast on its own lands in full")
+	p.free()
 	PlayerManager.clear()
