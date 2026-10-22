@@ -51,13 +51,15 @@ func _play(n: int, index: int) -> void:
 		PlayerManager.join(d)
 	MatchManager.state = MatchManager.State.COUNTDOWN
 	MatchManager.next_map_seed = _seed_base + index
+	_rng.seed = 11 + index   # per match, so a run reproduces match for match
 	PlayerManager.reset_match_stats()
 	# The whole match at one speed (countdown too), recorded with it, so
 	# tests/replay.tscn can play it back exactly.
 	Engine.time_scale = SPEED
 	var scene: Node = load("res://scenes/game.tscn").instantiate()
 	get_tree().root.add_child(scene)
-	await get_tree().create_timer(4.0).timeout
+	for i in roundi(4.0 * Engine.physics_ticks_per_second):   # the countdown, counted in ticks (a timer can land either side of one)
+		await get_tree().physics_frame
 	var brains := {}
 	for p: Player in scene.players:
 		brains[p.player_id] = {"hold": {}, "charge_until": 0.0, "field_until": 0.0, "target": Rect2(), "charged": false, "stuck": 0.0, "best_y": INF}

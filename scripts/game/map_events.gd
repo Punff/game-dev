@@ -140,7 +140,7 @@ func _pick_target() -> Player:
 func _mark_slab() -> void:
 	if not is_instance_valid(_target) or _target.is_dead:
 		return
-	if Engine.get_physics_frames() % 12 == 0:
+	if int(-_t * 60.0) % 12 == 0:
 		Fx.ring(_target.global_position + Vector2(0, -40), Palette.RUST, 34.0, 4.0, 0.25)
 
 
@@ -176,10 +176,12 @@ func _blow(delta: float) -> void:
 	for f: Fragment in get_tree().get_nodes_in_group("fragments"):
 		if f.held_by == null and not f.puppet:
 			f.linear_velocity.x += _wind_dir * WIND_FORCE * delta
-	if Engine.get_physics_frames() % 20 == 0:
+	# Speed lines are only a picture: the global random, on the event's own
+	# clock, so they never shift what the next event will be.
+	if int(_t * 60.0) % 20 == 0:
 		var cam: Camera2D = game.camera
 		var half: Vector2 = get_viewport().get_visible_rect().size / cam.zoom * 0.5
-		var p := cam.get_screen_center_position() + Vector2(_rng.randf_range(-half.x, half.x), _rng.randf_range(-half.y, half.y) * 0.8)
+		var p := cam.get_screen_center_position() + Vector2(randf_range(-half.x, half.x), randf_range(-half.y, half.y) * 0.8)
 		Fx.speed_lines(p, Vector2(_wind_dir, 0), Palette.PAPER_DIM)
 
 

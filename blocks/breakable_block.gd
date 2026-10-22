@@ -13,6 +13,9 @@ const CHUNK_AREA := 3600.0       ## roughly one shard per this many px²
 var _shards: Array[PackedVector2Array] = []
 
 var _broken := false
+# A break waiting for its physics tick (see schedule_break).
+var _break_in := -1
+var _break_args := []
 
 # Chain detection shared by all breakable blocks.
 static var _recent_breaks: Array[int] = []
@@ -29,13 +32,40 @@ func _ready() -> void:
 	rng.seed = _seed + 7
 	var count := maxi(3, roundi(size.x * size.y / CHUNK_AREA))
 	_shards = shatter(Rect2(-size * 0.5, size), count, rng)
+	set_physics_process(false)   # only while a break is scheduled
 
 
 func on_player_jump(player: Player, _strength: float) -> void:
 	if Net.is_client():
 		return   # the host breaks it
 	# Small delay so the jump itself still pushes off solid ground.
-	get_tree().create_timer(BREAK_DELAY).timeout.connect(break_apart.bind(player.global_position, 220.0, "jump", player))
+	schedule_break(roundi(BREAK_DELAY * Engine.physics_ticks_per_second), player.global_position, 220.0, "jump", player)
+
+
+## Breaks it `ticks` physics steps from now (0: on the next one), counted in
+## this block's own physics step - not on a timer or at the end of the frame,
+## which can fall either side of a physics step and made matches replay
+## differently. Also how a chunk breaks it from inside a collision callback,
+## where the physics server won't take new bodies.
+func schedule_break(ticks: int, origin: Vector2, force: float, cause: String, by: Player) -> void:
+	if _broken or (_break_in >= 0 and _break_in <= ticks):
+		return
+	_break_in = ticks
+	_break_args = [origin, force, cause, by]
+	set_physics_process(true)
+
+
+func _physics_process(_delta: float) -> void:
+	if _break_in < 0:
+		set_physics_process(false)
+		return
+	if _break_in > 0:
+		_break_in -= 1
+		return
+	_break_in = -1
+	set_physics_process(false)
+	var by: Player = _break_args[3] if is_instance_valid(_break_args[3]) else null
+	break_apart(_break_args[0], _break_args[1], _break_args[2], by)
 
 
 func on_player_land(player: Player) -> void:

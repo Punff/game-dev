@@ -33,8 +33,15 @@ var _next_net_id := 0
 var type_counts := {}
 
 
+## Physics ticks this match (not the engine's global count, which carries on
+## across matches: cleaning up on its beat freed chunks on different ticks in
+## a recording and its replay).
+var _ticks := 0
+
+
 func _physics_process(delta: float) -> void:
 	Block.clock += delta
+	_ticks += 1
 
 
 func block_by_net_id(id: int) -> Block:
@@ -76,7 +83,7 @@ func update_stream(highest_y: float, lava_y: float) -> void:
 		# screen of blocks in one frame (the buffer ahead is plenty).
 		_stream_to(maxf(highest_y - STREAM_AHEAD, planner.cursor_y - STREAM_STEP))
 	# The lava creeps up slowly: tidying up below it now and then is plenty.
-	if Engine.get_physics_frames() % 10 != 0:
+	if _ticks % 10 != 0:
 		return
 	var limit := lava_y + CLEANUP_BELOW_LAVA
 	for i in range(_blocks.size() - 1, -1, -1):

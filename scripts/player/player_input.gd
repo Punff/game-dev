@@ -72,9 +72,11 @@ func update() -> void:
 		move = Vector2(
 			Input.get_axis(PlayerManager.action(player_id, "left"), PlayerManager.action(player_id, "right")),
 			Input.get_axis(PlayerManager.action(player_id, "up"), PlayerManager.action(player_id, "down")))
-	# Quantised the way it's recorded, so a replay steers exactly the same.
-	_unpack(pack())
+	# Quantised the way it's recorded, so a replay steers exactly the same:
+	# the one packed value is both what's used now and what's recorded
+	# (packing the unpacked controls again could round a diagonal differently).
 	var packed := pack()
+	_unpack(packed)
 	if packed != _last_packed:
 		_last_packed = packed
 		recorded.append_array([seq, packed])
