@@ -5,6 +5,7 @@ extends UiPage
 
 const MODES := [
 	{"id": "solo", "title": "Solo", "sub": "Straight in: you and the rising slag. Climbs count for the board.", "balls": 1},
+	{"id": "daily", "title": "Daily", "sub": "Today's map, the same for everyone. Race your friends' ghosts.", "balls": 1},
 	{"id": "local", "title": "Local", "sub": "2-4 players on one screen: keyboard halves and pads.", "balls": 3},
 	{"id": "online", "title": "Online", "sub": "Make a room, share the code, play anywhere.", "balls": 2},
 ]
@@ -18,19 +19,19 @@ func _init() -> void:
 
 func build() -> void:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 16)
+	row.add_theme_constant_override("separation", 12)
 	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	add_child(row)
 	var cards: Array = []
 	for m in MODES:
 		var art := BallPortrait.new()
-		art.radius = 30.0 if m.balls < 3 else 22.0
+		art.radius = 30.0 if m.balls < 3 else 19.0
 		art.waves = m.id == "online"
 		var looks: Array = [BallPortrait.my_look()]
 		for i in m.balls - 1:
 			looks.append(BallPortrait.look_for_color(Palette.PLAYER_COLORS[(i + 1) * 3 % Palette.PLAYER_COLORS.size()]))
 		art.looks = looks
-		var card := UiCard.new(m.title, m.sub, art, Vector2(150, 260))
+		var card := UiCard.new(m.title, m.sub, art, Vector2(120, 260))
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		card.pressed.connect(_go.bind(m.id))
 		row.add_child(card)
@@ -41,10 +42,14 @@ func build() -> void:
 		c.focus_neighbor_bottom = UiNav.SELF
 
 	var best := int(Settings.get_value("best_height"))
-	if best > 0:
+	var today := int(Daily.local_best(Daily.today()).get("height", 0))
+	if best > 0 or today > 0:
 		var foot := HBoxContainer.new()
 		foot.add_theme_constant_override("separation", 10)
-		foot.add_child(UiChip.new("best %d m" % best))
+		if best > 0:
+			foot.add_child(UiChip.new("best %d m" % best))
+		if today > 0:
+			foot.add_child(UiChip.new("today %d m" % today, Palette.MUSTARD))
 		foot.add_child(UiPage.notes("on this computer. Beat it."))
 		add_child(foot)
 
@@ -62,10 +67,11 @@ func _input(event: InputEvent) -> void:
 
 func _go(id: String) -> void:
 	match id:
-		"solo":
+		"solo", "daily":
 			# Straight into a run: there's nobody to wait for.
 			PlayerManager.clear()
 			PlayerManager.join(_last_device)
+			MatchManager.daily = Daily.today() if id == "daily" else ""
 			MatchManager.start_match()
 		"local":
 			MatchManager.to_lobby()

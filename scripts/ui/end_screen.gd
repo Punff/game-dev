@@ -3,8 +3,9 @@ extends CanvasLayer
 
 ## Results, laid out like the main menu: the match in a sleeve on the left
 ## (ResultsPage), and where you now stand on the leaderboard in a second one
-## on the right - Highest Climb after a solo run, Online Wins after an online
-## match. Couch matches aren't ranked, so they get the result alone.
+## on the right - Highest Climb after a solo run, today's climb among your
+## friends after a daily one, Online Wins after an online match. Couch
+## matches aren't ranked, so they get the result alone.
 
 const BOARD_ROWS := 7
 const SUBMIT_WAIT := 6.0   ## solo: show the board anyway if the upload never answers
@@ -40,12 +41,12 @@ func _show(results: Dictionary) -> void:
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_root.add_child(dim)
 
-	var board_id := "height" if results.solo else ("wins" if Net.is_online() else "")
+	var board_id := "daily" if results.has("daily") else "height" if results.solo else ("wins" if Net.is_online() else "")
 	if board_id != "":
 		_board_sleeve = UiSleeve.new()
 		_root.add_child(_board_sleeve)
 		var board_page := UiPage.new()
-		board_page.title = "Highest climb" if board_id == "height" else "Online wins"
+		board_page.title = {"height": "Highest climb", "daily": "Today's climb", "wins": "Online wins"}[board_id]
 		_board = UiBoard.new(board_id, true, BOARD_ROWS)
 		board_page.add_child(_board)
 		_board_sleeve.open(board_page)
@@ -82,7 +83,16 @@ func _load_board(results: Dictionary) -> void:
 		if _board:
 			_board.refresh()   # says how to turn it on
 		return
-	if results.solo:
+	if results.has("daily"):
+		# The run went up as the match ended; the board is fresh once it's in.
+		var waited := 0.0
+		while Stats.daily_pending and waited < SUBMIT_WAIT:
+			await get_tree().create_timer(0.2).timeout
+			waited += 0.2
+		if is_instance_valid(page):
+			page.show_daily(Stats.daily_reply)
+			_board.refresh()
+	elif results.solo:
 		# The run is on its way up (Telemetry); the board is fresh once it lands.
 		var answered := [false]
 		Stats.match_submitted.connect(func(reply: Dictionary):

@@ -10,6 +10,7 @@ extends Node
 ## password itself is only ever sent to log in and never stored.
 
 signal match_submitted(reply: Dictionary)   ## the server's answer, e.g. {"rank": 12}
+signal daily_submitted(ok: bool, reply: Dictionary)   ## {"best", "improved", "rank", "of"}
 signal account_changed()
 
 const PENDING := "user://logs/pending.jsonl"
@@ -56,6 +57,37 @@ func leaderboard(board: String, done: Callable, around := false, limit := 15) ->
 ## done(ok, {"player": {...} or null})
 func my_stats(done: Callable) -> void:
 	_request("/v1/players/" + Settings.client_id(), HTTPClient.METHOD_GET, "", done)
+
+
+# ── Daily climb ──────────────────────────────
+
+## While a daily run is on its way up; the answer stays in daily_reply for
+## whoever shows it (the results screen comes up a moment after it's sent).
+var daily_pending := false
+var daily_reply := {}
+
+
+## A finished daily run: {"day", "height", "duration", "version", "ghost"}.
+## The server keeps it if it beats your best that day. Accounts only.
+func submit_daily(run: Dictionary) -> void:
+	daily_reply = {}
+	if not enabled() or not Settings.logged_in():
+		daily_submitted.emit(false, {})
+		return
+	daily_pending = true
+	_request("/v1/daily", HTTPClient.METHOD_POST, JSON.stringify(run), func(ok: bool, reply: Dictionary):
+		daily_pending = false
+		daily_reply = reply if ok else {}
+		daily_submitted.emit(ok, reply))
+
+
+## You and your friends on `day`, best first, in the leaderboard's shape;
+## with `ghosts`, their runs too. done(ok, {"rows", "me", "ghosts"?})
+func daily(day: String, done: Callable, ghosts := false) -> void:
+	if not Settings.logged_in():
+		done.call(false, {"unauthorized": true})
+		return
+	_request("/v1/daily?day=%s%s" % [day, "&ghosts=1" if ghosts else ""], HTTPClient.METHOD_GET, "", done)
 
 
 # ── Friends ──────────────────────────────────

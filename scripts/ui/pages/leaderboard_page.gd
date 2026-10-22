@@ -1,10 +1,11 @@
 class_name LeaderboardPage
 extends UiPage
 
-## Best solo climbs or online wins, and your place. Everything comes from
-## Stats (the server). Only accounts are ranked.
+## Best solo climbs, today's daily climb among your friends, or online wins,
+## and your place. Everything comes from Stats (the server). Only accounts
+## are ranked.
 
-const BOARDS := [["height", "Highest Climb"], ["wins", "Online Wins"]]
+const BOARDS := [["height", "Highest Climb"], ["daily", "Today"], ["wins", "Online Wins"]]
 
 
 func _init() -> void:

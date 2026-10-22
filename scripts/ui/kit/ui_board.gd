@@ -6,7 +6,7 @@ extends VBoxContainer
 ## otherwise it's the top of the board (Leaderboard page).
 ## Call refresh() to (re)load it.
 
-const UNITS := {"height": " m", "wins": " wins"}
+const UNITS := {"height": " m", "wins": " wins", "daily": " m"}
 
 var board := "height"
 var around := false
@@ -36,6 +36,15 @@ func refresh() -> void:
 	show_message("Loading...")
 	_asked += 1
 	var asked := _asked
+	if board == "daily":
+		# Today's climb: you and your friends.
+		if not Settings.logged_in():
+			show_message("Log in and add friends to race them on the daily climb.")
+			return
+		Stats.daily(Daily.today(), func(ok: bool, reply: Dictionary):
+			if asked == _asked:
+				_fill(ok, reply))
+		return
 	Stats.leaderboard(board, func(ok: bool, reply: Dictionary):
 		if asked == _asked:
 			_fill(ok, reply), around, limit)
@@ -49,7 +58,7 @@ func _fill(ok: bool, reply: Dictionary) -> void:
 	var unit: String = UNITS[board]
 	var rows: Array = reply.get("rows", [])
 	if rows.is_empty():
-		show_message("Nobody on this board yet. Be the first!")
+		show_message("Nobody has climbed today's map yet. Be the first!" if board == "daily" else "Nobody on this board yet. Be the first!")
 	for i in rows.size():
 		var r: Dictionary = rows[i]
 		var row := UiBoard.row(int(r.get("rank", i + 1)), str(r.get("name", "?")), "%d%s" % [int(r.get("value", 0)), unit], r.get("you", false))

@@ -13,6 +13,7 @@ var _votes: Label
 var _rematch: Button
 var _rows: Array[Control] = []
 var _place: UiStat
+var _best_today: UiStat
 
 
 func _init(match_results: Dictionary = {}) -> void:
@@ -31,14 +32,23 @@ func build() -> void:
 	_chips.add_theme_constant_override("separation", 10)
 	add_child(_chips)
 	if results.solo:
+		if results.has("daily"):
+			_chips.add_child(UiChip.new("daily climb", Palette.MUSTARD))
+			if results.daily_new:
+				_chips.add_child(UiChip.new("best today", Palette.GOOD))
 		if results.new_record:
 			_chips.add_child(UiChip.new("new best", Palette.GOOD))
 		var tiles := HBoxContainer.new()
 		tiles.add_theme_constant_override("separation", 10)
 		add_child(tiles)
 		tiles.add_child(UiStat.new("survived", _fmt_time(results.time)))
-		tiles.add_child(UiStat.new("your best", "%d m" % int(Settings.get_value("best_height"))))
-		_place = UiStat.new("on the board", "-")
+		if results.has("daily"):
+			_best_today = UiStat.new("best today", "%d m" % results.daily_best)
+			tiles.add_child(_best_today)
+			_place = UiStat.new("among friends", "-")
+		else:
+			tiles.add_child(UiStat.new("your best", "%d m" % int(Settings.get_value("best_height"))))
+			_place = UiStat.new("on the board", "-")
 		tiles.add_child(_place)
 	else:
 		_chips.add_child(UiChip.new("survived %s" % _fmt_time(results.time), Palette.SMOKE))
@@ -78,6 +88,16 @@ func hints() -> String:
 
 func handle_back() -> bool:
 	return true
+
+
+## The server's answer to a daily run: place among you and your friends.
+func show_daily(reply: Dictionary) -> void:
+	if reply.has("best") and _best_today:   # (you may have done better on another computer)
+		_best_today.set_value("%d m" % maxi(int(reply.best), int(results.daily_best)))
+	if reply.get("rank") != null and _place:
+		_place.set_value("#%d of %d" % [reply.rank, reply.get("of", 1)])
+	elif not Settings.logged_in():
+		add_child(UiPage.notes("Log in from Profile to race your friends' ghosts."))
 
 
 ## The server's answer to a solo run: place on the board.

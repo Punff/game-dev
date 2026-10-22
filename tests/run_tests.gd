@@ -38,6 +38,8 @@ func _ready() -> void:
 	_test_catchup_planner()
 	await _test_catchup_pad()
 	_test_catchup_cooldowns()
+	_test_daily()
+	await _test_daily_run()
 	print("\n%d checks, %d failures" % [_checks, _failures])
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -1014,3 +1016,52 @@ func _test_catchup_cooldowns() -> void:
 	check(is_equal_approx(p.cooldown_rate(), Player.CATCHUP_RATE), "...full speed-up far behind")
 	Player.lead_height = -INF
 	p.free()
+
+
+## The daily map is the same for everyone on a day and changes with the day;
+## this computer keeps only its best run; a ghost plays back in between points.
+func _test_daily() -> void:
+	check(Daily.seed_for("2026-10-22") == Daily.seed_for("2026-10-22"), "daily: same day, same map")
+	check(Daily.seed_for("2026-10-22") != Daily.seed_for("2026-10-23"), "daily: a new day, a new map")
+	check(Daily.today().length() == 10, "daily: today is a date")
+	var day := "1999-01-01"   # (not a day anyone plays)
+	var path := "%s/%s.json" % [Daily.DIR, day]
+	DirAccess.remove_absolute(path)
+	var ghost := {"step": Daily.STEP, "pts": [0, 0, 10, -20]}
+	check(Daily.keep_if_best(day, {"height": 10, "time": 30.0, "version": Daily.version(), "ghost": ghost}), "daily: the first run is the best")
+	check(not Daily.keep_if_best(day, {"height": 8, "time": 10.0, "version": Daily.version(), "ghost": ghost}), "daily: a lower run isn't kept")
+	check(Daily.keep_if_best(day, {"height": 10, "time": 25.0, "version": Daily.version(), "ghost": ghost}), "daily: as high but quicker is kept")
+	check(Daily.local_best(day).height == 10 and Daily.fits(Daily.local_best(day)), "daily: the best comes back")
+	check(not Daily.fits({"version": "0.0.1", "ghost": ghost}), "daily: another version's ghost doesn't fit")
+	DirAccess.remove_absolute(path)
+	var g := Ghost.new()
+	g.setup("x", Color.WHITE, ghost)
+	g.seek(Daily.STEP * 0.5)
+	check(g.position.is_equal_approx(Vector2(5, -10)), "ghost: halfway between two points")
+	g.seek(Daily.STEP + Ghost.FADE + 0.1)
+	check(not g.visible, "ghost: gone once its run is over")
+	g.free()
+
+
+## A daily run plays today's map, records itself as a ghost and races the
+## best one kept here.
+func _test_daily_run() -> void:
+	var day := "1999-01-02"
+	var path := "%s/%s.json" % [Daily.DIR, day]
+	Daily.keep_if_best(day, {"height": 3, "time": 9.0, "version": Daily.version(), "ghost": {"step": Daily.STEP, "pts": [0, -11, 0, -200]}})
+	PlayerManager.clear()
+	PlayerManager.join(Settings.DEVICE_KB_A)
+	MatchManager.daily = day
+	var scene: Node = load("res://scenes/game.tscn").instantiate()
+	get_tree().root.add_child(scene)
+	check(scene.map_gen.map_seed == Daily.seed_for(day), "daily run: plays the day's map")
+	check(scene._ghosts.size() == 1, "daily run: races the best kept here")
+	await get_tree().create_timer(5.0).timeout   # countdown, then a second of climbing
+	check(scene._track.size() >= 16, "daily run: records itself (%d values)" % scene._track.size())
+	var out: Dictionary = scene._finish_daily(1)
+	check(out.daily == day and out.daily_best == 3 and not out.daily_new, "daily run: a lower run leaves the best alone")
+	scene.queue_free()
+	await get_tree().process_frame
+	MatchManager.daily = ""
+	DirAccess.remove_absolute(path)
+	PlayerManager.clear()

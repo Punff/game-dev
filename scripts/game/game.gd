@@ -50,6 +50,12 @@ var _gone_fragments := PackedInt32Array()
 var _puppet_fragments := {}        # net_id -> Fragment
 var _snapshots_built := 0
 
+# Daily climb (MatchManager.daily): this run, recorded as a ghost, and the
+# ghosts it races.
+var _ghosts: Array[Ghost] = []
+var _track := PackedInt32Array()
+var _track_next := 0.0
+
 
 func _ready() -> void:
 	add_child(background)
@@ -64,6 +70,8 @@ func _ready() -> void:
 	else:
 		map_gen.map_seed = MatchManager.next_map_seed
 		MatchManager.next_map_seed = 0
+		if MatchManager.daily != "":
+			map_gen.map_seed = Daily.seed_for(MatchManager.daily)
 	# (Every peer knows the player count, and replays record it: same map.)
 	map_gen.biome_scale = MULTI_BIOME_SCALE if PlayerManager.players.size() > 1 else 1.0
 	map_gen.catchup_pads = PlayerManager.players.size() > 1
@@ -96,6 +104,8 @@ func _ready() -> void:
 	if PlayerManager.players.is_empty() and not Net.is_online():
 		PlayerManager.join(Settings.DEVICE_KB_A)   # launched directly (editor / tests)
 	_spawn_players()
+	if is_daily():
+		_load_ghosts()
 
 	hud = Hud.new()
 	hud.game = self
@@ -223,6 +233,8 @@ func _physics_process(delta: float) -> void:
 	map_gen.update_stream(highest, lava.surface_y)
 	background.set_height(map_gen.height_of(camera.global_position.y))
 	split_screen.set_height(map_gen.height_of(camera.global_position.y))
+	if is_daily():
+		_daily_tick()
 
 
 func _start_match() -> void:
@@ -280,6 +292,7 @@ func _finish(winner: Player) -> void:
 	for info in standings:
 		best_height = maxi(best_height, info.max_height)
 	var new_record := Settings.record_height(best_height) if not designer else false
+	var daily := _finish_daily(best_height) if is_daily() else {}
 	if new_record and players.size() == 1:
 		Settings.set_value("best_splits", hud.splits)   # the pace to beat next time
 	var results := {
@@ -290,6 +303,7 @@ func _finish(winner: Player) -> void:
 		"best_height": best_height,
 		"new_record": new_record,
 	}
+	results.merge(daily)
 	await get_tree().create_timer(END_DELAY).timeout
 	if not is_inside_tree():
 		return   # left the match in the meantime
@@ -351,6 +365,69 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Not once the match is decided: results are about to come up.
 func _can_pause() -> bool:
 	return MatchManager.state != MatchManager.State.ENDED and not _ending
+
+
+# ── Daily climb ──────────────────────────────
+
+func is_daily() -> bool:
+	return MatchManager.daily != "" and players.size() == 1 and not Net.is_online()
+
+
+## Your own best today from this computer straight away; your friends' (and
+## your best from another computer, if it's higher) once the server answers.
+func _load_ghosts() -> void:
+	var day := MatchManager.daily
+	var mine := Daily.local_best(day)
+	if Daily.fits(mine):
+		_add_ghost("your best", players[0].color, mine.ghost, mine.height)
+	Stats.daily(day, func(ok: bool, reply: Dictionary):
+		if not ok or not is_inside_tree():
+			return
+		var i := 0
+		for g: Dictionary in reply.get("ghosts", []):
+			if not Daily.fits(g):
+				continue
+			if g.get("you", false):
+				if mine.is_empty() or int(g.height) > int(mine.height):
+					for old in _ghosts.filter(func(x): return x.who == "your best"):
+						_ghosts.erase(old)
+						old.queue_free()
+					_add_ghost("your best", players[0].color, g.ghost, int(g.height))
+				continue
+			i += 1
+			_add_ghost(str(g.name), Palette.PLAYER_COLORS[(i * 3 + 1) % Palette.PLAYER_COLORS.size()], g.ghost, int(g.height)), true)
+
+
+func _add_ghost(who: String, color: Color, ghost: Dictionary, height: int) -> void:
+	var g := Ghost.new()
+	g.setup("%s %d m" % [who, height], color, ghost)
+	world.add_child(g)
+	g.seek(_match_time)
+	_ghosts.append(g)
+
+
+## Every tick: move the ghosts along, and add this run to its own track.
+func _daily_tick() -> void:
+	for g in _ghosts:
+		g.seek(_match_time)
+	var p := players[0]
+	if MatchManager.state != MatchManager.State.PLAYING or p.is_dead:
+		return
+	while _match_time >= _track_next and _track.size() < Daily.MAX_POINTS * 2:
+		_track.append_array([roundi(p.global_position.x), roundi(p.global_position.y)])
+		_track_next += Daily.STEP
+
+
+## Keeps the run here if it's your best today, and sends it to the server
+## (which keeps its own best). What the results screen shows about it.
+func _finish_daily(height: int) -> Dictionary:
+	var day := MatchManager.daily
+	var before := Daily.local_best(day)
+	var run := {"day": day, "height": height, "duration": snappedf(_match_time, 0.1), "version": Daily.version(),
+		"ghost": {"step": Daily.STEP, "pts": Array(_track)}}
+	var best := Daily.keep_if_best(day, {"height": height, "time": run.duration, "version": run.version, "ghost": run.ghost})
+	Stats.submit_daily(run)
+	return {"daily": day, "daily_best": maxi(height, int(before.get("height", 0))), "daily_new": best and not before.is_empty()}
 
 
 # ── Online ───────────────────────────────────

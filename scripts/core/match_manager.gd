@@ -13,6 +13,9 @@ var last_results: Dictionary = {}
 ## Offline: the next match uses this map seed (bot runs, so before-and-after
 ## comparisons play the same maps). Used once, then back to random.
 var next_map_seed := 0
+## The daily climb's day ("YYYY-MM-DD") while playing it, else "". A rematch
+## keeps it; anything else from the menu clears it.
+var daily := ""
 
 # Each new screen comes up out of ink. It never delays the change itself.
 var _curtain_layer := CanvasLayer.new()
@@ -45,12 +48,14 @@ func goto(path: String) -> void:
 
 func to_menu() -> void:
 	Net.leave()
+	daily = ""
 	state = State.MENU
 	goto(MAIN_MENU)
 
 
 func to_lobby() -> void:
 	Net.leave()
+	daily = ""
 	state = State.LOBBY
 	for info in PlayerManager.players.values():
 		info.is_ready = false

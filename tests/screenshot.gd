@@ -29,6 +29,8 @@ func _ready() -> void:
 		# menu if it opens offline, so this goes first).
 		Net.host()
 		Net.room_code = "FKLT8"
+	if OS.get_environment("SHOT_DAILY") != "":
+		MatchManager.daily = Daily.today()   # today's daily climb (with whatever ghosts there are)
 	var scene: Node = load(scene_path).instantiate()
 	# SHOT_FIXED renders into an offscreen 1280x720 viewport so the output
 	# size doesn't depend on the window manager.

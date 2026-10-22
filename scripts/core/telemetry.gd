@@ -170,6 +170,7 @@ func _on_started() -> void:
 		"mode": "online" if online else "solo" if g.players.size() == 1 else "local",
 		"players": g.players.size(),
 		"seed": g.map_gen.map_seed,
+		"daily": MatchManager.daily if g.players.size() == 1 and not online else "",
 		"map_events": Settings.get_value("map_events"),
 		"time_scale": Engine.time_scale,   # bot runs go faster; a replay has to match
 		"tuning": tuning,

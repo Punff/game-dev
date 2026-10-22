@@ -79,6 +79,11 @@ API (JSON). Requests from a logged-in game carry `Authorization: Bearer <token>`
   "online" = seen in the last 2.5 minutes). No push: the game polls while
   the menu or a room is open. Needs migration `0003_friends.sql`:
   `npx wrangler d1 migrations apply cakum-pakum-stats --remote`.
+- Daily climb (accounts only, Bearer token), see `src/daily.js`:
+  `POST /v1/daily {day, height, duration, version, ghost}` keeps your best
+  run of that UTC day (with its ghost: positions through the run), and
+  `GET /v1/daily?day=YYYY-MM-DD[&ghosts=1]` is that day's board among you
+  and your friends, plus their ghosts. Needs migration `0004_daily.sql`.
 
 ### Resetting a forgotten password
 
