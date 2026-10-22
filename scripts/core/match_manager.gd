@@ -10,6 +10,9 @@ const GAME := "res://scenes/game.tscn"
 
 var state: State = State.MENU
 var last_results: Dictionary = {}
+## Offline: the next match uses this map seed (bot runs, so before-and-after
+## comparisons play the same maps). Used once, then back to random.
+var next_map_seed := 0
 
 # Each new screen comes up out of ink. It never delays the change itself.
 var _curtain_layer := CanvasLayer.new()

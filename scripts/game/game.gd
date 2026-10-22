@@ -54,6 +54,8 @@ func _ready() -> void:
 		map_gen.map_seed = Net.match_seed
 		Net.game = self
 	else:
+		map_gen.map_seed = MatchManager.next_map_seed
+		MatchManager.next_map_seed = 0
 		_designer_flags()
 	world.add_child(map_gen)
 	map_gen.generate(FLOOR_Y)
