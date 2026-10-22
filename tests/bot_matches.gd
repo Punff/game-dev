@@ -218,6 +218,8 @@ func _ground(p: Player, b: Dictionary, r: Rect2, want: Dictionary, t: float) -> 
 	# Line up behind the take-off spot, then run through it and jump.
 	if signf(dx) == dir or absf(dx) > 14.0:
 		want["right" if dx > 0.0 else "left"] = true
+		if p.is_on_wall():
+			want["jump"] = true   # a wall in the way (the start floor's): hop it
 	else:
 		want["right" if dir > 0.0 else "left"] = true
 		want["jump"] = true

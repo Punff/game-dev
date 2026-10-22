@@ -19,6 +19,10 @@ const ROW_SPACING_MIN := 140.0     ## min horizontal space between platforms of 
 const TALL := 110.0                ## height of big concrete slabs
 const CLEARANCE := 64.0            ## min vertical gap between stacked platforms
 const V_MARGIN := 16.0             ## px of jump height we never rely on
+## Walls at the ends of the start floor: a blast at the start shoves you into
+## one instead of off into the lava 13 m below (half of all multiplayer
+## deaths used to happen before anyone got 10 m up). Low enough to hop over.
+const START_WALL := Vector2(50.0, 60.0)
 
 const BIOMES := [
 	# name, starts at (px above start), row gap range, chance of a charge-jump row, block weights
@@ -60,9 +64,15 @@ func start(floor_y: float, floor_width := 1100.0) -> Dictionary:
 	cursor_y = floor_y
 	var floor := _plat(-floor_width * 0.5, floor_width * 0.5, "floor", floor_y, Block.HEIGHT)
 	floor.reachable = true
-	var row := {"y": floor_y, "platforms": [floor], "biome": "Rubble", "template": T.SAFE, "charged": false}
+	var plats := [floor]
+	for side: float in [-1.0, 1.0]:
+		var outer: float = side * floor_width * 0.5
+		var wall := _plat(minf(outer, outer - side * START_WALL.x), maxf(outer, outer - side * START_WALL.x), "wall", floor_y - START_WALL.y, START_WALL.y)
+		wall.reachable = true
+		plats.append(wall)
+	var row := {"y": floor_y, "platforms": plats, "biome": "Rubble", "template": T.SAFE, "charged": false}
 	_prev_anchors = [floor]
-	_prev_row = [floor]
+	_prev_row = plats
 	rows.append(row)
 	return row
 

@@ -17,6 +17,10 @@ const COUNTDOWN := 3
 const LAVA_START_BELOW := 650.0
 const LAVA_GRACE := 3.5
 const END_DELAY := 1.4
+## Players start spread over the floor, two of them about 8 m apart: at the
+## edge of a blast's reach, so opening with one is a choice, not a given.
+const SPAWN_SPACING := 400.0
+const SPAWN_SPREAD := 900.0
 
 var background := Background.new()
 var world := Node2D.new()
@@ -135,7 +139,7 @@ func _designer_flags() -> void:
 func _spawn_players() -> void:
 	var infos := PlayerManager.sorted_players()
 	var n := infos.size()
-	var spacing := minf(200.0, 800.0 / maxf(n, 1))
+	var spacing := minf(SPAWN_SPACING, SPAWN_SPREAD / maxf(n, 1))
 	for i in n:
 		var p := Player.new()
 		p.setup(infos[i])

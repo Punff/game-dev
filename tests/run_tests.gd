@@ -32,6 +32,7 @@ func _ready() -> void:
 	await _test_chaos()
 	await _test_knockout()
 	_test_blasts_dont_stack()
+	await _test_start_walls()
 	print("\n%d checks, %d failures" % [_checks, _failures])
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -851,4 +852,29 @@ func _test_blasts_dont_stack() -> void:
 	p.hit_by_shockwave(Vector2(Player.SHOCK_FORCE, 0), null)
 	check(is_equal_approx(p.velocity.x, Player.SHOCK_FORCE), "a blast on its own lands in full")
 	p.free()
+	PlayerManager.clear()
+
+
+## A blast on the start floor shoves you into a wall, not into the lava.
+func _test_start_walls() -> void:
+	PlayerManager.clear()
+	var id := PlayerManager.join(Settings.DEVICE_KB_A)
+	var map: Node2D = preload("res://scripts/game/map_generation.gd").new()
+	map.map_seed = 77
+	get_tree().root.add_child(map)
+	map.generate(0.0)
+	var walls: Array = map.planner.rows[0].platforms.filter(func(q): return q.role == "wall")
+	check(walls.size() == 2, "the start floor has a wall at each end")
+	var p := Player.new()
+	p.setup(PlayerManager.players[id])
+	get_tree().root.add_child(p)
+	p.global_position = Vector2(300, -Player.RADIUS - 1.0)
+	for i in 5:
+		await get_tree().physics_frame
+	p.hit_by_shockwave(Vector2(Player.SHOCK_FORCE, 0), null)
+	for i in 120:
+		await get_tree().physics_frame
+	check(p.global_position.y < 10.0 and absf(p.global_position.x) < 560.0, "a sideways blast on the start floor leaves you on it (at %s)" % p.global_position)
+	p.free()
+	map.queue_free()
 	PlayerManager.clear()
