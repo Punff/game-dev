@@ -445,13 +445,17 @@ func _pack_floor(held: Array[Fragment], delta: float) -> void:
 
 
 ## Chunks in `list` pass through this player; every other one is solid again.
+## (Not just through the ball: on the way to their slots chunks pass through
+## each other too, or they jam short of them and the floor never forms.)
 func _set_phasing(list: Array[Fragment]) -> void:
 	for f in _phasing:
 		if is_instance_valid(f) and not f in list:
-			f.remove_collision_exception_with(self)
+			f.collision_layer = 1
+			f.collision_mask = 1
 	for f in list:
 		if not f in _phasing:
-			f.add_collision_exception_with(self)
+			f.collision_layer = 0
+			f.collision_mask = 0
 	_phasing = list
 
 

@@ -4,7 +4,7 @@ extends UiPage
 ## Game modes as cards. A new mode is a new entry in MODES and a case in _go().
 
 const MODES := [
-	{"id": "solo", "title": "Solo", "sub": "Just you and the rising slag. Climbs count for the board.", "balls": 1},
+	{"id": "solo", "title": "Solo", "sub": "Straight in: you and the rising slag. Climbs count for the board.", "balls": 1},
 	{"id": "local", "title": "Local", "sub": "2-4 players on one screen: keyboard halves and pads.", "balls": 3},
 	{"id": "online", "title": "Online", "sub": "Make a room, share the code, play anywhere.", "balls": 2},
 ]
@@ -63,9 +63,10 @@ func _input(event: InputEvent) -> void:
 func _go(id: String) -> void:
 	match id:
 		"solo":
+			# Straight into a run: there's nobody to wait for.
 			PlayerManager.clear()
 			PlayerManager.join(_last_device)
-			MatchManager.to_lobby()
+			MatchManager.start_match()
 		"local":
 			MatchManager.to_lobby()
 		"online":

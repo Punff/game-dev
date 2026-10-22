@@ -194,11 +194,27 @@ func apply_all() -> void:
 
 
 func toggle_fullscreen() -> void:
-	# On the web this has to happen inside an input event (user gesture),
-	# so it is applied immediately instead of waiting for apply_all().
-	var is_fs := DisplayServer.window_get_mode() in [DisplayServer.WINDOW_MODE_FULLSCREEN, DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN]
-	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if is_fs else DisplayServer.WINDOW_MODE_FULLSCREEN)
-	set_value("fullscreen", not is_fs)
+	set_fullscreen(not is_fullscreen())
+
+
+## On the web this has to happen inside an input event (user gesture),
+## so it is applied immediately instead of waiting for apply_all().
+func set_fullscreen(on: bool) -> void:
+	if on != is_fullscreen():
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if on else DisplayServer.WINDOW_MODE_WINDOWED)
+	set_value("fullscreen", on)
+
+
+func is_fullscreen() -> bool:
+	return DisplayServer.window_get_mode() in [DisplayServer.WINDOW_MODE_FULLSCREEN, DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN]
+
+
+## F11 anywhere.
+func _unhandled_key_input(event: InputEvent) -> void:
+	var k := event as InputEventKey
+	if k and k.pressed and not k.echo and k.keycode == KEY_F11:
+		get_viewport().set_input_as_handled()
+		toggle_fullscreen()
 
 
 func _set_bus_volume(bus: String, linear: float) -> void:

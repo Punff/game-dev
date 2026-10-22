@@ -98,7 +98,7 @@ func show_player(info: PlayerInfo) -> void:
 		var panel := UiTheme.box(Color(Palette.INK, 0.94), border, 4 if info.is_ready else 2, 0, Vector2(16, 16), 7)
 		panel.shadow_color = Color(border, 0.55)
 		add_theme_stylebox_override("panel", panel)
-		_name.text = info.display_name
+		_name.text = info.display_name.to_upper()
 		_name.add_theme_color_override("font_color", info.color)
 		_device.text = info.device_label()
 		_colour_row.visible = true

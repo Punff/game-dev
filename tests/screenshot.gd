@@ -18,6 +18,11 @@ func _ready() -> void:
 		var id := PlayerManager.join(devices[i])
 		if OS.get_environment("SHOT_READY") != "":
 			PlayerManager.players[id].is_ready = i % 2 == 0
+	if OS.get_environment("SHOT_ACTION") == "room":
+		# Online lobby as a room host, with a made-up code (it leaves for the
+		# menu if it opens offline, so this goes first).
+		Net.host()
+		Net.room_code = "FKLT8"
 	var scene: Node = load(scene_path).instantiate()
 	# SHOT_FIXED renders into an offscreen 1280x720 viewport so the output
 	# size doesn't depend on the window manager.
@@ -66,9 +71,6 @@ func _do_action(scene: Node, action: String) -> void:
 		"gate": scene._show_gate()
 		"browse": scene.tracklist.track("leaderboard").grab_focus.call_deferred()
 		"room":
-			# Online lobby as a room host, with a made-up code.
-			Net.host()
-			Net.room_code = "FKLT8"
 			scene._refresh()
 		"controls":
 			scene.choose("settings")

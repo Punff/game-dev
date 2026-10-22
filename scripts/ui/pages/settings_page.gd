@@ -52,7 +52,7 @@ func _build_audio(body: VBoxContainer) -> void:
 
 
 func _build_display(body: VBoxContainer) -> void:
-	var rows: Array = [UiRow.toggle("Fullscreen", "fullscreen", func(_on): Settings.toggle_fullscreen())]
+	var rows: Array = [UiRow.toggle("Fullscreen  (F11)", "fullscreen", func(on: bool): Settings.set_fullscreen(on))]
 	if not Settings.is_web():
 		rows.append(UiRow.toggle("VSync", "vsync"))
 	rows.append(UiRow.slider("Screen shake", "screen_shake"))
