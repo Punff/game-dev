@@ -18,12 +18,17 @@ func _init() -> void:
 	block_id = "vanishing_block"
 
 
+func _ready() -> void:
+	super._ready()
+	set_physics_process(false)   # only while vanishing / gone
+
+
 func on_player_land(player: Player) -> void:
 	if _state == S.SOLID and not Net.is_client():
 		Telemetry.ev("vanish", player)
 		_state = S.WARNING
 		_timer = WARN_TIME
-		set_process(true)
+		set_physics_process(true)
 		net_changed()
 
 
@@ -37,10 +42,12 @@ func apply_net_state(state: int) -> void:
 	_state = state as S
 	_timer = (WARN_TIME if _state == S.WARNING else GONE_TIME) - Net.lead_time   # we run ahead of the host
 	collision_layer = 0 if _state == S.GONE else 1
-	set_process(true)
+	set_physics_process(true)
 
 
-func _process(delta: float) -> void:
+## On physics ticks (not frames), so it vanishes on the same tick on every
+## machine and on a replay.
+func _physics_process(delta: float) -> void:
 	match _state:
 		S.WARNING:
 			_timer -= delta
@@ -54,7 +61,7 @@ func _process(delta: float) -> void:
 			if _timer <= 0.0 and not _ball_inside():
 				_state = S.SOLID
 				collision_layer = 1
-				set_process(false)
+				set_physics_process(false)
 	modulate.a = 0.45 + 0.55 * (_timer / WARN_TIME) if _state == S.WARNING else 1.0
 	_shake = Vector2(randf_range(-2, 2), randf_range(-1, 1)) * (1.0 - _timer / WARN_TIME) * 2.0 if _state == S.WARNING else Vector2.ZERO
 	_body_art.position = _shake

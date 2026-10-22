@@ -50,6 +50,7 @@ func generate(start_floor_y: float) -> void:
 	_by_net_id.clear()
 	_next_net_id = 0
 	Block.clock = 0.0
+	BreakableBlock._recent_breaks.clear()   # a new clock: last match's breaks would never expire
 	planner = MapPlanner.new(map_seed)
 	planner.height_offset = height_offset
 	floor_y = start_floor_y

@@ -167,6 +167,8 @@ func _on_started() -> void:
 		"mode": "online" if online else "solo" if g.players.size() == 1 else "local",
 		"players": g.players.size(),
 		"seed": g.map_gen.map_seed,
+		"map_events": Settings.get_value("map_events"),
+		"time_scale": Engine.time_scale,   # bot runs go faster; a replay has to match
 		"tuning": tuning,
 		"tuning_hash": ("%08x" % hash(JSON.stringify(tuning, "", true))),
 		"roster": roster,
@@ -292,6 +294,13 @@ func _finish(order: Array, winner: int, abandoned: bool) -> void:
 	_rec["per_player"] = per
 	_rec["events"] = _events
 	_rec["events_dropped"] = _events.size() >= MAX_EVENTS
+	# Offline: every player's controls, so tests/replay.tscn can play the
+	# match again (online guests' frames live on their own machines).
+	if g and _rec.get("mode") != "online":
+		var inputs := {}
+		for p: Player in g.players:
+			inputs[str(p.player_id)] = Array(p.input.recorded)
+		_rec["inputs"] = inputs
 	_save(_rec)
 	Stats.submit_match(_rec)
 	_rec = {}

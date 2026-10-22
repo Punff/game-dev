@@ -65,9 +65,12 @@ func break_apart(origin: Vector2, force := 260.0, cause := "", by: Player = null
 	var parent := get_parent()
 	var shards := _shards
 	if get_tree().get_nodes_in_group("fragments").size() > 110:
-		shards = shatter(Rect2(-size * 0.5, size), maxi(2, shards.size() / 2), RandomNumberGenerator.new())
+		var few := RandomNumberGenerator.new()
+		few.seed = _seed + 3
+		shards = shatter(Rect2(-size * 0.5, size), maxi(2, shards.size() / 2), few)
+	# Seeded by the block, not at random: replays come out the same.
 	var rng := RandomNumberGenerator.new()
-	rng.randomize()
+	rng.seed = _seed + 7919
 	for poly in shards:
 		var center := Vector2.ZERO
 		for v in poly:
@@ -99,10 +102,11 @@ func apply_net_state(state: int) -> void:
 		queue_free()   # the server sends the chunks
 
 
+## On the game clock (not real time), so it's the same on a replay.
 static func _track_chain(pos: Vector2) -> void:
-	var now := Time.get_ticks_msec()
+	var now := int(Block.clock * 1000.0)
 	_recent_breaks.append(now)
-	while not _recent_breaks.is_empty() and now - _recent_breaks[0] > 450:
+	while not _recent_breaks.is_empty() and (now - _recent_breaks[0] > 450 or _recent_breaks[0] > now):
 		_recent_breaks.pop_front()
 	if _recent_breaks.size() >= 3:
 		SignalBus.chain_reaction_occurred.emit(_recent_breaks.size(), pos)

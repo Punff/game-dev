@@ -1,7 +1,7 @@
 extends Node
 
 ## Headless test runner:
-##   godot --headless --path . res://tests/run_tests.tscn
+##   godot --headless --fixed-fps 60 --path . res://tests/run_tests.tscn   (fast; drop --fixed-fps for real time)
 ## Exits with code 1 if anything fails.
 
 var _failures := 0

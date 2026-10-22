@@ -3,7 +3,7 @@ extends Node
 ## Plays whole matches with simple climbing bots and records them with
 ## Telemetry (tagged "bot"), to exercise the stats pipeline and to get a
 ## rough feel for a tuning change before people play it:
-##   TELEMETRY_LOG=/tmp/bots.jsonl godot --headless --path . res://tests/bot_matches.tscn -- --matches=6
+##   TELEMETRY_LOG=/tmp/bots.jsonl godot --headless --fixed-fps 60 --path . res://tests/bot_matches.tscn -- --matches=6
 ## Add --signaling=ws://127.0.0.1:8787 to upload to a local `wrangler dev`
 ## (BOT_UPLOAD=1); bots never upload anywhere else.
 ##
@@ -17,7 +17,7 @@ extends Node
 ## plays the same maps: compare with tools/analytics/compare.py.
 
 const CAP := 150.0                 ## s of match time before the survivors are retired
-const SPEED := 3.0                 ## Engine.time_scale while a match runs
+const SPEED := 1.0                 ## Engine.time_scale while a match runs (run with --fixed-fps 60 for speed)
 
 var _rng := RandomNumberGenerator.new()
 var _seed_base := 1000
@@ -52,10 +52,12 @@ func _play(n: int, index: int) -> void:
 	MatchManager.state = MatchManager.State.COUNTDOWN
 	MatchManager.next_map_seed = _seed_base + index
 	PlayerManager.reset_match_stats()
+	# The whole match at one speed (countdown too), recorded with it, so
+	# tests/replay.tscn can play it back exactly.
+	Engine.time_scale = SPEED
 	var scene: Node = load("res://scenes/game.tscn").instantiate()
 	get_tree().root.add_child(scene)
 	await get_tree().create_timer(4.0).timeout
-	Engine.time_scale = SPEED
 	var brains := {}
 	for p: Player in scene.players:
 		brains[p.player_id] = {"hold": {}, "charge_until": 0.0, "field_until": 0.0, "target": Rect2(), "charged": false, "stuck": 0.0, "best_y": INF}

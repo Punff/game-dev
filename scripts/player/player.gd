@@ -99,6 +99,9 @@ var _last_aim_time := 0.0
 var _ring := PackedVector2Array()   # the boiling outline, rebuilt ~10 times a second
 var _ring_boil := -1
 var input := PlayerInput.new()   ## where controls come from: this machine or the network
+## Gameplay randomness (throw spread) from a fixed seed, so a match replays
+## the same from its recorded controls.
+var _rng := RandomNumberGenerator.new()
 
 ## Online guests don't simulate other players' balls: a puppet just shows
 ## where the host says it is, a few ticks in the past so there's always a
@@ -135,6 +138,7 @@ func setup(p: PlayerInfo) -> void:
 	color = p.color
 	name = "Player%d" % player_id
 	input = PlayerInput.new(player_id, p.is_local())
+	_rng.seed = player_id * 7919 + 17
 	add_to_group("player")
 
 
@@ -358,7 +362,7 @@ func _end_field(allow_throw: bool) -> void:
 	if allow_throw and aim.length_squared() > 0.2 and not Net.is_client():
 		for f in _held:
 			if is_instance_valid(f):
-				f.throw(self, aim.normalized().rotated(randf_range(-0.12, 0.12)) * THROW_SPEED * randf_range(0.85, 1.1) + velocity * 0.3)
+				f.throw(self, aim.normalized().rotated(_rng.randf_range(-0.12, 0.12)) * THROW_SPEED * _rng.randf_range(0.85, 1.1) + velocity * 0.3)
 				thrown += 1
 	Telemetry.ev("field_end", self, {"held": _held.size(), "thrown": thrown, "dur": snappedf(_field_time, 0.01), "cut": not allow_throw})
 	for f in _held:

@@ -117,7 +117,10 @@ func throw(by: Player, velocity: Vector2) -> void:
 	credit = by
 	_thrown_time = 0.35
 	linear_velocity = velocity
-	angular_velocity = randf_range(-8, 8)
+	# Spin from where it is, not the global random: replays come out the same.
+	var r := RandomNumberGenerator.new()
+	r.seed = hash(Vector2i(global_position)) + int(velocity.x)
+	angular_velocity = r.randf_range(-8, 8)
 
 
 func _physics_process(delta: float) -> void:

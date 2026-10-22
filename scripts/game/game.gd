@@ -57,6 +57,8 @@ func _ready() -> void:
 		map_gen.map_seed = MatchManager.next_map_seed
 		MatchManager.next_map_seed = 0
 		_designer_flags()
+		if map_gen.map_seed == 0:
+			map_gen.map_seed = (randi() % 2000000000) + 1   # a real one, recorded for replays
 	world.add_child(map_gen)
 	map_gen.generate(FLOOR_Y)
 
@@ -71,7 +73,7 @@ func _ready() -> void:
 	lava.surface_y = FLOOR_Y + LAVA_START_BELOW
 	add_child(camera)
 	background.camera = camera
-	events.setup(self, map_gen.map_seed if map_gen.map_seed != 0 else randi())
+	events.setup(self, map_gen.map_seed)
 	add_child(events)
 	background.set_half_width(MapPlanner.HALF_WIDTH + 20.0)
 
@@ -143,6 +145,8 @@ func _spawn_players() -> void:
 
 
 func _exit_tree() -> void:
+	if _stop_ticks > 0:
+		Engine.time_scale = _scale_before
 	if Net.game == self:
 		Net.game = null
 	PlayerInput.suspended = false
@@ -157,6 +161,7 @@ func player_by_id(id: int) -> Player:
 
 
 func _physics_process(delta: float) -> void:
+	_tick_hit_stop()
 	PlayerInput.suspended = Net.is_online() and pause_menu.visible
 	if Net.is_client():
 		_client_tick(delta)
@@ -275,13 +280,27 @@ func _on_chain(count: int, _pos: Vector2) -> void:
 	SignalBus.screen_shake_requested.emit(4.0 + count)
 
 
-## Freeze-frame for impact. Uses a real-time timer so it ends on time.
+## Freeze-frame for impact: a few physics ticks in slow motion. Counted in
+## ticks rather than real time so a replay goes through the same ticks, and
+## it puts back whatever speed was set before (bot runs go faster).
+const HIT_STOP_SCALE := 0.08
+var _stop_ticks := 0
+var _scale_before := 1.0
+
+
 func _hit_stop(duration: float) -> void:
-	if Net.is_online():
-		return   # would only freeze the server's copy of the world
-	Engine.time_scale = 0.08
-	await get_tree().create_timer(duration, true, false, true).timeout
-	Engine.time_scale = 1.0
+	if Net.is_online() or _stop_ticks > 0:
+		return   # online it would only freeze the server's copy of the world
+	_scale_before = Engine.time_scale
+	Engine.time_scale = _scale_before * HIT_STOP_SCALE
+	_stop_ticks = maxi(1, roundi(duration * Engine.physics_ticks_per_second))
+
+
+func _tick_hit_stop() -> void:
+	if _stop_ticks > 0:
+		_stop_ticks -= 1
+		if _stop_ticks == 0:
+			Engine.time_scale = _scale_before
 
 
 ## A controller dropping out mid-match pauses the game so nobody dies to it.

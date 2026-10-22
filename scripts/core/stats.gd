@@ -163,7 +163,9 @@ func _request(path: String, method: int, body: String, done: Callable) -> void:
 	add_child(http)
 	http.request_completed.connect(func(result: int, code: int, _headers, raw: PackedByteArray):
 		http.queue_free()
-		var reply: Variant = JSON.parse_string(raw.get_string_from_utf8())
+		# Parsed quietly: offline or timed out, there's no body at all.
+		var json := JSON.new()
+		var reply: Variant = json.data if json.parse(raw.get_string_from_utf8()) == OK else {}
 		if not reply is Dictionary:
 			reply = {}
 		# A 4xx means the server looked and said no; retrying won't help

@@ -1,6 +1,7 @@
-# Runs the test suite and a few bot matches on every push / PR, and fails if
-# the bots' records show something broken (report.py --check: impossible
-# positions, stuck most of a match, event cap hit). Nothing is uploaded.
+# Runs the test suite and bot matches on every push / PR, and fails if the
+# bots' records show something broken (report.py --check: impossible
+# positions, stuck most of a match, event cap hit) or a match doesn't replay
+# the same from its recorded controls. Nothing is uploaded.
 name: Checks
 
 on:
@@ -42,11 +43,15 @@ jobs:
       - name: Import
         run: godot --headless --import
 
+      # --fixed-fps: as fast as the CPU goes, same physics, no waiting on real time.
       - name: Tests
-        run: NO_STATS=1 godot --headless res://tests/run_tests.tscn
+        run: NO_STATS=1 godot --headless --fixed-fps 60 res://tests/run_tests.tscn
 
       - name: Bot matches
-        run: NO_STATS=1 TELEMETRY_LOG=bots.jsonl godot --headless res://tests/bot_matches.tscn -- --matches=6
+        run: NO_STATS=1 TELEMETRY_LOG=bots.jsonl godot --headless --fixed-fps 60 res://tests/bot_matches.tscn -- --matches=12
+
+      - name: Matches replay as recorded
+        run: REPLAY_FILE=bots.jsonl REPLAY_ALL=1 godot --headless --fixed-fps 60 res://tests/replay.tscn
 
       - name: Bot records look sane
         run: python3 tools/analytics/report.py --file bots.jsonl --only-bots --all-builds --out bot_report.html --check

@@ -35,6 +35,7 @@ A record (schema 1) is one JSON object:
 | `samples` | Every 0.5 s: `[t, lava m, lava px/s, [[x m, height m, state] or null per player]]`. State: `g` ground, `a` air, `c` charging, `f` field |
 | `events` | `[t, kind, player id, x m, height m, details?]`, see below |
 | `per_player` | Per player: `place`, `max_m`, `death` (`t`, `cause`, `killer`, `how`, `height_m`, `block`), `kos`, `air_s`, `near_lava_s`, `stall_s`, `stalls`, `block_time` (s per block type), `block_lands` |
+| `inputs` | Offline matches: per player id, its controls as a flat `[frame, packed, frame, packed, ...]` list, one pair whenever they change (8 button bits, two signed axes, see `PlayerInput.pack`). With `seed`, `time_scale` and `map_events`, enough to play the match again: `tests/replay.tscn` |
 
 Events:
 
@@ -117,15 +118,37 @@ works and for a rough first look at a tuning change; they don't stand in
 for people. Their records are tagged `"bot"` and only upload to a local server
 (`BOT_UPLOAD=1` and `--signaling=ws://127.0.0.1:8787`).
 
+### Fast runs and replays
+
+Add `--fixed-fps 60` to any headless run (tests, bots, replays): the game
+then runs as fast as the CPU allows with exactly the same physics steps,
+instead of waiting on the clock. The test suite takes seconds instead of
+minutes, and twelve bot matches about five.
+
+Offline match records carry each player's controls (`inputs`), so a match
+can be played again on the same map:
+
+```bash
+REPLAY_FILE=~/.local/share/godot/app_userdata/"Ultimate Cakum Pakum"/logs/matches.jsonl \
+  godot --path . res://tests/replay.tscn                        # watch the last match
+REPLAY_FILE=/tmp/bots.jsonl REPLAY_ALL=1 godot --headless --fixed-fps 60 --path . res://tests/replay.tscn
+```
+
+The second checks every record replays exactly (heights and knock-out times)
+and exits 1 if one doesn't. That needs gameplay to be deterministic: no
+global random numbers in gameplay code (seed a RandomNumberGenerator from
+the block / player / map), timers on physics ticks or the game clock
+(`Block.clock`), never real time.
+
 ### Before and after a change
 
 Bot matches use fixed map seeds (`--seed-base=N`, default 1000), so two runs
 play the same maps:
 
 ```bash
-TELEMETRY_LOG=/tmp/before.jsonl godot --headless --path . res://tests/bot_matches.tscn -- --matches=12
+TELEMETRY_LOG=/tmp/before.jsonl godot --headless --fixed-fps 60 --path . res://tests/bot_matches.tscn -- --matches=12
 # ...make the change...
-TELEMETRY_LOG=/tmp/after.jsonl godot --headless --path . res://tests/bot_matches.tscn -- --matches=12
+TELEMETRY_LOG=/tmp/after.jsonl godot --headless --fixed-fps 60 --path . res://tests/bot_matches.tscn -- --matches=12
 python3 tools/analytics/compare.py /tmp/before.jsonl /tmp/after.jsonl
 ```
 

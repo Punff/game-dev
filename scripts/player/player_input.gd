@@ -38,6 +38,14 @@ var _window := 0
 var _fewest := 1000         # fewest frames waiting at any step in this window
 var _catch_up := 0          # extra frames to use up, one per step, to shorten the wait
 
+## Replays. A local player's controls are kept as [frame, packed] pairs
+## whenever they change (Telemetry puts them in the match record); a
+## replay feeds such pairs back in instead of the keyboard or pad.
+var recorded := PackedInt32Array()
+var replay := PackedInt32Array()
+var _last_packed := -1
+var _replay_at := 0
+
 
 func _init(id := 1, local := true) -> void:
 	player_id = id
@@ -54,6 +62,9 @@ func update() -> void:
 	move = Vector2.ZERO
 	seq += 1
 	allowed = allow_local
+	if not replay.is_empty():
+		_replay_step()
+		return
 	if not suspended:
 		for i in Settings.ACTIONS.size():
 			if Input.is_action_pressed(PlayerManager.action(player_id, Settings.ACTIONS[i])):
@@ -61,6 +72,20 @@ func update() -> void:
 		move = Vector2(
 			Input.get_axis(PlayerManager.action(player_id, "left"), PlayerManager.action(player_id, "right")),
 			Input.get_axis(PlayerManager.action(player_id, "up"), PlayerManager.action(player_id, "down")))
+	# Quantised the way it's recorded, so a replay steers exactly the same.
+	_unpack(pack())
+	var packed := pack()
+	if packed != _last_packed:
+		_last_packed = packed
+		recorded.append_array([seq, packed])
+
+
+## Replay: the controls in force at this frame.
+func _replay_step() -> void:
+	while _replay_at + 2 < replay.size() and replay[_replay_at + 2] <= seq:
+		_replay_at += 2
+	if replay[_replay_at] <= seq:
+		_unpack(replay[_replay_at + 1])
 
 
 ## Remote: how many steps to run this tick. Normally one per frame that has
