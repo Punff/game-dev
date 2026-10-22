@@ -48,6 +48,9 @@ var _next_contest := 4
 ## Designer runs: build the map as if this many px had already been climbed
 ## (start inside a later biome). Heights the player sees still count from 0.
 var height_offset := 0.0
+## Biomes start at `from` x this. Multiplayer brings them much closer (see
+## game.gd MULTI_BIOME_SCALE): matches there rarely climb past the first.
+var biome_scale := 1.0
 
 static var _env_double: PackedVector2Array
 static var _env_charged: PackedVector2Array
@@ -85,10 +88,15 @@ func generate_until(target_y: float) -> Array:
 	return out
 
 
+## Where biome `i` starts (px above the start), at this scale.
+static func biome_from(i: int, scale: float) -> float:
+	return BIOMES[i].from * scale
+
+
 func biome_at(height_px: float) -> Dictionary:
 	var b: Dictionary = BIOMES[0]
 	for candidate in BIOMES:
-		if height_px >= candidate.from:
+		if height_px >= candidate.from * biome_scale:
 			b = candidate
 	return b
 

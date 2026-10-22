@@ -46,6 +46,7 @@ func _ready() -> void:
 		vp.add_child(cam)
 		var bg := Background.new()
 		bg.camera = cam
+		bg.biome_scale = main_background.biome_scale if main_background else 1.0
 		bg.visible = false
 		vp.add_child(bg)
 		add_child(vp)

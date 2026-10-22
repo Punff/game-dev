@@ -21,6 +21,9 @@ const END_DELAY := 1.4
 ## edge of a blast's reach, so opening with one is a choice, not a given.
 const SPAWN_SPACING := 400.0
 const SPAWN_SPREAD := 900.0
+## With 2+ players the biomes (their blocks, gaps and events) come this much
+## sooner: a multiplayer match used to stay in the first one (2% got past it).
+const MULTI_BIOME_SCALE := 0.3
 
 var background := Background.new()
 var world := Node2D.new()
@@ -61,6 +64,10 @@ func _ready() -> void:
 	else:
 		map_gen.map_seed = MatchManager.next_map_seed
 		MatchManager.next_map_seed = 0
+	# (Every peer knows the player count, and replays record it: same map.)
+	map_gen.biome_scale = MULTI_BIOME_SCALE if PlayerManager.players.size() > 1 else 1.0
+	background.biome_scale = map_gen.biome_scale
+	if not Net.is_online():
 		_designer_flags()
 		if map_gen.map_seed == 0:
 			map_gen.map_seed = (randi() % 2000000000) + 1   # a real one, recorded for replays
@@ -121,9 +128,9 @@ func _designer_flags() -> void:
 		elif a.begins_with("--start-height="):
 			map_gen.height_offset = float(v) * 50.0
 		elif a.begins_with("--biome="):
-			for b in MapPlanner.BIOMES:
-				if b.name.to_lower() == v.to_lower():
-					map_gen.height_offset = b.from + 1.0
+			for i in MapPlanner.BIOMES.size():
+				if MapPlanner.BIOMES[i].name.to_lower() == v.to_lower():
+					map_gen.height_offset = MapPlanner.biome_from(i, map_gen.biome_scale) + 1.0
 		elif a.begins_with("--event="):
 			events.only = v
 			events._next = 5.0

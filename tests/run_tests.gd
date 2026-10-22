@@ -33,6 +33,7 @@ func _ready() -> void:
 	await _test_knockout()
 	_test_blasts_dont_stack()
 	await _test_start_walls()
+	_test_biome_scale()
 	print("\n%d checks, %d failures" % [_checks, _failures])
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -878,3 +879,13 @@ func _test_start_walls() -> void:
 	p.free()
 	map.queue_free()
 	PlayerManager.clear()
+
+
+## Multiplayer brings the biomes closer; solo keeps the long climb.
+func _test_biome_scale() -> void:
+	var planner := MapPlanner.new(5)
+	var inferno := MapPlanner.biome_from(1, 1.0)
+	check(planner.biome_at(inferno * 0.5).name == "Rubble", "solo: halfway to Inferno is still Rubble")
+	planner.biome_scale = 0.3
+	check(planner.biome_at(inferno * 0.5).name == "Inferno", "multiplayer: the same height is Inferno")
+	check(is_equal_approx(MapPlanner.biome_from(1, 0.3), inferno * 0.3), "biome_from scales")

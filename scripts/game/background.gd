@@ -17,6 +17,7 @@ const BLEND_PX := 2500.0
 
 var camera: Camera2D
 var auto_scroll := 0.0         ## px/s, used by menus with no camera
+var biome_scale := 1.0         ## see MapPlanner.biome_scale
 var _mat := ShaderMaterial.new()
 var _scroll := 0.0
 var _height := -INF
@@ -45,12 +46,13 @@ func set_height(h: float) -> void:
 	_height = h
 	var idx := 0
 	for i in MapPlanner.BIOMES.size():
-		if h >= MapPlanner.BIOMES[i].from:
+		if h >= MapPlanner.biome_from(i, biome_scale):
 			idx = i
 	var t := 0.0
 	if idx + 1 < MapPlanner.BIOMES.size():
-		var next_from: float = MapPlanner.BIOMES[idx + 1].from
-		t = clampf((h - (next_from - BLEND_PX)) / BLEND_PX, 0.0, 1.0)
+		var next_from := MapPlanner.biome_from(idx + 1, biome_scale)
+		var blend := BLEND_PX * biome_scale
+		t = clampf((h - (next_from - blend)) / blend, 0.0, 1.0)
 	var a: Array = PALETTES[idx]
 	var b: Array = PALETTES[mini(idx + 1, PALETTES.size() - 1)]
 	_mat.set_shader_parameter("sky_top", a[0].lerp(b[0], t))

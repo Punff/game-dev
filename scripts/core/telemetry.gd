@@ -158,7 +158,7 @@ func _on_started() -> void:
 		"lava_chase_from": Lava.CHASE_FROM, "lava_rise_per_m": Lava.RISE_PER_M,
 		"lava_lead_chase": Lava.LEAD_CHASE, "lava_lead_max": Lava.LEAD_MAX,
 		"lava_start_below": g.LAVA_START_BELOW, "lava_grace": g.LAVA_GRACE,
-		"spawn_spacing": g.SPAWN_SPACING, "start_wall": MapPlanner.START_WALL.y,
+		"spawn_spacing": g.SPAWN_SPACING, "biome_scale": g.map_gen.biome_scale, "start_wall": MapPlanner.START_WALL.y,
 	}
 	_rec = {
 		"schema": SCHEMA,

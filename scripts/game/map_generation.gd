@@ -23,6 +23,8 @@ var BLOCK_TYPES := {
 @export var map_seed := 0
 ## Designer runs: start the map this many px up (see MapPlanner.height_offset).
 var height_offset := 0.0
+## See MapPlanner.biome_scale.
+var biome_scale := 1.0
 
 var planner: MapPlanner
 var floor_y := 0.0
@@ -60,6 +62,7 @@ func generate(start_floor_y: float) -> void:
 	BreakableBlock._recent_breaks.clear()   # a new clock: last match's breaks would never expire
 	planner = MapPlanner.new(map_seed)
 	planner.height_offset = height_offset
+	planner.biome_scale = biome_scale
 	floor_y = start_floor_y
 	_spawn_row(planner.start(floor_y))
 	_stream_to(floor_y - STREAM_AHEAD)
