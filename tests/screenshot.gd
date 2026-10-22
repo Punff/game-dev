@@ -76,7 +76,7 @@ func _do_action(scene: Node, action: String) -> void:
 		"pause_settings":
 			await get_tree().create_timer(4.5).timeout
 			scene.pause_menu.open()
-			scene.pause_menu._menu.open_settings()
+			scene.pause_menu.page.push(SettingsPage.new())
 		"pause":
 			await get_tree().create_timer(4.5).timeout
 			scene.pause_menu.open()
@@ -84,6 +84,9 @@ func _do_action(scene: Node, action: String) -> void:
 			await get_tree().create_timer(4.5).timeout
 			for p in scene.players.slice(1):
 				p.die()
+		"solo_end":
+			await get_tree().create_timer(4.5).timeout
+			scene.players[0].die()
 		"lava":
 			# Lava right under the players, then one falls in and one is knocked off.
 			await get_tree().create_timer(4.5).timeout

@@ -3,8 +3,10 @@
 //
 //   POST /v1/matches              a finished (or abandoned) match's Telemetry record
 //                                 -> {ok, id, rank?, best?, new_best?}   (rank: solo runs by an account)
-//   GET  /v1/leaderboard?board=height|wins&limit=15&me=<client>
-//                                 -> {board, rows: [{name, value, you}], me: {rank, value} | null}
+//   GET  /v1/leaderboard?board=height|wins&limit=15&me=<client>[&around=me]
+//                                 -> {board, rows: [{rank, name, value, you}], me: {rank, value} | null}
+//                                    around=me: `limit` rows centred on the viewer's place
+//                                    (the top of the board if they aren't on it)
 //   GET  /v1/players/<client>     -> {player: {...totals, account, rank_height, rank_wins} | null}
 //   /v1/auth/...                  accounts, see auth.js
 //
@@ -161,16 +163,30 @@ async function getLeaderboard(request, url, env, reply) {
   const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "15", 10) || 15, 1), 50);
   const acc = await viewer(request, env, url.searchParams.get("me"));
   const myKey = acc ? accountKey(acc.id) : null;
-  const { results } = await env.DB.prepare(
-    `SELECT client, name, ${col} AS value FROM players WHERE account_id IS NOT NULL AND ${col} > 0
-     ORDER BY ${col} DESC, ${tiebreak} LIMIT ?`,
-  ).bind(limit).all();
-  const out = { board, rows: results.map((r) => ({ name: r.name, value: r.value, you: r.client === myKey })), me: null };
+  let me = null;
   if (acc) {
     const row = await env.DB.prepare(`SELECT ${col} AS value FROM players WHERE client = ?`).bind(myKey).first();
-    if (row && row.value > 0) out.me = { rank: await rankOf(env, col, row.value), value: row.value };
+    if (row && row.value > 0) me = { rank: await rankOf(env, col, row.value), value: row.value };
   }
-  return reply(200, out);
+  const ranked = `FROM players WHERE account_id IS NOT NULL AND ${col} > 0`;
+  let offset = 0;
+  if (url.searchParams.get("around") === "me" && me) {
+    const total = (await env.DB.prepare(`SELECT COUNT(*) AS n ${ranked}`).first()).n;
+    offset = Math.max(0, Math.min(me.rank - 1 - Math.floor((limit - 1) / 2), total - limit));
+  }
+  const { results } = await env.DB.prepare(
+    `SELECT client, name, ${col} AS value ${ranked} ORDER BY ${col} DESC, ${tiebreak} LIMIT ? OFFSET ?`,
+  ).bind(limit, offset).all();
+  // Places, with ties sharing the better one (as rankOf counts them).
+  const rows = [];
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    let rank = offset + i + 1;
+    if (i > 0 && r.value === results[i - 1].value) rank = rows[i - 1].rank;
+    else if (i === 0 && offset > 0) rank = await rankOf(env, col, r.value);
+    rows.push({ rank, name: r.name, value: r.value, you: r.client === myKey });
+  }
+  return reply(200, { board, rows, me });
 }
 
 async function getPlayer(request, client, env, reply) {

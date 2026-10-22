@@ -1,4 +1,4 @@
-extends MenuBase
+extends Control
 
 ## Online play once you're connecting (the main menu's Online page starts
 ## it): the same player cards as the couch lobby. Each computer brings one

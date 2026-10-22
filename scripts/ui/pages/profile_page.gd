@@ -53,21 +53,20 @@ func _build_card(body: VBoxContainer) -> void:
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 10)
 	body.add_child(grid)
-	var values := {}
+	var tiles := {}
 	for s in STATS:
-		var tile := _stat_tile(s[1])
+		var tile := UiStat.new(s[1])
 		grid.add_child(tile)
-		values[s[0]] = tile.get_child(0).get_child(0)
+		tiles[s[0]] = tile
 	if Stats.enabled():
 		Stats.my_stats(func(ok: bool, reply: Dictionary):
 			var p: Variant = reply.get("player")
 			if not ok or not p is Dictionary:
 				return
 			for s in STATS:
-				var l: Variant = values[s[0]]   # untyped: the page may be gone by now
-				if is_instance_valid(l):
-					l.text = "%d%s" % [int(p.get(s[0], 0)), s[2]]
-					UiFx.bump(l, 0.1))
+				var tile: Variant = tiles[s[0]]   # untyped: the page may be gone by now
+				if is_instance_valid(tile):
+					tile.set_value("%d%s" % [int(p.get(s[0], 0)), s[2]]))
 
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
@@ -89,19 +88,6 @@ func _build_card(body: VBoxContainer) -> void:
 	for x in [customise, b]:
 		x.focus_neighbor_top = UiNav.SELF
 		x.focus_neighbor_bottom = UiNav.SELF
-
-
-func _stat_tile(caption: String) -> PanelContainer:
-	var p := PanelContainer.new()
-	p.add_theme_stylebox_override("panel", UiTheme.box(Palette.INK_SOFT, Palette.SMOKE, 2, 0, Vector2(14, 8), 4))
-	p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", -4)
-	p.add_child(v)
-	v.add_child(UiTheme.title("-", 32, Palette.MUSTARD))
-	v.get_child(0).horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	v.add_child(UiTheme.label(caption.to_upper(), 14, Palette.PAPER_DIM))
-	return p
 
 
 # ── Customise ────────────────────────────────

@@ -68,6 +68,8 @@ API (JSON). Requests from a logged-in game carry `Authorization: Bearer <token>`
 - `POST /v1/matches`: a Telemetry record. Returns `{ok, id}`, plus `rank`,
   `best` and `new_best` for solo runs by an account.
 - `GET /v1/leaderboard?board=height|wins&limit=15&me=<client id>`: accounts only.
+  Each row has its `rank`. Add `&around=me` for `limit` rows centred on the
+  viewer's place (the results screen uses this).
 - `GET /v1/players/<client id>`
 
 ### Resetting a forgotten password

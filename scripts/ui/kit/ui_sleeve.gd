@@ -115,6 +115,12 @@ func pop() -> void:
 		restore.grab_focus.call_deferred()
 
 
+## Back to the bottom page.
+func to_root() -> void:
+	while _stack.size() > 1:
+		pop()
+
+
 func clear() -> void:
 	while not _stack.is_empty():
 		var page: UiPage = _stack.pop_back()
@@ -128,6 +134,7 @@ func preview(title_text: String, notes_text: String) -> void:
 	clear()
 	_preview.visible = true
 	_preview_text.text = notes_text
+	_title.add_theme_color_override("font_color", Palette.PAPER)
 	_set_title(title_text, false)
 	_crumb.text = ""
 	changed.emit()
@@ -148,6 +155,7 @@ func back() -> void:
 func _show_top(fresh: bool) -> void:
 	var page := top()
 	page.visible = true
+	_title.add_theme_color_override("font_color", page.title_color)
 	_set_title(page.title, fresh)
 	var names: Array[String] = []
 	for p in _stack:
@@ -208,6 +216,7 @@ class Floating extends Control:
 	var sleeve := UiSleeve.new()
 	var page: UiPage
 	var hints := UiHintBar.new()
+	var _size := Vector2.ZERO
 
 	func _init() -> void:
 		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -221,18 +230,37 @@ class Floating extends Control:
 		add_child(hints)
 		sleeve.active = true
 		sleeve.backed_out.connect(func(): closed.emit())
-		sleeve.changed.connect(func():
-			if sleeve.top():
-				hints.set_hints(sleeve.top().hints()))
+		sleeve.changed.connect(_on_changed)
 		resized.connect(_layout)
 
 	func _ready() -> void:
-		_layout()
 		sleeve.open(page)
+		_size = _want()
+		_layout()
 		UiFx.stamp(sleeve, 1.05, -1.5)
 
+	## The top page's size, within the screen.
+	func _want() -> Vector2:
+		var want := sleeve.top().float_size if sleeve.top() else Vector2(860, 580)
+		return Vector2(minf(want.x, size.x - 80.0), minf(want.y, size.y - 140.0))
+
+	func _on_changed() -> void:
+		if not sleeve.top():
+			return
+		hints.set_hints(sleeve.top().hints())
+		if not is_inside_tree():
+			return
+		var target := _want()
+		if not UiFx.enabled():
+			_size = target
+			_layout()
+			return
+		create_tween().tween_method(func(v: Vector2):
+			_size = v
+			_layout(), _size, target, 0.2).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+
 	func _layout() -> void:
-		var s := Vector2(minf(860.0, size.x - 80.0), minf(580.0, size.y - 140.0))
-		sleeve.size = s
+		var s := _size if _size != Vector2.ZERO else _want()
+		sleeve.size = s.floor()
 		sleeve.position = ((size - s) * 0.5 + Vector2(0, 10)).floor()
 		hints.position = sleeve.position + Vector2(0, s.y + 18)

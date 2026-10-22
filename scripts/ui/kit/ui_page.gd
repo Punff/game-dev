@@ -11,6 +11,10 @@ var teaser := ""
 var sleeve: UiSleeve
 ## Set when the page uses tabs, so the sleeve can step them.
 var tabs: UiTabs
+## Colour of the stamped title (e.g. the winner's colour on Results).
+var title_color := Palette.PAPER
+## Size of a floating sleeve (in-game) while this page is on top.
+var float_size := Vector2(860, 580)
 var _built := false
 
 

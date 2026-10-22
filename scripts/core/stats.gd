@@ -18,6 +18,7 @@ const TIMEOUT := 15.0
 
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS   # the results screen pauses the game while it waits for us
 	_flush_pending.call_deferred()
 	_check_session.call_deferred()
 
@@ -43,9 +44,13 @@ func submit_match(rec: Dictionary) -> void:
 
 
 ## board: "height" (best solo climb) or "wins" (online wins).
-## done(ok, {"rows": [{"name", "value", "client"}...], "me": {...}})
-func leaderboard(board: String, done: Callable) -> void:
-	_request("/v1/leaderboard?board=%s&limit=15&me=%s" % [board, Settings.client_id()], HTTPClient.METHOD_GET, "", done)
+## around: `limit` rows centred on this player's place instead of the top.
+## done(ok, {"rows": [{"rank", "name", "value", "you"}...], "me": {"rank", "value"} or null})
+func leaderboard(board: String, done: Callable, around := false, limit := 15) -> void:
+	var q := "/v1/leaderboard?board=%s&limit=%d&me=%s" % [board, limit, Settings.client_id()]
+	if around:
+		q += "&around=me"
+	_request(q, HTTPClient.METHOD_GET, "", done)
 
 
 ## done(ok, {"player": {...} or null})
