@@ -41,6 +41,9 @@ var _prev_anchors: Array = []
 var _prev_row: Array = []
 var _since_contest := 0
 var _next_contest := 4
+## Designer runs: build the map as if this many px had already been climbed
+## (start inside a later biome). Heights the player sees still count from 0.
+var height_offset := 0.0
 
 static var _env_double: PackedVector2Array
 static var _env_charged: PackedVector2Array
@@ -88,13 +91,13 @@ static func top_of(p: Dictionary) -> float:
 
 func _next_row() -> Dictionary:
 	var start_y: float = rows[0].y
-	var biome := biome_at(start_y - cursor_y)
+	var biome := biome_at(start_y - cursor_y + height_offset)
 	var gap := minf(rng.randf_range(biome.gap.x, biome.gap.y), max_rise(false) - V_MARGIN - 40.0)
 	var charged_row: bool = rng.randf() < biome.charge_rows
 	if charged_row:
 		gap = rng.randf_range(300.0, 360.0)
 	var y := cursor_y - gap
-	var tmpl := _pick_template(start_y - y)
+	var tmpl := _pick_template(start_y - y + height_offset)
 	var plats := _build_template(tmpl, y)
 	_resolve_overlaps(plats)
 	_assign_types(plats, biome, tmpl)
@@ -286,17 +289,25 @@ func _ensure_reachable(plats: Array, charged: bool, gap: float) -> void:
 			p.anchor_ok = true
 			p.travel = 0.0
 			return
-	# 2) Otherwise drop a stepping stone beside a previous anchor: scan
-	#    outward from it for the first spot that is reachable and in bounds.
-	var w := rng.randf_range(MIN_WIDTH, 260.0)
+	# 2) Otherwise drop a stepping stone near a previous anchor: scan outward
+	#    beside it, then over it, for the first spot that is reachable and in
+	#    bounds - at a random width, then the narrowest (a wide anchor near
+	#    the walls, like the start floor, leaves little room beside it).
 	var sources := _prev_anchors.duplicate()
 	sources.shuffle()
-	for src in sources:
-		var rise := minf(gap, max_rise(charged) - V_MARGIN - 50.0) * rng.randf_range(0.8, 1.0)
-		var y: float = top_of(src) - rise
-		for k in 14:
-			for side in [1.0, -1.0]:
-				var x0: float = src.x1 + 40.0 + k * 30.0 if side > 0 else src.x0 - 40.0 - k * 30.0 - w
+	for w in [rng.randf_range(MIN_WIDTH, 260.0), MIN_WIDTH]:
+		for src in sources:
+			var rise := minf(gap, max_rise(charged) - V_MARGIN - 50.0) * rng.randf_range(0.8, 1.0)
+			var y: float = top_of(src) - rise
+			var spots: Array = []
+			for k in 14:
+				spots.append(src.x1 + 40.0 + k * 30.0)
+				spots.append(src.x0 - 40.0 - k * 30.0 - w)
+			var over: float = src.x0
+			while over + w <= src.x1:
+				spots.append(over)
+				over += 60.0
+			for x0: float in spots:
 				if x0 < -HALF_WIDTH + EDGE_MARGIN or x0 + w > HALF_WIDTH - EDGE_MARGIN:
 					continue
 				var step := _plat(x0, x0 + w, "step", y, Block.HEIGHT)

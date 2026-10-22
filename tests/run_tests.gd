@@ -12,12 +12,14 @@ func _ready() -> void:
 	await get_tree().process_frame   # let autoloads finish _ready
 	_test_envelope_sanity()
 	_test_planner_invariants()
+	_test_planner_always_reachable()
 	_test_planner_determinism()
 	_test_bindings_roundtrip()
 	await _test_field_holds_player()
 	await _test_jump_physics_matches_envelope()
 	await _test_game_smoke()
 	await _test_vanishing_waits()
+	await _test_map_events()
 	await _test_sandbox_smoke()
 	await _test_menu_smoke()
 	await _test_chaos()
@@ -45,6 +47,20 @@ func _test_envelope_sanity() -> void:
 	check(MapPlanner.can_reach(-100, 100, 150, 300, 150), "simple sideways hop is reachable")
 	check(not MapPlanner.can_reach(-100, 100, 900, 1000, 150), "far platform is unreachable")
 	check(not MapPlanner.can_reach(-100, 100, -300, 300, 150), "covered by a much wider platform with no way around")
+
+
+## Seeds whose start floor once left no room for a stepping stone beside it,
+## which cut the guaranteed route for the whole map.
+func _test_planner_always_reachable() -> void:
+	for seed_value in [168, 230]:
+		var p := MapPlanner.new(seed_value)
+		p.start(0.0)
+		var bad := 0
+		while p.cursor_y > -20000.0:
+			var row: Dictionary = p.generate_until(p.cursor_y - 1.0)[0]
+			if not row.platforms.any(func(q): return q.reachable and q.anchor_ok):
+				bad += 1
+		check(bad == 0, "planner: every row of seed %d has a reachable anchor" % seed_value)
 
 
 func _test_planner_invariants() -> void:
@@ -401,6 +417,49 @@ func _test_game_smoke() -> void:
 	check(MatchManager.state == MatchManager.State.ENDED and scene.end_screen.visible, "results come up after the end delay")
 	check(not scene.pause_menu.visible, "the pause menu isn't open under the results")
 	get_tree().paused = false
+	scene.queue_free()
+	await get_tree().process_frame
+	PlayerManager.clear()
+
+
+## Each map event does its thing in a real match.
+func _test_map_events() -> void:
+	PlayerManager.clear()
+	PlayerManager.join(Settings.DEVICE_KB_A)
+	var scene: Node = load("res://scenes/game.tscn").instantiate()
+	get_tree().root.add_child(scene)
+	await get_tree().create_timer(4.2).timeout   # countdown
+	var ev: MapEvents = scene.events
+
+	ev.start("slab")
+	var falling := false
+	for i in roundi((MapEvents.WARN + 0.4) * 60.0):
+		await get_tree().physics_frame
+		for f in get_tree().get_nodes_in_group("fragments"):
+			falling = falling or f.linear_velocity.y > 600.0
+	check(falling, "map events: a slab drops")
+
+	ev.start("surge")
+	await get_tree().create_timer(MapEvents.WARN + 0.2).timeout
+	check(scene.lava.surge > 0.0, "map events: the lava surges")
+	await get_tree().create_timer(MapEvents.SURGE_TIME).timeout
+	check(scene.lava.surge == 0.0, "map events: the surge ends")
+
+	var concrete := func(): return get_tree().get_nodes_in_group("blocks").filter(func(b): return b is BreakableBlock and not b._broken).size()
+	var standing: int = concrete.call()
+	ev.start("quake")
+	await get_tree().create_timer(MapEvents.WARN + 0.2).timeout
+	check(concrete.call() < standing, "map events: a quake cracks concrete")
+
+	var loose := get_tree().get_nodes_in_group("fragments").filter(func(f): return f.linear_velocity.y < 300.0)
+	var xs := loose.map(func(f): return f.linear_velocity.x)
+	ev.start("wind")
+	await get_tree().create_timer(MapEvents.WARN + 1.0).timeout
+	var moved := 0
+	for i in loose.size():
+		if is_instance_valid(loose[i]) and absf(loose[i].linear_velocity.x - xs[i]) > 50.0:
+			moved += 1
+	check(loose.is_empty() or moved > 0, "map events: wind drifts the debris")
 	scene.queue_free()
 	await get_tree().process_frame
 	PlayerManager.clear()

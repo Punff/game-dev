@@ -5,6 +5,12 @@ extends Node2D
 ##
 ## Online, the server runs all of that and streams snapshots; clients build
 ## the same map from the shared seed and only display what they're sent.
+##
+## Designer runs (offline, from the command line):
+##   godot --path . res://scenes/game.tscn -- --seed=1234 --start-height=200 --event=quake
+## --seed fixes the map, --start-height=<m> or --biome=<name> starts the map
+## partway up, --event=<slab|surge|wind|quake> makes every map event that one,
+## the first 5 s in. These runs don't upload or count as a best.
 
 const FLOOR_Y := 0.0
 const COUNTDOWN := 3
@@ -17,6 +23,9 @@ var world := Node2D.new()
 var map_gen: Node2D
 var lava := Lava.new()
 var camera := GameCamera.new()
+var events := MapEvents.new()
+## Started with designer flags: nothing it does counts.
+var designer := false
 var hud: Hud
 var pause_menu: PauseMenu
 var end_screen: EndScreen
@@ -44,6 +53,8 @@ func _ready() -> void:
 	if Net.is_online():
 		map_gen.map_seed = Net.match_seed
 		Net.game = self
+	else:
+		_designer_flags()
 	world.add_child(map_gen)
 	map_gen.generate(FLOOR_Y)
 
@@ -58,6 +69,8 @@ func _ready() -> void:
 	lava.surface_y = FLOOR_Y + LAVA_START_BELOW
 	add_child(camera)
 	background.camera = camera
+	events.setup(self, map_gen.map_seed if map_gen.map_seed != 0 else randi())
+	add_child(events)
 	background.set_half_width(MapPlanner.HALF_WIDTH + 20.0)
 
 	if PlayerManager.players.is_empty() and not Net.is_online():
@@ -82,6 +95,30 @@ func _ready() -> void:
 	camera.snap()
 	_countdown = COUNTDOWN + 0.6
 	MatchManager.state = MatchManager.State.COUNTDOWN
+
+
+## See the top of this file.
+func _designer_flags() -> void:
+	for a in OS.get_cmdline_user_args():
+		var v := a.get_slice("=", 1)
+		if a.begins_with("--seed="):
+			map_gen.map_seed = int(v)
+		elif a.begins_with("--start-height="):
+			map_gen.height_offset = float(v) * 50.0
+		elif a.begins_with("--biome="):
+			for b in MapPlanner.BIOMES:
+				if b.name.to_lower() == v.to_lower():
+					map_gen.height_offset = b.from + 1.0
+		elif a.begins_with("--event="):
+			events.only = v
+			events._next = 5.0
+		else:
+			continue
+		designer = true
+	if designer:
+		OS.set_environment("NO_STATS", "1")
+		Telemetry.tag = "designer"
+		print("Designer run: seed %d, map starts %d m up, events %s" % [map_gen.map_seed, map_gen.height_offset / 50.0, events.only if events.only != "" else "normal"])
 
 
 func _spawn_players() -> void:
@@ -134,6 +171,8 @@ func _physics_process(delta: float) -> void:
 	elif MatchManager.state == MatchManager.State.PLAYING:
 		_match_time += delta
 		lava.active = _match_time > LAVA_GRACE
+		if not _ending:
+			events.tick(delta, _match_time)
 
 	var highest := INF
 	var lowest := -INF
@@ -195,6 +234,7 @@ func _finish(winner: Player) -> void:
 	if _ending:
 		return
 	_ending = true
+	events.stop()
 	pause_menu.close()   # results take over; a pause menu under them would fight for input
 	if winner:
 		winner.controls_enabled = false
@@ -207,7 +247,7 @@ func _finish(winner: Player) -> void:
 	var best_height := 0
 	for info in standings:
 		best_height = maxi(best_height, info.max_height)
-	var new_record := Settings.record_height(best_height)
+	var new_record := Settings.record_height(best_height) if not designer else false
 	var results := {
 		"winner": winner.player_id if winner else -1,
 		"solo": players.size() == 1,

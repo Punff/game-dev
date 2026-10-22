@@ -20,6 +20,9 @@ const GLOW := 60.0
 var surface_y := 0.0
 var speed := BASE_SPEED
 var active := false
+## Extra px/s while a surge (MapEvents) is on. Only applies while nobody is
+## already close to being caught, so a surge squeezes, it doesn't snipe.
+var surge := 0.0
 var _time := 0.0
 var _rect := ColorRect.new()
 var _mat := ShaderMaterial.new()
@@ -48,6 +51,8 @@ func update_lava(delta: float, lowest_player_y: float, cam: Camera2D) -> void:
 			target = base * 0.45
 		elif gap > CHASE_FROM:
 			target = lerpf(base, MAX_SPEED, clampf((gap - CHASE_FROM) / (CHASE_FULL - CHASE_FROM), 0.0, 1.0))
+		if surge > 0.0 and gap >= NEAR:
+			target += surge
 		speed = move_toward(speed, minf(target, MAX_SPEED), 60.0 * delta)
 		surface_y -= speed * delta
 	# Fit the rect to the visible area.

@@ -21,6 +21,8 @@ var BLOCK_TYPES := {
 }
 
 @export var map_seed := 0
+## Designer runs: start the map this many px up (see MapPlanner.height_offset).
+var height_offset := 0.0
 
 var planner: MapPlanner
 var floor_y := 0.0
@@ -49,6 +51,7 @@ func generate(start_floor_y: float) -> void:
 	_next_net_id = 0
 	Block.clock = 0.0
 	planner = MapPlanner.new(map_seed)
+	planner.height_offset = height_offset
 	floor_y = start_floor_y
 	_spawn_row(planner.start(floor_y))
 	_stream_to(floor_y - STREAM_AHEAD)
@@ -56,7 +59,7 @@ func generate(start_floor_y: float) -> void:
 
 
 func height_of(y: float) -> float:
-	return floor_y - y
+	return floor_y - y + height_offset
 
 
 func biome_at_y(y: float) -> Dictionary:

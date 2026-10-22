@@ -62,7 +62,8 @@ func _build_display(body: VBoxContainer) -> void:
 
 
 func _build_gameplay(body: VBoxContainer) -> void:
-	_finish(body, [UiRow.slider("Stick deadzone", "deadzone", 0.1, 0.6), UiRow.toggle("Controller rumble", "rumble")])
+	_finish(body, [UiRow.toggle("Map events", "map_events"), UiRow.slider("Stick deadzone", "deadzone", 0.1, 0.6), UiRow.toggle("Controller rumble", "rumble")])
+	body.add_child(UiPage.notes("Map events: falling slabs, lava surges, wind and quakes, a different one in each part of the climb. Online, the host's setting counts."))
 
 
 func _build_data(body: VBoxContainer) -> void:

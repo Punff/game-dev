@@ -71,6 +71,12 @@ func ev(kind: String, p: Player, data := {}) -> void:
 		_add(kind, p.player_id, p.global_position, data)
 
 
+## Something that happened to the world, not to a player (MapEvents).
+func world(kind: String, pos: Vector2, data := {}) -> void:
+	if recording:
+		_add(kind, 0, pos, data)
+
+
 ## A gravity field went up; how many chunks it had to work with says whether
 ## it was a real play or a whiff.
 func field_on(p: Player) -> void:

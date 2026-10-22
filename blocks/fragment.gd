@@ -143,7 +143,10 @@ func _on_body_entered(body: Node) -> void:
 	if speed < IMPACT_SPEED:
 		return
 	if body is BreakableBlock:
-		body.break_apart(global_position, speed * 0.6, "chunk", credit)
+		# Deferred: this runs inside the physics step, which won't let the new
+		# chunks switch on their contact reports - they'd break nothing more,
+		# cutting chain reactions short.
+		body.break_apart.call_deferred(global_position, speed * 0.6, "chunk", credit)
 	elif body is Player:
 		if body == thrown_by and _thrown_time > 0.0:
 			return
