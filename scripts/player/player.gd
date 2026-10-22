@@ -42,6 +42,15 @@ const THROW_SPEED := 1000.0
 const FLOOR_WIDTH := 300.0          ## gravity-field floor row width before chunks start a row below
 const FLOOR_GAP := 2.0
 const FLOOR_ARRIVE := 10.0          ## a chunk this close to its floor slot turns solid
+## Riding your debris up (aim the field up while standing on it) is fine, but
+## all the upward speed you take from chunks over one field adds up to at most
+## this - about a full charge jump's worth. (Each time you left a rising chunk
+## it handed you its speed, and the field then pulled the chunks faster to
+## keep up with you: rides ratcheted up to 1,200+ px/s.)
+const RIDE_BUDGET := 1300.0
+## And no single push off debris leaves you rising faster than this (riding a
+## throw from under your own feet could hand you 1,000+ in one go).
+const RIDE_PEAK := 860.0
 const SHOCK_COOLDOWN := 2.5
 const SHOCK_RANGE := 450.0
 const SHOCK_FORCE := 1350.0
@@ -83,6 +92,8 @@ var _ice_applied := false
 var _coyote := 0.0
 var _jump_buffer := 0.0
 var _was_on_floor := false
+var _on_debris := false          # standing on a chunk (not a block) after the last move
+var _ride_left := RIDE_BUDGET    # upward speed chunks may still give us this field
 var _reverse_timer := 0.0
 var _charging := false
 var _charge := 0.0
@@ -92,7 +103,6 @@ var _field_time := 0.0
 var _field_active := false
 var _held: Array[Fragment] = []
 var _phasing: Array[Fragment] = []
-var _aim_passing: Array[Fragment] = []   # held chunks passing through us while we aim
 var _floor_blocks: Array = []
 var _squash := Vector2.ONE
 var _trail: PackedVector2Array = []
@@ -251,7 +261,23 @@ func _step(delta: float) -> void:
 	_handle_abilities(delta)
 
 	var fall_speed := velocity.y
+	var before := velocity.y
 	move_and_slide()
+	# Leaving a chunk you stood on (or one that caught you from below this
+	# very step) hands you its speed: spend the ride budget.
+	var touched := _on_debris
+	for i in get_slide_collision_count():
+		if get_slide_collision(i).get_collider() is Fragment:
+			touched = true
+	if touched and not is_on_floor() and velocity.y < before:
+		var take := minf(before - velocity.y, _ride_left)
+		velocity.y = maxf(before - take, minf(before, -RIDE_PEAK))
+		_ride_left -= before - velocity.y
+	# (Standing still reports no slide collisions: look at what's underfoot.)
+	_on_debris = false
+	if is_on_floor():
+		var under := move_and_collide(Vector2(0, 2), true)
+		_on_debris = touched or (under != null and under.get_collider() is Fragment)
 
 	# No walls: get shoved far enough off the side and you're out.
 	if absf(global_position.x) > world_half_width + OUT_OF_BOUNDS and not Net.is_client():
@@ -348,6 +374,7 @@ func _handle_abilities(delta: float) -> void:
 	elif _pressed("gravity") and gravity_cd <= 0.0 and _just_pressed("gravity"):
 		_field_active = true
 		_field_time = 0.0
+		_ride_left = RIDE_BUDGET
 		Telemetry.field_on(self)
 		Sfx.play("gravity", -3.0)
 
@@ -358,7 +385,6 @@ func _handle_abilities(delta: float) -> void:
 func _end_field(allow_throw: bool) -> void:
 	_field_active = false
 	_set_phasing([])
-	_set_aim_passing([])   # (a thrown chunk then passes through us on its own, see Fragment.throw)
 	gravity_cd = GRAVITY_COOLDOWN
 	var aim := aim_vector()
 	if aim.length_squared() <= 0.2 and _last_aim_time > 0.0:
@@ -401,18 +427,14 @@ func _update_field(delta: float) -> void:
 		f.held_by = self
 		held.append(f)
 	if aim.length_squared() > 0.2:
-		# Chunks gather in a loose cluster where you aim. They pass through
-		# you on the way (only you): pulled up out from under your feet they
-		# would otherwise lift you, a launch stronger than a charge jump.
+		# Chunks gather in a loose cluster where you aim.
 		_set_phasing([])
-		_set_aim_passing(held)
 		for idx in held.size():
 			var f := held[idx]
 			var target := global_position + aim.normalized() * 95.0 + Vector2(cos(idx * 2.4), sin(idx * 2.4)) * (20.0 + idx * 4.0)
 			_pull(f, target, delta)
 			f.angular_velocity = lerpf(f.angular_velocity, 0.0, minf(10.0 * delta, 1.0))
 	else:
-		_set_aim_passing([])
 		_pack_floor(held, delta)
 	_held = held
 
@@ -458,18 +480,6 @@ func _pack_floor(held: Array[Fragment], delta: float) -> void:
 			x += f.extent.size.x + FLOOR_GAP
 		top += row_h + FLOOR_GAP
 	_set_phasing(phasing)
-
-
-## Held chunks in `list` pass through this player (while aiming); the rest
-## don't.
-func _set_aim_passing(list: Array[Fragment]) -> void:
-	for f in _aim_passing:
-		if is_instance_valid(f) and not f in list:
-			f.remove_collision_exception_with(self)
-	for f in list:
-		if not f in _aim_passing:
-			f.add_collision_exception_with(self)
-	_aim_passing = list
 
 
 ## Chunks in `list` pass through this player; every other one is solid again.

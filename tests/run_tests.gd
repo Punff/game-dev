@@ -430,6 +430,7 @@ func _test_game_smoke() -> void:
 func _test_map_events() -> void:
 	PlayerManager.clear()
 	PlayerManager.join(Settings.DEVICE_KB_A)
+	MatchManager.next_map_seed = 4242   # a map with concrete in view for the quake
 	var scene: Node = load("res://scenes/game.tscn").instantiate()
 	get_tree().root.add_child(scene)
 	await get_tree().create_timer(4.2).timeout   # countdown
@@ -512,8 +513,8 @@ func _test_field_spares_holder() -> void:
 	PlayerManager.clear()
 
 
-## Aiming the field from your own debris floor doesn't launch you: the chunks
-## pulled up from under your feet used to lift you faster than a full charge.
+## Riding your debris up is allowed, but within the field's ride budget: it
+## used to ratchet into a launch of 1,000+ px/s, more than a full charge.
 func _test_no_field_launch() -> void:
 	PlayerManager.clear()
 	var id := PlayerManager.join(Settings.DEVICE_KB_A)
@@ -543,7 +544,7 @@ func _test_no_field_launch() -> void:
 		await get_tree().physics_frame
 		fastest = maxf(fastest, -p.velocity.y)
 	Input.action_release(act.call("up"))
-	check(fastest < Player.JUMP_VELOCITY, "aiming the field up from your debris floor doesn't launch you (%.0f px/s)" % fastest)
+	check(fastest < 950.0, "riding your debris stays within its budget (%.0f px/s)" % fastest)
 	for f in get_tree().get_nodes_in_group("fragments"):
 		f.free()
 	p.free()
