@@ -12,12 +12,27 @@ extends Node
 ## envelope), run to a take-off spot that isn't under it, jump, double-jump
 ## at the top and only drift over it once they're above its edge - the same
 ## policy the planner checks every row with. Charged jumps when only those
-## reach. They also blast and throw at anyone close. Each match uses a fixed
+## reach. They blast and throw the way people do (see SHOCK_RATE). Each match uses a fixed
 ## map seed (--seed-base=N, default 1000), so a run before and after a change
 ## plays the same maps: compare with tools/analytics/compare.py.
 
 const CAP := 150.0                 ## s of match time before the survivors are retired
 const SPEED := 1.0                 ## Engine.time_scale while a match runs (run with --fixed-fps 60 for speed)
+
+# ── Abilities, the way people use them ───────
+# From the live couch matches (169 matches, 143 player-minutes, 2026-10-22);
+# check a change with tools/analytics/abilities.py. People blast nearly as
+# soon as the cooldown lets them once someone is within 6 m, now and then
+# out to 9 m (the blast's reach), hardly ever further, and from the first
+# second of a match. 84% of blasts go sideways, the rest up or down about
+# evenly. The gravity field is a rare, short thing (0.2-0.9 s), used about
+# as often whoever is near, and mostly let go of without a throw.
+## Blasts per second while ready, by distance (m) to the nearest player.
+const SHOCK_RATE := [[3.0, 1.6], [6.0, 1.4], [9.0, 0.15], [15.0, 0.03], [INF, 0.013]]
+const SHOCK_STRAIGHT := 0.16       ## share of blasts aimed up/down (half each) rather than sideways
+const FIELD_RATE := 0.026          ## gravity fields per second while ready
+const FIELD_TIME := Vector2(0.2, 0.9)
+const FIELD_THROW := 0.1           ## share of fields that end in a throw at the nearest player
 
 var _rng := RandomNumberGenerator.new()
 var _seed_base := 1000
@@ -62,7 +77,7 @@ func _play(n: int, index: int) -> void:
 		await get_tree().physics_frame
 	var brains := {}
 	for p: Player in scene.players:
-		brains[p.player_id] = {"hold": {}, "charge_until": 0.0, "field_until": 0.0, "target": Rect2(), "charged": false, "stuck": 0.0, "best_y": INF}
+		brains[p.player_id] = {"hold": {}, "charge_until": 0.0, "field_until": 0.0, "field_throw": false, "target": Rect2(), "charged": false, "stuck": 0.0, "best_y": INF}
 	var t := 0.0
 	while MatchManager.state != MatchManager.State.ENDED:
 		await get_tree().physics_frame
@@ -261,21 +276,30 @@ func _landing(p: Player) -> Rect2:
 	return best
 
 
-## Pick on whoever is close (like players do, by the recorded rates).
+## Blast and throw like people do (see SHOCK_RATE).
 func _sabotage(p: Player, b: Dictionary, scene: Node, t: float, want: Dictionary) -> void:
+	var dt := get_physics_process_delta_time()
 	var foe := _nearest_foe(p, scene)
-	# Not in the opening scramble, and now and then rather than on cooldown:
-	# hits decide few real matches.
-	if t > 6.0 and foe and p.global_position.distance_to(foe.global_position) < 320.0:
-		var to := (foe.global_position - p.global_position).normalized()
-		if p.shock_cd <= 0.0 and _rng.randf() < 0.005:
+	if foe and p.shock_cd <= 0.0:
+		var m := p.global_position.distance_to(foe.global_position) / 50.0
+		var rate := 0.0
+		for band in SHOCK_RATE:
+			if m < band[0]:
+				rate = band[1]
+				break
+		if _rng.randf() < rate * dt:
 			want["shockwave"] = true
-			_aim(want, to)
-		elif p.gravity_cd <= 0.0 and _rng.randf() < 0.003:
-			b.field_until = t + _rng.randf_range(0.5, 1.2)
+			var to := (foe.global_position - p.global_position).normalized()
+			if _rng.randf() < SHOCK_STRAIGHT:
+				_aim(want, Vector2(0.0, -1.0 if _rng.randf() < 0.5 else 1.0))
+			else:
+				_aim(want, Vector2(signf(to.x) if to.x != 0.0 else 1.0, 0.0))
+	if p.gravity_cd <= 0.0 and t >= b.field_until and _rng.randf() < FIELD_RATE * dt:
+		b.field_until = t + _rng.randf_range(FIELD_TIME.x, FIELD_TIME.y)
+		b.field_throw = _rng.randf() < FIELD_THROW
 	if t < b.field_until:
 		want["gravity"] = true
-		if foe and b.field_until - t < 0.15:
+		if foe and b.field_throw and b.field_until - t < 0.15:
 			_aim(want, (foe.global_position - p.global_position).normalized())
 
 

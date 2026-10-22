@@ -8,9 +8,9 @@ exists today and what it depends on. Order is a suggestion, not a commitment.
 | | Done | Left |
 |---|---|---|
 | 1. Menus and UI | Menu shell and UI kit, Play / Profile / Friends / Leaderboard / Settings pages, login on start, Pause and Results as sleeves, Results board around you, How to play rework (station card, goals) | Lobby restyle with kit pieces |
-| 2. Online | Ping in the lobby; friends (requests, presence, join a friend's room, invites) | Deploy: migration `0003_friends.sql` + `wrangler deploy`. Push invites (no Durable Object yet: games poll) |
+| 2. Online | Ping in the lobby; friends (requests, presence, join a friend's room, invites), deployed | Push invites (no Durable Object yet: games poll) |
 | 3. Map generation | Biome events (slab, surge, wind, quake) with a setting; designer flags (`--seed`, `--start-height`, `--biome`, `--event`); map preview tool; unreachable-row fix | New blocks; more rules per biome; tuning from live data |
-| 4. Testing and AI | Planner-aware bots on fixed seeds; `compare.py`; `report.py --check`; replays from recorded controls (deterministic gameplay); CI runs tests, bots, replays | Bots that use abilities like people do (from recorded events) |
+| 4. Testing and AI | Planner-aware bots on fixed seeds; `compare.py`; `report.py --check`; replays from recorded controls (deterministic gameplay); CI runs tests, bots, replays; bots blast and use fields at people's rates (`abilities.py` checks it against live matches) | Bots that move like people: they bunch up (people spend most of a match 9 m+ apart), so they still blast about twice as often overall |
 | 5. Abilities | Analysis: `docs/abilities.md` | Decide on the candidates there with live data |
 
 The audit behind several fixes is in `docs/audit.md`.
