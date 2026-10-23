@@ -48,7 +48,6 @@ const BLOCKS := {
 	"speed_block": [Color("c99a3e"), Color("0e0c0b")],
 	"breakable_block": [Color("c9b993"), Color("6d6250")],
 	"conveyor_block": [Color("2f7473"), Color("9fd3cc")],
-	"push_zone": [Color("b5573a"), Color("ecc6a4")],
 	"vanishing_block": [Color("51657a"), Color("b8c8d8")],
 	"ice_block": [Color("a3bfc8"), Color("f2efe6")],
 	"moving_platform": [Color("4b6a8c"), Color("d8e4f0")],

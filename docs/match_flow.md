@@ -51,7 +51,7 @@ python3 tools/analytics/abilities.py --remote             # ability use by dista
 | Conveyor | 5% | 4% | 4% |
 | Bounce pad | 5% | 0% | 6% |
 | Vanishing | 4% | 1% | 2% |
-| Moving, ice, speed, reverse, push | 4% | 4% | 3% |
+| Moving, ice, speed, reverse, push (push since cut) | 4% | 4% | 3% |
 
 - Rows are always within a double jump: the gap is 190–235 px (`MapPlanner.BIOMES`), and only 4% of Rubble rows need a charge jump.
 - So you never need an ability to climb, and the only choice is which platform to use, which barely matters.

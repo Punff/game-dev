@@ -13,7 +13,6 @@ var BLOCK_TYPES := {
 	"speed": SpeedBlock,
 	"breakable": BreakableBlock,
 	"conveyor": ConveyorBlock,
-	"push": PushZone,
 	"vanishing": VanishingBlock,
 	"ice": IceBlock,
 	"moving": MovingPlatform,

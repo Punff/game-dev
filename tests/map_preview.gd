@@ -11,7 +11,7 @@ extends Node
 
 const BIOME_TINT := {"Rubble": Color("1b1f2b"), "Inferno": Color("2b1514"), "Void": Color("112022"), "Storm": Color("1d1d22")}
 const TYPE_KEY := {"static": "static_platform", "floor": "static_platform", "breakable": "breakable_block",
-	"bouncy": "bounce_pad", "speed": "speed_block", "conveyor": "conveyor_block", "push": "push_zone",
+	"bouncy": "bounce_pad", "speed": "speed_block", "conveyor": "conveyor_block",
 	"vanishing": "vanishing_block", "ice": "ice_block", "moving": "moving_platform", "reverse": "reverse_block"}
 
 

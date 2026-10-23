@@ -29,11 +29,11 @@ const BIOMES := [
 	{"name": "Rubble", "from": 0.0, "gap": Vector2(190, 235), "charge_rows": 0.04,
 		"weights": {"static": 26, "breakable": 48, "bouncy": 8, "moving": 8, "conveyor": 8, "vanishing": 10}},
 	{"name": "Inferno", "from": 9000.0, "gap": Vector2(195, 240), "charge_rows": 0.08,
-		"weights": {"static": 20, "breakable": 42, "bouncy": 8, "speed": 14, "reverse": 10, "push": 8, "moving": 6}},
+		"weights": {"static": 20, "breakable": 42, "bouncy": 8, "speed": 14, "reverse": 10, "moving": 6}},
 	{"name": "Void", "from": 21000.0, "gap": Vector2(200, 240), "charge_rows": 0.12,
 		"weights": {"static": 14, "breakable": 38, "ice": 16, "reverse": 10, "conveyor": 10, "vanishing": 12, "moving": 8}},
 	{"name": "Storm", "from": 36000.0, "gap": Vector2(205, 240), "charge_rows": 0.16,
-		"weights": {"static": 10, "breakable": 38, "moving": 14, "reverse": 8, "ice": 10, "speed": 12, "bouncy": 6, "vanishing": 10, "push": 8}},
+		"weights": {"static": 10, "breakable": 38, "moving": 14, "reverse": 8, "ice": 10, "speed": 12, "bouncy": 6, "vanishing": 10}},
 ]
 
 enum T { SCATTER, DEMOLITION, WIDE, CHOKE, DOOR, SAFE, CONTEST, PAIR }
@@ -270,7 +270,7 @@ func _assign_types(plats: Array, biome: Dictionary, _tmpl: int) -> void:
 		if p.h > Block.HEIGHT and t != "breakable":
 			t = "breakable" if rng.randf() < 0.7 else "static"
 		p.type = t
-		if t in ["bouncy", "speed", "reverse", "push", "ice", "vanishing", "conveyor"]:
+		if t in ["bouncy", "speed", "reverse", "ice", "vanishing", "conveyor"]:
 			p.h = Block.HEIGHT
 		if t in ["bouncy", "speed", "reverse"] and p.x1 - p.x0 > MAX_SPECIAL_WIDTH:
 			var c: float = (p.x0 + p.x1) * 0.5

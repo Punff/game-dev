@@ -61,7 +61,7 @@ var _card_goal: Label
 var _hints: Control
 var _tried_blocks := {}          # block ids stood on at the Blocks station
 var _goal_breaks := 0            # concrete broken at the Concrete station
-const BLOCK_KINDS := 8
+const BLOCK_KINDS := 7
 
 
 func _ready() -> void:
@@ -170,7 +170,6 @@ func _build_level() -> void:
 		[BouncePad, "Bounce Pad", "Launches you sky-high."],
 		[SpeedBlock, "Speed Strip", "Shoots you along the arrows."],
 		[ConveyorBlock, "Conveyor", "Drags you. A shockwave flips it."],
-		[PushZone, "Gust", "Wind that changes direction."],
 		[IceBlock, "Ice", "Slippery. Plan your stops."],
 		[VanishingBlock, "Ghost", "Vanishes after you land. Comes back."],
 		[MovingPlatform, "Mover", "Slides side to side."],
