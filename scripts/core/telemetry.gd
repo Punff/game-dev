@@ -159,7 +159,7 @@ func _on_started() -> void:
 		"lava_lead_chase": Lava.LEAD_CHASE, "lava_lead_max": Lava.LEAD_MAX,
 		"lava_start_below": g.LAVA_START_BELOW, "lava_grace": g.LAVA_GRACE,
 		"spawn_spacing": g.SPAWN_SPACING, "biome_scale": g.map_gen.biome_scale,
-		"catchup_rate": Player.CATCHUP_RATE, "lead_slab": MapEvents.LEAD_SLAB, "pad_launch": CatchupPad.LAUNCH_VELOCITY, "start_wall": MapPlanner.START_WALL.y,
+		"catchup_rate": Player.CATCHUP_RATE, "lead_slab": MapEvents.LEAD_SLAB, "slab_lock": MapEvents.SLAB_LOCK, "pad_launch": CatchupPad.LAUNCH_VELOCITY, "start_wall": MapPlanner.START_WALL.y,
 	}
 	_rec = {
 		"schema": SCHEMA,

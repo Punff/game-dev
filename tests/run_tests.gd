@@ -460,6 +460,19 @@ func _test_map_events() -> void:
 		await get_tree().physics_frame
 	check(get_tree().get_nodes_in_group("fragments").all(func(f): return not f.concrete), "map events: the slab shatters on the ball it lands on")
 
+	ev.start("slab")
+	while ev._t < -MapEvents.SLAB_LOCK + 0.05:
+		await get_tree().physics_frame
+	var ball: Player = scene.players[0]
+	var aimed := ev._aim_x
+	ball.global_position.x += 300.0   # gets out of the way once it's stopped following
+	while ev._kind != "":
+		await get_tree().physics_frame
+	var slabs := get_tree().get_nodes_in_group("fragments").filter(func(f): return f.concrete)
+	check(slabs.size() == 1 and absf(slabs[0].global_position.x - aimed) < 1.0, "map events: the slab comes down where it stopped following")
+	for f in slabs:
+		f.queue_free()
+
 	ev.start("surge")
 	await get_tree().create_timer(MapEvents.WARN + 0.2).timeout
 	check(scene.lava.surge > 0.0, "map events: the lava surges")
@@ -486,8 +499,15 @@ func _test_map_events() -> void:
 	ev._next = 1e9          # nothing due for ages...
 	ev._last = -INF
 	ev._quiet = MapEvents.QUIET   # ...but nothing has broken in a while
-	for i in 2:   # (the signal comes before the game's own step)
-		await get_tree().physics_frame
+	scene.set_physics_process(false)   # (driven by hand from here)
+	ev.tick(1.0 / 60.0, MapEvents.FIRST_AFTER - 5.0)
+	check(ev._kind == "", "map events: a quiet start doesn't bring the first event before FIRST_AFTER")
+	ev._next = 1e9
+	ev.steady = true
+	ev.tick(1.0 / 60.0, MapEvents.FIRST_AFTER + 1.0)
+	check(ev._kind == "", "map events: the daily climb's timetable stays put")
+	ev.steady = false
+	ev.tick(1.0 / 60.0, MapEvents.FIRST_AFTER + 1.0)
 	check(ev._kind != "", "map events: a quiet stretch brings the next event forward")
 	ev.stop()
 	scene.queue_free()

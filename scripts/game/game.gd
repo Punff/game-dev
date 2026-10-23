@@ -105,6 +105,7 @@ func _ready() -> void:
 		PlayerManager.join(Settings.DEVICE_KB_A)   # launched directly (editor / tests)
 	_spawn_players()
 	if is_daily():
+		events.steady = true
 		_load_ghosts()
 
 	hud = Hud.new()

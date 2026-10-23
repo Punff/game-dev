@@ -24,7 +24,8 @@ extends Node
 const FIRST_AFTER := 25.0         ## s into the match
 const GAP := Vector2(22.0, 38.0)  ## s between events
 ## A stretch where nobody breaks any concrete brings the next event
-## forward (but never closer than MIN_GAP after the last one).
+## forward (but never closer than MIN_GAP after the last one, nor before
+## FIRST_AFTER: alone at the start you often break nothing for 12 s).
 const QUIET := 12.0
 const MIN_GAP := 14.0
 const WARN := 1.2                 ## s of warning before it hits
@@ -46,6 +47,10 @@ const SLAB_SIZE := Vector2(200, 60)
 const SLAB_DROP := 480.0          ## px above its target it appears (about the top of the view)
 const SLAB_SPEED := 720.0
 const SLAB_SETTLE := 260.0        ## once it's slowed below this (px/s) it floats, a stepping stone
+## s before it drops, the mark stops following its target: it comes down
+## where they were then. Aimed at the last moment (and ahead of them), it
+## hit 71% of the time in solo runs: not much of a dodge.
+const SLAB_LOCK := 0.3
 ## Multiplayer catch-up: whoever is out in front by more than this (px)
 ## for LEAD_HOLD s gets a slab of their own, at most every LEAD_SLAB_GAP s.
 ## Kept for real runaways: replayed over the live matches, 15 m / 4 s / 20 s
@@ -61,6 +66,9 @@ const QUAKE_AREA := Vector2(1280, 720)
 var game: Node                     # game.gd
 ## Every event is this kind (designer runs: --event=quake).
 var only := ""
+## Same timetable every run (the daily climb, so ghosts race the same
+## events): a quiet stretch doesn't bring the next one forward.
+var steady := false
 ## An online guest: told about events, doesn't decide them.
 var remote := false
 var _rng := RandomNumberGenerator.new()
@@ -69,6 +77,7 @@ var _kind := ""                    # event under way, "" when none
 var _t := 0.0                      # time into it (negative while warning)
 var _wind_dir := 1.0
 var _target: Player
+var _aim_x := 0.0                  # where the slab comes down
 var _last := -INF                  # match time of the last event
 var _quiet := 0.0                  # s since any concrete broke
 var _ahead := 0.0                  # s the front player has led by LEAD_SLAB
@@ -93,8 +102,8 @@ func tick(delta: float, match_time: float) -> void:
 		return
 	if remote or not Settings.get_value("map_events"):
 		return
-	if _quiet >= QUIET:
-		_next = minf(_next, maxf(_last + MIN_GAP, match_time))
+	if _quiet >= QUIET and not steady:
+		_next = minf(_next, maxf(maxf(_last + MIN_GAP, FIRST_AFTER), match_time))
 	_ahead = _ahead + delta if _front_lead() > LEAD_SLAB else 0.0
 	if _ahead >= LEAD_HOLD and match_time - _last_lead_slab >= LEAD_SLAB_GAP and only == "":
 		start("slab", "lead")
@@ -129,6 +138,7 @@ func start(kind: String, why := "") -> void:
 			if _target == null:
 				_kind = ""
 				return
+			_aim_x = _target.global_position.x
 			text = "%s, look up!" % _target.info.display_name if game.players.size() > 1 and _target.info else text
 		"wind":
 			_wind_dir = 1.0 if _rng.randf() < 0.5 else -1.0
@@ -166,6 +176,8 @@ func _run(delta: float) -> void:
 				if _t >= 0.0:
 					_kind = ""
 			elif _t < 0.0:
+				if _t < -SLAB_LOCK and is_instance_valid(_target):
+					_aim_x = _target.global_position.x
 				_mark_slab()
 			elif hit:
 				_drop_slab()
@@ -224,13 +236,14 @@ func _front_lead() -> float:
 
 
 ## Where it'll come down: a ring over the player, and a mark on whatever
-## they'd land on below.
+## they'd land on below. Both stop following them SLAB_LOCK s before it drops.
 func _mark_slab() -> void:
 	if not is_instance_valid(_target) or _target.is_dead:
 		return
 	if int(-_t * 60.0) % 12 == 0:
-		Fx.ring(_target.global_position + Vector2(0, -40), Palette.RUST, 34.0, 4.0, 0.25)
-		var ground := _ground_below(_target.global_position)
+		var at := Vector2(_aim_x, _target.global_position.y)
+		Fx.ring(at + Vector2(0, -40), Palette.RUST, 34.0, 4.0, 0.25)
+		var ground := _ground_below(at)
 		if ground != Vector2.INF:
 			Fx.ring(ground, Palette.RUST, SLAB_SIZE.x * 0.5, 5.0, 0.3)
 
@@ -248,7 +261,7 @@ func _ground_below(p: Vector2) -> Vector2:
 func _drop_slab() -> void:
 	if not is_instance_valid(_target):
 		return
-	var x := _target.global_position.x + _target.velocity.x * 0.25   # a little ahead of where they're going
+	var x := _aim_x
 	var y := _target.global_position.y - SLAB_DROP
 	var r := Rect2(-SLAB_SIZE * 0.5, SLAB_SIZE)
 	var poly := PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)])
