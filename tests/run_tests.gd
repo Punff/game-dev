@@ -19,6 +19,7 @@ func _ready() -> void:
 	await _test_jump_physics_matches_envelope()
 	await _test_game_smoke()
 	await _test_vanishing_waits()
+	await _test_speed_strip_long_jump()
 	await _test_field_spares_holder()
 	_test_lava_pressure()
 	await _test_no_field_launch()
@@ -783,6 +784,50 @@ func _test_wind_pushes() -> void:
 	Player.wind = 0.0
 	p.free()
 	PlayerManager.clear()
+
+
+## A speed strip's boost lasts into the jump off it: a long jump.
+func _test_speed_strip_long_jump() -> void:
+	var steel: float = await _jump_distance(StaticPlatform)
+	var strip: float = await _jump_distance(SpeedBlock)
+	print("Long jump: steel %.0f px, speed strip %.0f px" % [steel, strip])
+	check(strip > steel + 150.0, "jumping off a speed strip goes further (%.0f px vs %.0f from steel)" % [strip, steel])
+
+
+## How far (px) a ball holding right travels in the air, from jumping off
+## `type` until it's back down to take-off height.
+func _jump_distance(type) -> float:
+	PlayerManager.clear()
+	var id := PlayerManager.join(Settings.DEVICE_KB_A)
+	var world := Node2D.new()
+	get_tree().root.add_child(world)
+	var b: Block = type.new()
+	b.set_block_size(Vector2(400, Block.HEIGHT))
+	world.add_child(b)
+	var p := Player.new()
+	p.setup(PlayerManager.players[id])
+	p.controls_enabled = true
+	world.add_child(p)
+	p.global_position = Vector2(-150, -Block.HEIGHT * 0.5 - Player.RADIUS)
+	var right := PlayerManager.action(id, "right")
+	var jump := PlayerManager.action(id, "jump")
+	Input.action_press(right)
+	var from := 0.0
+	var dist := 0.0
+	for frame in 240:
+		await get_tree().physics_frame
+		if from == 0.0 and p.global_position.x > 120.0:
+			Input.action_press(jump)
+			from = p.global_position.x
+		elif from != 0.0 and p.velocity.y > 0.0 and p.global_position.y > -Block.HEIGHT * 0.5 - Player.RADIUS:
+			dist = p.global_position.x - from
+			break
+	Input.action_release(right)
+	Input.action_release(jump)
+	world.free()
+	PlayerManager.clear()
+	await get_tree().process_frame
+	return dist
 
 
 ## A vanishing block coming back doesn't close around a ball inside it.

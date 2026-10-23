@@ -168,7 +168,7 @@ func _build_level() -> void:
 	var x := 6350.0
 	for entry in [
 		[BouncePad, "Bounce Pad", "Launches you sky-high."],
-		[SpeedBlock, "Speed Strip", "Shoots you along the arrows."],
+		[SpeedBlock, "Speed Strip", "Shoots you along the arrows. Jump off the end: long jump."],
 		[ConveyorBlock, "Conveyor", "Drags you. A shockwave flips it."],
 		[IceBlock, "Ice", "Slippery. Plan your stops."],
 		[VanishingBlock, "Ghost", "Vanishes after you land. Comes back."],

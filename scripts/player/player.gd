@@ -106,6 +106,11 @@ var surface_push := 0.0
 var surface_ice := false
 var _push_applied := 0.0
 var _ice_applied := false
+# Speed a block sends you off with (SpeedBlock): px/s of push that fades
+# out over _carry_full s in the air, gone when you land.
+var _carry := 0.0
+var _carry_time := 0.0
+var _carry_full := 1.0
 
 var _coyote := 0.0
 var _jump_buffer := 0.0
@@ -357,6 +362,11 @@ func _handle_horizontal(delta: float, on_floor: bool) -> void:
 	if dir != 0.0:
 		facing = signf(dir)
 	var target := dir * SPEED + _push_applied + wind * (0.33 if on_floor else 1.0)
+	if on_floor:
+		_carry_time = 0.0
+	elif _carry_time > 0.0:
+		target += _carry * _carry_time / _carry_full
+		_carry_time = maxf(_carry_time - delta, 0.0)
 	var rate: float
 	if _ice_applied:
 		rate = ICE_ACCEL if dir != 0.0 else ICE_FRICTION
@@ -776,6 +786,14 @@ func _end_through() -> void:
 	_through.clear()
 
 
+## Sends you off with `push` px/s of extra sideways speed, fading over
+## `time` s in the air (a speed strip's long jump).
+func carry(push: float, time: float) -> void:
+	_carry = push
+	_carry_time = time
+	_carry_full = maxf(time, 0.01)
+
+
 func reverse_controls(duration: float) -> void:
 	_reverse_timer = maxf(_reverse_timer, duration)
 
@@ -979,7 +997,8 @@ func _reconcile(ack: int, pos: Vector2, vel: Vector2) -> void:
 func _capture() -> Array:
 	return [global_position, velocity, is_on_floor(), jumps_left, _coyote, _jump_buffer, _was_on_floor,
 		_reverse_timer, _charging, _charge, gravity_cd, shock_cd, _field_time, _field_active,
-		_rocket_time, _last_aim, _last_aim_time, facing, _jump_aim_off, _up_age, _blast, _blast_time]
+		_rocket_time, _last_aim, _last_aim_time, facing, _jump_aim_off, _up_age, _blast, _blast_time,
+		_carry, _carry_time, _carry_full]
 
 
 func _restore(st: Array) -> void:
@@ -1009,6 +1028,9 @@ func _restore(st: Array) -> void:
 	_up_age = st[19]
 	_blast = st[20]
 	_blast_time = st[21]
+	_carry = st[22]
+	_carry_time = st[23]
+	_carry_full = st[24]
 
 
 func _snap_to(pos: Vector2, vel: Vector2) -> void:

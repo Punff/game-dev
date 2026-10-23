@@ -1,9 +1,14 @@
 class_name SpeedBlock
 extends Block
 
-## Treadmill that boosts you along its arrows.
+## Treadmill that shoots you along its arrows, and keeps shooting you
+## after you leave it: jump off the end for a long jump. (You stand on a
+## block for about 0.4 s a landing, so a push that only works underfoot
+## barely registered.)
 
 const BOOST := 380.0
+## s the boost lasts in the air after you leave it, fading out.
+const CARRY_TIME := 0.8
 
 var direction := 1.0
 
@@ -14,12 +19,19 @@ func _init() -> void:
 	animated = true
 
 
-func on_player_land(_player: Player) -> void:
+func on_player_land(player: Player) -> void:
 	Sfx.play("speed", -6.0)
+	# Up to strip speed at once, not after a ramp you'd never finish.
+	player.velocity.x = direction * maxf(player.velocity.x * direction, BOOST)
 
 
 func on_player_stand(player: Player, _delta: float) -> void:
 	player.surface_push += direction * BOOST
+
+
+func on_player_leave(player: Player) -> void:
+	if not player.is_on_floor():   # (not when you walk onto the next block)
+		player.carry(direction * BOOST, CARRY_TIME)
 
 
 func _draw_icon() -> void:
