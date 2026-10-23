@@ -1,9 +1,14 @@
 class_name ConveyorBlock
 extends Block
 
-## Belt that slowly drags you along. A shockwave flips its direction.
+## Belt that slowly drags you along. A shockwave flips its direction, and
+## the jolt throws whoever's on it (but the blaster) off the new way: the
+## belt is a trap to spring on someone, from anywhere in reach of it.
 
 const PUSH := 150.0
+## The jolt, as a blast (it merges with the shockwave itself if that hit
+## them too): sideways along the new direction, and up off the belt.
+const FLIP_KICK := Vector2(700.0, -360.0)
 
 var direction := 1.0
 
@@ -20,7 +25,15 @@ func on_player_stand(player: Player, _delta: float) -> void:
 
 func on_shockwave(_dir: Vector2, _origin: Vector2, by: Player = null) -> void:
 	direction = -direction
-	Telemetry.ev("conveyor_flip", by)
+	var kicked := 0
+	for p: Player in get_tree().get_nodes_in_group("player"):
+		if p != by and not p.is_dead and self in p._floor_blocks:
+			p.hit_by_shockwave(Vector2(direction * FLIP_KICK.x, FLIP_KICK.y), by)
+			kicked += 1
+	if kicked > 0:
+		Fx.speed_lines(global_position, Vector2(direction, 0), Palette.BLOCKS[block_id][1])
+		Sfx.play("hit", -2.0)
+	Telemetry.ev("conveyor_flip", by, {"kicked": kicked})
 	net_changed()
 
 

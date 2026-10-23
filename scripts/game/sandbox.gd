@@ -169,7 +169,7 @@ func _build_level() -> void:
 	for entry in [
 		[BouncePad, "Bounce Pad", "Launches you sky-high."],
 		[SpeedBlock, "Speed Strip", "Shoots you along the arrows. Jump off the end: long jump."],
-		[ConveyorBlock, "Conveyor", "Drags you. A shockwave flips it."],
+		[ConveyorBlock, "Conveyor", "Drags you. Blast it: it flips and throws off whoever's on it."],
 		[IceBlock, "Ice", "Slippery. Plan your stops."],
 		[VanishingBlock, "Ghost", "Vanishes after you land. Comes back."],
 		[MovingPlatform, "Mover", "Slides side to side."],

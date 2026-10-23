@@ -52,7 +52,7 @@ Events:
 | `chain` | `n` breaks within 0.45 s |
 | `death` | `cause` (`lava` / `side` / `quit`), `killer`, `how` |
 | `stall` | 8 s+ without beating your best height by 1 m: `dur`, `best_m`, `block` stood on |
-| `bounce`, `reversed`, `vanish`, `conveyor_flip` | Block effects triggered |
+| `bounce`, `reversed`, `vanish`, `conveyor_flip` | Block effects triggered; `conveyor_flip` has `kicked`: players its jolt threw off |
 
 A death counts as a knock-out for the last player who hit the victim within
 5 s (2 s for a jump shove). Chunks carry `Fragment.credit`: whoever threw

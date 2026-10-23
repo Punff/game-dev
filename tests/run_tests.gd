@@ -20,6 +20,7 @@ func _ready() -> void:
 	await _test_game_smoke()
 	await _test_vanishing_waits()
 	await _test_speed_strip_long_jump()
+	await _test_conveyor_kick()
 	await _test_field_spares_holder()
 	_test_lava_pressure()
 	await _test_no_field_launch()
@@ -828,6 +829,33 @@ func _jump_distance(type) -> float:
 	PlayerManager.clear()
 	await get_tree().process_frame
 	return dist
+
+
+## Blasting a conveyor flips it and throws whoever's on it off the new
+## way, but not the one who blasted it.
+func _test_conveyor_kick() -> void:
+	var world := Node2D.new()
+	get_tree().root.add_child(world)
+	var belt := ConveyorBlock.new()
+	belt.set_block_size(Vector2(500, Block.HEIGHT))
+	world.add_child(belt)
+	PlayerManager.clear()
+	var balls: Array[Player] = []
+	for x in [-150.0, 150.0]:
+		var p := Player.new()
+		p.setup(PlayerManager.players[PlayerManager.join(Settings.DEVICE_KB_A if x < 0.0 else Settings.DEVICE_KB_B)])
+		world.add_child(p)
+		p.global_position = Vector2(x, -Block.HEIGHT * 0.5 - Player.RADIUS)
+		balls.append(p)
+	for i in 10:
+		await get_tree().physics_frame
+	var was := belt.direction
+	belt.on_shockwave(Vector2.DOWN, balls[0].global_position, balls[0])
+	check(belt.direction == -was, "conveyor: a blast flips it")
+	check(balls[1].velocity.x * belt.direction > 500.0 and balls[1].velocity.y < 0.0, "conveyor: the flip throws the ball on it off the new way (%s)" % balls[1].velocity)
+	check(absf(balls[0].velocity.x) < 300.0, "conveyor: the blaster isn't thrown by their own flip")
+	world.free()
+	PlayerManager.clear()
 
 
 ## A vanishing block coming back doesn't close around a ball inside it.
