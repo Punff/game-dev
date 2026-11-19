@@ -99,6 +99,41 @@ with `report.py --remote --since 2026-10-23`:
 - **match length** should go up;
 - **catchup** events, and `map_event` with `why: "lead"`, show how often each fires.
 
+## The party (2026-11-10): what the changes did
+
+**Data:** 96 couch matches on v1.1.1, 74 of them with 4 players, 276
+player-minutes. October's numbers (173 matches, mostly 2 players) for comparison.
+
+**Reproduce:** `python3 tools/analytics/report.py --remote --all-builds --since 2026-11-10`
+and `python3 tools/analytics/abilities.py --remote`.
+
+### The opening is fixed
+- Matches last a median 44 s, up from 14 s. The first death comes at 18 s, up from 9 s.
+- 25% of blasts come in the first 5 s, down from 52%. 14% of deaths never got above 10 m, down from 36%.
+- Blasts dropped to 2.6 per player-minute (from 5.2). Hit rate is still 80%.
+
+### The leader still usually wins
+- The player leading at 20 s wins 67% of matches (54% at 10 s). With 4 players, chance would be 27%.
+- The lead does change hands more: 3 times per match (median), up from 1.
+- Leader to runner-up at 20 s: 13 m median, 22 m in the top quarter. That's still past every ability's 9 m reach.
+- **Lead slab:** fired 93 times, about once per match. In the 6 s after it, the lead shrank in 41 of 79 cases and grew in 22. It hit the leader in 29.
+- **Catch-up pads:** 165 launches, about +17 m in 5 s. Only 8% of launches put the player in the lead; the winner used one in 21 of 58 matches that had pads.
+- KOs come from above: 2 s before the knock-out, the killer was higher than the victim 67 times, lower 39, level 24.
+
+### Being knocked out is the new problem
+- With 4 players, 24% of all player-time is spent dead, watching.
+- The first player out waits a median 28 s (up to 45 s) for the match to end, most of it.
+- In October's 2-player matches, matches ended as soon as one player was out.
+
+### Smaller things
+- Concrete is 26% of the map but 4% of standing time: people still avoid it.
+- 85% of gravity fields catch no chunks. Winners use the field 1.8x and the charge jump 2.0x as often as everyone else.
+
+### Ideas from this (not built; pick one at a time)
+- **Something to do once you're out.** This is the biggest win for a 4-player couch. For example, the knocked-out come back as a ghost that can blast once in a while, or drop the slab on whoever's in front. That keeps them in the sabotage.
+- **Reach the runaway.** The gap at 20 s is about 13 m against 9 m of reach. Ideas: a slab that comes sooner (the 15 m threshold is above the median gap), or pads that throw harder the further behind you are.
+- **Matches against bots:** Play → Bots, or + Bot in the couch lobby. Once the last person is out, the match ends rather than leaving them to watch the bots.
+
 ## Later (ideas, not built)
 
 - **Meeting points.** Map sections that alternate fast climbing with spots that funnel everyone together. The CONTEST and PAIR rows already exist; first measure whether clashes actually happen there.
