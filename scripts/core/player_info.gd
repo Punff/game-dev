@@ -4,7 +4,8 @@ extends RefCounted
 ## Lobby/match data for one joined player.
 
 var player_id := 1
-var device_id := -1          ## Settings.DEVICE_KB_A / DEVICE_KB_B, or a joypad id
+var device_id := -1          ## Settings.DEVICE_KB_A / DEVICE_KB_B, or a joypad id (bots: PlayerManager.BOT_DEVICE)
+var is_bot := false          ## played by a BotBrain
 var color_index := 0
 var is_ready := false
 var peer_id := 0             ## online: the peer that controls this player (0 offline)
@@ -22,11 +23,11 @@ var color: Color:
 
 ## Online: the player's name (account or Ball-XXXX); offline just "P1".
 var display_name: String:
-	get: return nick if nick != "" else "P%d" % player_id
+	get: return nick if nick != "" else ("BOT%d" if is_bot else "P%d") % player_id
 
 
 func is_keyboard() -> bool:
-	return device_id < 0
+	return device_id < 0 and not is_bot
 
 
 ## Controlled from this machine (always true offline).
@@ -37,6 +38,8 @@ func is_local() -> bool:
 func device_label() -> String:
 	if not is_local():
 		return "Online"
+	if is_bot:
+		return "Bot"
 	match device_id:
 		Settings.DEVICE_ANY: return "This computer"
 		Settings.DEVICE_KB_A: return "Keyboard Left"

@@ -18,6 +18,7 @@ func _ready() -> void:
 	await _test_field_holds_player()
 	await _test_jump_physics_matches_envelope()
 	await _test_game_smoke()
+	await _test_vs_bots()
 	await _test_vanishing_waits()
 	await _test_speed_strip_long_jump()
 	await _test_conveyor_kick()
@@ -434,6 +435,36 @@ func _test_game_smoke() -> void:
 	await get_tree().create_timer(scene.END_DELAY + 0.5).timeout
 	check(MatchManager.state == MatchManager.State.ENDED and scene.end_screen.visible, "results come up after the end delay")
 	check(not scene.pause_menu.visible, "the pause menu isn't open under the results")
+	get_tree().paused = false
+	scene.queue_free()
+	await get_tree().process_frame
+	PlayerManager.clear()
+
+
+## Against bots: they climb on their own, and once the only person is out
+## the match ends instead of leaving them to watch the bots.
+func _test_vs_bots() -> void:
+	PlayerManager.clear()
+	PlayerManager.join(Settings.DEVICE_KB_A)
+	PlayerManager.add_bot()
+	PlayerManager.add_bot()
+	check(PlayerManager.players[2].is_bot and PlayerManager.players[2].is_ready, "vs bots: a bot joins ready")
+	check(not InputMap.has_action(PlayerManager.action(2, "jump")), "vs bots: a bot has no key bindings")
+	MatchManager.state = MatchManager.State.COUNTDOWN
+	MatchManager.next_map_seed = 1000
+	var scene: Node = load("res://scenes/game.tscn").instantiate()
+	get_tree().root.add_child(scene)
+	await get_tree().create_timer(4.2).timeout
+	scene.lava.surface_y = 60000.0   # the person stands still; keep them alive while the bots climb
+	await get_tree().create_timer(5.0).timeout
+	var bots: Array = scene.players.filter(func(p): return p.info.is_bot)
+	check(bots.all(func(p): return p.max_height_px > 150.0), "vs bots: the bots climb by themselves")
+	check(scene.players[0].max_height_px < 10.0, "vs bots: the person's ball only moves when they do")
+	scene.players[0].die()
+	await get_tree().process_frame
+	check(scene._ending, "vs bots: the match ends when the last person is out")
+	await get_tree().create_timer(scene.END_DELAY + 0.5).timeout
+	check(MatchManager.last_results.get("winner", -1) in [2, 3], "vs bots: a bot still climbing wins")
 	get_tree().paused = false
 	scene.queue_free()
 	await get_tree().process_frame

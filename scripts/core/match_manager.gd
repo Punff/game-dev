@@ -58,7 +58,7 @@ func to_lobby() -> void:
 	daily = ""
 	state = State.LOBBY
 	for info in PlayerManager.players.values():
-		info.is_ready = false
+		info.is_ready = info.is_bot
 	goto(LOBBY)
 
 

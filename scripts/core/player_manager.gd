@@ -4,6 +4,8 @@ extends Node
 ## (p1_jump, p2_left, ...), rebuilt from Settings whenever bindings change.
 
 const MAX_PLAYERS := 4
+## Bots' device ids: BOT_DEVICE - n, clear of the keyboards, DEVICE_ANY and online guests.
+const BOT_DEVICE := -100
 
 var players: Dictionary = {}   # player_id -> PlayerInfo
 
@@ -14,7 +16,7 @@ func _ready() -> void:
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 
 
-func join(device_id: int) -> int:
+func join(device_id: int, bot := false) -> int:
 	var existing := find_by_device(device_id)
 	if existing:
 		return existing.player_id
@@ -23,6 +25,8 @@ func join(device_id: int) -> int:
 	var info := PlayerInfo.new()
 	info.player_id = _next_free_id()
 	info.device_id = device_id
+	info.is_bot = bot
+	info.is_ready = bot
 	# Player 1 gets their Profile colour if it's free.
 	var preferred := int(Settings.get_value("ball_color")) if info.player_id == 1 else info.player_id - 1
 	info.color_index = _first_free_color(preferred)
@@ -30,6 +34,18 @@ func join(device_id: int) -> int:
 	_build_actions(info)
 	SignalBus.player_joined.emit(info.player_id, device_id)
 	return info.player_id
+
+
+## A computer player (BotBrain): always ready, no controls of its own.
+func add_bot() -> int:
+	var n := 0
+	while find_by_device(BOT_DEVICE - n):
+		n += 1
+	return join(BOT_DEVICE - n, true)
+
+
+func bots() -> Array:
+	return players.values().filter(func(p): return p.is_bot)
 
 
 func leave(player_id: int) -> void:
@@ -101,6 +117,8 @@ func rebuild_all_actions() -> void:
 
 
 func _build_actions(info: PlayerInfo) -> void:
+	if info.is_bot:
+		return
 	var profile := Settings.profile_for_device(info.device_id)
 	for a in Settings.ACTIONS:
 		var name := action(info.player_id, a)
@@ -165,5 +183,5 @@ func rumble(player_id: int, weak: float, strong: float, duration: float) -> void
 	if not Settings.get_value("rumble"):
 		return
 	var info: PlayerInfo = players.get(player_id)
-	if info and not info.is_keyboard():
+	if info and not info.is_keyboard() and not info.is_bot:
 		Input.start_joy_vibration(info.device_id, weak, strong, duration)

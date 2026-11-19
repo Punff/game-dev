@@ -110,7 +110,8 @@ func show_player(info: PlayerInfo) -> void:
 		_state.text = "READY!" if info.is_ready else ("Not ready" if online else "Press Jump to ready")
 		_state.add_theme_color_override("font_color", Palette.GOOD if info.is_ready else Palette.TEXT_DIM)
 		var none: Array[String] = []
-		_set_controls(_control_summary(info) if info.is_local() else none)
+		var bot: Array[String] = ["Climbs, blasts and throws", "like people do"]
+		_set_controls(bot if info.is_bot else _control_summary(info) if info.is_local() else none)
 	_preview.queue_redraw()
 
 

@@ -43,6 +43,8 @@ var _catch_up := 0          # extra frames to use up, one per step, to shorten t
 ## replay feeds such pairs back in instead of the keyboard or pad.
 var recorded := PackedInt32Array()
 var replay := PackedInt32Array()
+## A computer player sets the controls instead of the keyboard or pad.
+var brain: BotBrain
 var _last_packed := -1
 var _replay_at := 0
 
@@ -65,7 +67,9 @@ func update() -> void:
 	if not replay.is_empty():
 		_replay_step()
 		return
-	if not suspended:
+	if brain:
+		brain.drive(self)
+	elif not suspended:
 		for i in Settings.ACTIONS.size():
 			if Input.is_action_pressed(PlayerManager.action(player_id, Settings.ACTIONS[i])):
 				buttons |= 1 << i

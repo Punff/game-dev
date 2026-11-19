@@ -5,9 +5,10 @@ extends UiPage
 ## mode is a new entry in MODES and a case in _go().
 
 const MODES := [
-	{"id": "solo", "title": "Solo", "sub": "Straight in: you and the rising slag. Climbs count for the board.", "balls": 1},
-	{"id": "local", "title": "Local", "sub": "2-4 players on one screen: keyboard halves and pads.", "balls": 3},
-	{"id": "online", "title": "Online", "sub": "Make a room, share the code, play anywhere.", "balls": 2},
+	{"id": "solo", "title": "Solo", "sub": "Straight in: you and the rising slag. Counts for the board.", "balls": 1},
+	{"id": "local", "title": "Local", "sub": "2-4 players on one screen.", "balls": 3},
+	{"id": "bots", "title": "Bots", "sub": "You against computer players.", "balls": 2},
+	{"id": "online", "title": "Online", "sub": "Make a room, share the code.", "balls": 2},
 ]
 
 var _last_device := Settings.DEVICE_KB_A   # whoever picked Solo plays it
@@ -19,19 +20,19 @@ func _init() -> void:
 
 func build() -> void:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 16)
+	row.add_theme_constant_override("separation", 10)
 	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	add_child(row)
 	var cards: Array = []
 	for m in MODES:
 		var art := BallPortrait.new()
-		art.radius = 30.0 if m.balls < 3 else 22.0
+		art.radius = 26.0 if m.balls < 3 else 19.0
 		art.waves = m.id == "online"
 		var looks: Array = [BallPortrait.my_look()]
 		for i in m.balls - 1:
 			looks.append(BallPortrait.look_for_color(Palette.PLAYER_COLORS[(i + 1) * 3 % Palette.PLAYER_COLORS.size()]))
 		art.looks = looks
-		var card := UiCard.new(m.title, m.sub, art, Vector2(150, 230))
+		var card := UiCard.new(m.title, m.sub, art, Vector2(120, 230))
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		card.pressed.connect(_go.bind(m.id))
 		row.add_child(card)
@@ -87,6 +88,12 @@ func _go(id: String) -> void:
 			MatchManager.daily = Daily.today() if id == "daily" else ""
 			MatchManager.start_match()
 		"local":
+			MatchManager.to_lobby()
+		"bots":
+			# The lobby, with whoever picked it and a bot already in.
+			PlayerManager.clear()
+			PlayerManager.join(_last_device)
+			PlayerManager.add_bot()
 			MatchManager.to_lobby()
 		"online":
 			open_online()

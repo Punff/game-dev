@@ -1,8 +1,8 @@
 extends Control
 
 ## Join screen. Each keyboard half and every gamepad can join as its own
-## player, pick a colour, and ready up. When everyone is ready a short
-## countdown starts the match.
+## player, pick a colour, and ready up; bots fill seats nobody wants. When
+## everyone is ready a short countdown starts the match.
 
 const AUTO_START := 3.0
 
@@ -44,8 +44,8 @@ func _ready() -> void:
 	var kb := func(act): return UiTheme.key("kb_b", act)
 	var help := VBoxContainer.new()
 	help.add_theme_constant_override("separation", 6)
-	help.add_child(UiTheme.hint("Jump to join, again to ready:  %s [Space]   %s   pad [A]" % [ka.call("jump"), kb.call("jump")], 17))
-	help.add_child(UiTheme.hint("%s %s / %s %s colour     %s / %s back out     [Enter] start     [Esc] menu" % [
+	help.add_child(UiTheme.hint("Jump to join, again to ready:  %s [Space]   %s   pad [A]     [B] / pad [X] add a bot" % [ka.call("jump"), kb.call("jump")], 17))
+	help.add_child(UiTheme.hint("%s %s / %s %s colour     %s / %s back out     [Backspace] / pad [Back] remove a bot     [Enter] start" % [
 		ka.call("left"), ka.call("right"), kb.call("left"), kb.call("right"), ka.call("down"), kb.call("down")], 17))
 	col.add_child(help)
 
@@ -53,7 +53,7 @@ func _ready() -> void:
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", 16)
 	col.add_child(buttons)
-	for entry in [["Back", _back], ["Start", _try_start]]:
+	for entry in [["Back", _back], ["+ Bot", add_bot], ["- Bot", remove_bot], ["Start", _try_start]]:
 		var b := UiTheme.button(entry[0], 180)
 		b.focus_mode = Control.FOCUS_NONE   # mouse only: A/Enter are join keys here
 		b.pressed.connect(entry[1])
@@ -68,7 +68,7 @@ func _refresh() -> void:
 	var infos := PlayerManager.sorted_players()
 	for i in _slots.size():
 		_slots[i].show_player(infos[i] if i < infos.size() else null)
-	var all_ready := not infos.is_empty() and infos.all(func(p): return p.is_ready)
+	var all_ready := _all_ready()
 	if all_ready and _countdown < 0.0:
 		_countdown = AUTO_START
 	elif not all_ready:
@@ -78,8 +78,8 @@ func _refresh() -> void:
 
 func _update_status() -> void:
 	var infos := PlayerManager.sorted_players()
-	if infos.is_empty():
-		_status.text = "Press Jump to join"
+	if infos.all(func(p): return p.is_bot):
+		_status.text = "Press Jump to join" if infos.is_empty() else "Press Jump to join the bots"
 		_status.add_theme_color_override("font_color", Palette.TEXT)
 	elif _countdown >= 0.0:
 		_status.text = "Starting in %d..." % ceili(_countdown)
@@ -103,8 +103,8 @@ func _process(delta: float) -> void:
 
 func _try_start() -> void:
 	var infos := PlayerManager.sorted_players()
-	if infos.is_empty():
-		return
+	if infos.all(func(p): return p.is_bot):
+		return   # somebody has to play
 	for p in infos:
 		p.is_ready = true
 	_start()
@@ -140,7 +140,11 @@ func _unhandled_input(event: InputEvent) -> void:
 				_command(device, cmd)
 				get_viewport().set_input_as_handled()
 				return
-		if event.physical_keycode in [KEY_ENTER, KEY_KP_ENTER]:
+		if event.physical_keycode == KEY_B:
+			add_bot()
+		elif event.physical_keycode == KEY_BACKSPACE:
+			remove_bot()
+		elif event.physical_keycode in [KEY_ENTER, KEY_KP_ENTER]:
 			_command(Settings.DEVICE_KB_A, "confirm")
 	elif event is InputEventJoypadButton and event.pressed:
 		match event.button_index:
@@ -154,6 +158,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			JOY_BUTTON_DPAD_LEFT: _command(event.device, "prev")
 			JOY_BUTTON_DPAD_RIGHT: _command(event.device, "next")
 			JOY_BUTTON_Y: _command(event.device, "next")
+			JOY_BUTTON_X: add_bot()
+			JOY_BUTTON_BACK: remove_bot()
 	elif event is InputEventJoypadMotion and event.axis == JOY_AXIS_LEFT_X:
 		var dir := 0
 		if event.axis_value > 0.6:
@@ -168,7 +174,24 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _all_ready() -> bool:
 	var infos := PlayerManager.sorted_players()
-	return not infos.is_empty() and infos.all(func(p): return p.is_ready)
+	return infos.any(func(p): return not p.is_bot) and infos.all(func(p): return p.is_ready)
+
+
+func add_bot() -> void:
+	if PlayerManager.add_bot() > 0:
+		Sfx.play("join")
+	_refresh()
+
+
+## The last bot to join leaves.
+func remove_bot() -> void:
+	var bots := PlayerManager.bots()
+	if bots.is_empty():
+		return
+	bots.sort_custom(func(a, b): return a.player_id > b.player_id)
+	PlayerManager.leave(bots[0].player_id)
+	Sfx.play("leave")
+	_refresh()
 
 
 ## Maps a key press to a lobby command using that keyboard half's bindings.
@@ -197,7 +220,7 @@ func _command(device: int, cmd: String) -> void:
 				Sfx.play("ui_select" if info.is_ready else "ui_back")
 		"back":
 			if info == null:
-				if device >= 0 and PlayerManager.players.is_empty():
+				if device >= 0 and PlayerManager.players.values().all(func(p): return p.is_bot):
 					_back()
 				return
 			if info.is_ready:

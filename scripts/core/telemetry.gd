@@ -149,7 +149,7 @@ func _on_started() -> void:
 			"best": 0.0, "best_t": 0.0, "stall_from": -1.0, "stall_total": 0.0, "stalls": 0,
 			"last_hit": [0, "", -INF], "kos": 0, "death": null}
 		roster.append({"id": p.player_id, "client": _client_of(p.info, online, g.players.size()), "name": _name_of(p.info, online),
-			"device": "net" if not p.info.is_local() else "kb" if p.info.is_keyboard() else "pad"})
+			"device": "net" if not p.info.is_local() else "bot" if p.info.is_bot else "kb" if p.info.is_keyboard() else "pad"})
 	var tuning := {
 		"gravity": Player.GRAVITY, "jump_velocity": Player.JUMP_VELOCITY, "charge_velocity": Player.CHARGE_VELOCITY,
 		"speed": Player.SPEED, "gravity_cd": Player.GRAVITY_COOLDOWN, "shock_cd": Player.SHOCK_COOLDOWN,

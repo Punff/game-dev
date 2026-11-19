@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """How abilities get used, people next to bots: the check that
-tests/bot_matches.gd plays like people do (its SHOCK_RATE and friends).
+scripts/player/bot_brain.gd plays like people do (its SHOCK_RATE and friends).
 
     python3 tools/analytics/abilities.py --remote --bots /tmp/bots.jsonl
     python3 tools/analytics/abilities.py --file people.jsonl --bots /tmp/bots.jsonl
 
-People's matches are the multiplayer ones (2+ players) not tagged "bot";
+People's matches are the multiplayer ones (2+ players) not tagged "bot"
+and with no bot in them;
 bots' are the tagged ones from the --bots file. Per side: uses per
 player-minute, what blasts are aimed at and from how far, how fields go,
 and how often each is used by distance to the nearest other player - the
@@ -23,7 +24,8 @@ BANDS = [(0, 3), (3, 6), (6, 9), (9, 15), (15, math.inf)]
 
 
 def multiplayer(recs, bots):
-    return [r for r in recs if (r.get("tag") == "bot") == bots and r.get("players", 1) >= 2]
+    return [r for r in recs if (r.get("tag") == "bot") == bots and r.get("players", 1) >= 2
+            and (bots or not report.vs_bots(r))]
 
 
 def foe_dist(r, t, pid, x, h):

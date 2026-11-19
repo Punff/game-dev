@@ -2,6 +2,7 @@ extends Node
 
 ## Dev helper: renders a scene and saves PNGs.
 ##   SHOT_SCENE=res://scenes/game.tscn SHOT_OUT=/tmp/x SHOT_PLAYERS=2 godot --path . res://tests/screenshot.tscn
+## SHOT_BOTS=n adds n bots.
 
 var _svp: SubViewport
 
@@ -18,6 +19,8 @@ func _ready() -> void:
 		var id := PlayerManager.join(devices[i])
 		if OS.get_environment("SHOT_READY") != "":
 			PlayerManager.players[id].is_ready = i % 2 == 0
+	for i in OS.get_environment("SHOT_BOTS").to_int():   # computer players after the people
+		PlayerManager.add_bot()
 	var login := OS.get_environment("SHOT_LOGIN").split(":")   # user:password, against --signaling
 	if login.size() == 2:
 		var done := [false]

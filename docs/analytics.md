@@ -29,7 +29,7 @@ A record (schema 1) is one JSON object:
 | `date`, `version`, `build`, `client`, `tag` | When, which game version (`config/version`), `editor` / `Web` / `Linux` / ..., the uploader's id, `"bot"` for bot runs |
 | `mode`, `players`, `seed` | `solo` / `local` / `online`, player count, map seed (replay the same map) |
 | `tuning`, `tuning_hash` | Movement, ability and lava constants in effect; the hash groups matches played under identical tuning |
-| `roster` | Per player: `id`, `client` (only solo and online players have one), `name`, `device` (`kb` / `pad` / `net`) |
+| `roster` | Per player: `id`, `client` (only solo and online players have one), `name`, `device` (`kb` / `pad` / `net` / `bot`) |
 | `duration`, `winner`, `best_height` | Result |
 | `map` | `blocks`: how many of each block type the map built; `rows` |
 | `samples` | Every 0.5 s: `[t, lava m, lava px/s, [[x m, height m, state] or null per player]]`. State: `g` ground, `a` air, `c` charging, `f` field |
@@ -112,11 +112,16 @@ TELEMETRY_LOG=/tmp/bots.jsonl godot --headless --path . res://tests/bot_matches.
 python3 tools/analytics/report.py --file /tmp/bots.jsonl --only-bots --all-builds
 ```
 
-Crude climbing bots (they jump toward the next platform, charge for big gaps,
-blast and throw at anyone close). They're for checking that the pipeline
-works and for a rough first look at a tuning change; they don't stand in
-for people. Their records are tagged `"bot"` and only upload to a local server
-(`BOT_UPLOAD=1` and `--signaling=ws://127.0.0.1:8787`).
+Every seat is taken by the game's own computer player
+(`scripts/player/bot_brain.gd`, the same one people play against from Play →
+Bots). They're for checking that the pipeline works and for a rough first
+look at a tuning change; they don't stand in for people. Their records are
+tagged `"bot"` and only upload to a local server (`BOT_UPLOAD=1` and
+`--signaling=ws://127.0.0.1:8787`).
+
+People's matches against bots are ordinary `local` records with `bot` in
+the roster's `device`. `report.py` leaves them out unless you pass
+`--vs-bots`, and `abilities.py` never counts them as people.
 
 ### Fast runs and replays
 
@@ -169,7 +174,10 @@ it on every push.
 
 The bots climb with the map planner's own jump policy (see
 `tests/bot_matches.gd`): good enough to compare changes, not to stand in for
-people. They reach roughly 20-40 m; people go much further.
+people. They brake before take-off so they don't drift in under the
+ledge they're jumping for. On the party matches (2026-11-10) people
+climbed 1.6 m/s and bots 1.3 m/s; bots' median best height per match is
+about 45 m against people's 86 m.
 
 ## Leaderboards, accounts and player stats
 

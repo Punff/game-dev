@@ -55,7 +55,11 @@ func _play() -> bool:
 	PlayerManager.clear()
 	var devices := [Settings.DEVICE_KB_A, Settings.DEVICE_KB_B, 0, 1]
 	for i in int(_rec.players):
-		PlayerManager.join(devices[i])
+		# Bots stay bots (for when the match ends); their recorded controls drive them.
+		if _rec.roster[i].get("device") == "bot":
+			PlayerManager.add_bot()
+		else:
+			PlayerManager.join(devices[i])
 	MatchManager.next_map_seed = int(_rec.seed)
 	MatchManager.state = MatchManager.State.COUNTDOWN
 	Engine.time_scale = float(_rec.get("time_scale", 1.0))

@@ -16,6 +16,7 @@ Sources (pick one; default: this computer's own matches):
 Filters: --since 2026-10-01  --version 0.4  --mode solo|local|online
          --builds Web,Linux  (default: everything except "editor")  --all-builds
          --bots  (include tests/bot_matches.gd runs)  --only-bots
+         --vs-bots  (include people's matches against the game's bots)
 Output:  --out report.html (default tools/analytics/out/report.html)
 
 Only the standard library is used.
@@ -95,9 +96,16 @@ def load_d1(remote):
         last = rows[-1]["id"]
 
 
+def vs_bots(r):
+    """People playing against the game's bots (a bot in the roster)."""
+    return r.get("tag") != "bot" and any(p.get("device") == "bot" for p in r.get("roster", []))
+
+
 def keep(r, a):
     bot = r.get("tag") == "bot"
     if bot and not (a.bots or a.only_bots) or a.only_bots and not bot:
+        return False
+    if vs_bots(r) and not (a.vs_bots or a.bots):
         return False
     if a.since and r.get("date", "") < a.since:
         return False
@@ -612,6 +620,7 @@ def main():
     ap.add_argument("--builds")
     ap.add_argument("--all-builds", action="store_true")
     ap.add_argument("--bots", action="store_true")
+    ap.add_argument("--vs-bots", action="store_true", help="include people's matches against bots")
     ap.add_argument("--only-bots", action="store_true")
     ap.add_argument("--save", help="also write the loaded records to this JSONL file")
     ap.add_argument("--out", default=str(Path(__file__).parent / "out" / "report.html"))

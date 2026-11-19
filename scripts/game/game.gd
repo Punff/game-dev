@@ -162,6 +162,8 @@ func _spawn_players() -> void:
 	for i in n:
 		var p := Player.new()
 		p.setup(infos[i])
+		if infos[i].is_bot and not Net.is_online():
+			p.input.brain = BotBrain.new(p, map_gen.map_seed * 31 + infos[i].player_id)
 		p.position = Vector2((i - (n - 1) * 0.5) * spacing, FLOOR_Y - Player.RADIUS - 1.0)
 		p.facing = -1.0 if p.position.x > 0 else 1.0
 		if Net.is_client() and infos[i].is_local():
@@ -273,6 +275,11 @@ func _on_player_died(player_id: int) -> void:
 	var solo := players.size() == 1
 	if solo and alive.is_empty() or not solo and alive.size() <= 1:
 		_finish(alive[0] if alive.size() == 1 else null)
+	elif alive.all(func(p): return p.info.is_bot) and not players.all(func(p): return p.info.is_bot):
+		# Everyone playing is out: nobody wants to watch the bots finish.
+		# The highest bot still climbing takes it.
+		alive.sort_custom(func(a, b): return a.max_height_px > b.max_height_px)
+		_finish(alive[0])
 
 
 func _finish(winner: Player) -> void:
