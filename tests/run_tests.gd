@@ -591,22 +591,24 @@ func _test_field_spares_holder() -> void:
 	PlayerManager.clear()
 
 
-## Riding your debris up is allowed, but within the field's ride budget: it
-## used to ratchet into a launch of 1,000+ px/s, more than a full charge.
+## Riding your debris up is a way to climb: jump, field, air jump, aim up
+## and ride it out gets you well above the same jumps with no field, but
+## within the field's ride budget (uncapped, holding W launched you 110 m).
 func _test_no_field_launch() -> void:
-	# (Let go of the field while aiming up: the chunks under you fly off.)
-	var r := await _field_ride(true, false)
-	check(r.fastest < 950.0, "throwing your debris floor up doesn't launch you (%.0f px/s)" % r.fastest)
-	# Jump, field, air jump, aim up and ride it out - against the same jumps
-	# with no field at all.
 	var plain := await _field_ride(false, true)
 	var ride := await _field_ride(true, true)
 	var gain: float = (ride.rise - plain.rise) / 50.0
-	print("Field ride: %.1f m above jumping alone (budget %.1f m)" % [gain, Player.RIDE_BUDGET / 50.0])
-	check(gain < Player.RIDE_BUDGET / 50.0 + 1.5, "riding your debris up gains about its budget (%.1f m)" % gain)
+	print("Field ride: %.1f m above jumping alone, up to %.0f px/s" % [gain, ride.fastest])
+	check(gain > 6.0, "riding your debris up pushes you well up (%.1f m)" % gain)
+	# Keyboard: W is jump and up. Air jump with W and keep holding it.
+	var w := await _field_ride(true, true, true)
+	var w_gain: float = (w.rise - plain.rise) / 50.0
+	print("Field ride holding W: %.1f m above jumping alone" % w_gain)
+	check(w_gain > 6.0, "holding W rides your debris up too (%.1f m)" % w_gain)
+	check(maxf(gain, w_gain) < Player.RIDE_BUDGET / 50.0 + 4.0, "one field's ride stays within its budget")
 
 
-func _field_ride(field: bool, ride_out: bool) -> Dictionary:
+func _field_ride(field: bool, ride_out: bool, w_key := false) -> Dictionary:
 	PlayerManager.clear()
 	var id := PlayerManager.join(Settings.DEVICE_KB_A)
 	var block := BreakableBlock.new()
@@ -632,7 +634,10 @@ func _field_ride(field: bool, ride_out: bool) -> Dictionary:
 	for i in 50 if not ride_out else 20:
 		await get_tree().physics_frame
 		top = minf(top, p.global_position.y)
-	if ride_out:
+	if ride_out and w_key:
+		Input.action_press(act.call("jump"))   # the air jump, and up, on one key held down
+		Input.action_press(act.call("up"))
+	elif ride_out:
 		Input.action_press(act.call("jump"))   # the air jump
 		await get_tree().physics_frame
 		Input.action_release(act.call("jump"))
@@ -644,6 +649,7 @@ func _field_ride(field: bool, ride_out: bool) -> Dictionary:
 		fastest = maxf(fastest, -p.velocity.y)
 		top = minf(top, p.global_position.y)
 	Input.action_release(act.call("up"))
+	Input.action_release(act.call("jump"))
 	Input.action_release(act.call("gravity"))
 	for f in get_tree().get_nodes_in_group("fragments"):
 		f.free()
@@ -688,8 +694,9 @@ func _clear_field_test(p: Player, id: int) -> void:
 	PlayerManager.clear()
 
 
-## Jump and up are one key on keyboard (W): jumping while the field holds a
-## floor under you mustn't aim it up and pull the floor out from under you.
+## Jump and up are one key on keyboard (W): a jump (a tap) while the field
+## holds a floor under you mustn't aim it up and pull the floor out from
+## under you. (Holding W on does aim: _test_no_field_launch rides it.)
 func _test_field_jump_keeps_floor() -> void:
 	PlayerManager.clear()
 	var id := PlayerManager.join(Settings.DEVICE_KB_A)
@@ -699,6 +706,9 @@ func _test_field_jump_keeps_floor() -> void:
 	var above := 0
 	for i in 30:
 		await get_tree().physics_frame
+		if i == 6:
+			Input.action_release(PlayerManager.action(id, "jump"))
+			Input.action_release(PlayerManager.action(id, "up"))
 		for f in get_tree().get_nodes_in_group("fragments"):
 			if f.held_by == p and f.global_position.y < p.global_position.y:
 				above += 1

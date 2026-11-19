@@ -42,13 +42,15 @@ const THROW_SPEED := 1000.0
 const FLOOR_WIDTH := 300.0          ## gravity-field floor row width before chunks start a row below
 const FLOOR_GAP := 2.0
 const FLOOR_ARRIVE := 10.0          ## a chunk this close to its floor slot turns solid
-## Riding your debris up (aim the field up while standing on it) is fine, but
-## all the height chunks give you over one field - lifts off them and being
-## carried on them - adds up to at most this (px), a bit under a full charge
-## jump. (Each time you left a rising chunk it handed you its speed, and the
-## field then pulled the chunks faster to keep up with you: one field could
-## be worth 10-18 m.) Once it's spent, the field stops lifting chunks under you.
-const RIDE_BUDGET := 250.0
+## Riding your debris up (aim the field up while standing on it, or hold W)
+## is a way to climb, but all the height chunks give you over one field -
+## lifts off them and being carried on them - adds up to at most this (px):
+## 12 m, about two full charge jumps. (Each time you left a rising chunk it
+## handed you its speed and the field pulled the chunks faster to keep up:
+## uncapped, one field launched you 110 m.) 5 m (2026-10-22) made the field
+## useless for climbing. Once it's spent, the field stops lifting chunks
+## under you.
+const RIDE_BUDGET := 600.0
 ## And no single push off debris leaves you rising faster than this (riding a
 ## throw from under your own feet could hand you 1,000+ in one go).
 const RIDE_PEAK := 860.0
@@ -66,6 +68,7 @@ const SHOCK_RECOIL := 420.0
 const SHOCK_STACK_TIME := 0.3
 const ROCKET_NO_FASTFALL := 0.25   ## s after a downward shockwave when "down" won't fast-fall
 const AIM_GRACE := 0.12            ## s an aim is remembered for a gravity-field throw
+const UP_HOLD_AIM := 0.25          ## s an up that came with a jump has to be held to aim after all
 ## Multiplayer catch-up: field and blast recharge faster the further you are
 ## below the leader's best height - from CATCHUP_FROM px behind, up to
 ## CATCHUP_RATE x at CATCHUP_FULL px. The pips show it.
@@ -225,7 +228,8 @@ func aim_vector() -> Vector2:
 
 ## Where the gravity field aims: an up that came with a jump isn't aiming, or
 ## jumping during a field would send the floor under you up over your head.
-## (Out of jumps, the same press does aim.)
+## Keep holding it (UP_HOLD_AIM) and it does aim: hold W to ride your debris
+## up. (Out of jumps, the same press aims at once.)
 func _field_aim() -> Vector2:
 	var v := aim_vector()
 	if _jump_aim_off:
@@ -269,7 +273,7 @@ func _step(delta: float) -> void:
 	_rocket_time = maxf(_rocket_time - delta, 0.0)
 	_blast_time = maxf(_blast_time - delta, 0.0)
 	_up_age = 0.0 if _just_pressed("up") else _up_age + delta
-	if aim_vector().y > -0.2:
+	if aim_vector().y > -0.2 or _up_age > UP_HOLD_AIM:
 		_jump_aim_off = false
 	var aim := _field_aim()
 	if aim.length_squared() > 0.2:
